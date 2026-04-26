@@ -1,0 +1,4 @@
+main.cpp: In function 'int main()':
+main.cpp:10:99: error: lvalue required as left operand of assignment
+   10 |     if(N = 2 && N = 3 && N = 5 && N = 6 && N = 9 && N = 12 && N = -11 && N = -9 && N = -21 && N = 36);
+      |                                                                                                   ^~

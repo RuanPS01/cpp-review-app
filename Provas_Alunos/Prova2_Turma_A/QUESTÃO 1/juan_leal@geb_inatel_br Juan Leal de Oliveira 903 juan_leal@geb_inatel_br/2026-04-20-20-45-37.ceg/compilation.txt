@@ -1,0 +1,9 @@
+Q01.cpp: In function 'int main()':
+Q01.cpp:13:38: error: expected ')' before 'R'
+   13 |       for( int cont; cont = N; cont++R){
+      |          ~                           ^
+      |                                      )
+Q01.cpp:13:39: error: expected ';' before ')' token
+   13 |       for( int cont; cont = N; cont++R){
+      |                                       ^
+      |                                       ;

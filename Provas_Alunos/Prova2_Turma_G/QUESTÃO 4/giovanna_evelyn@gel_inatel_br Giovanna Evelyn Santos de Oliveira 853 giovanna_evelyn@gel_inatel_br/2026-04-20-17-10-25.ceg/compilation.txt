@@ -1,0 +1,10 @@
+Armazenar.cpp: In function 'int main()':
+Armazenar.cpp:10:28: error: 'I' was not declared in this scope
+   10 |     for (int i = 0; i > N; I++ )
+      |                            ^
+Armazenar.cpp:15:13: error: 'X' was not declared in this scope
+   15 |         if (X != reais [100])
+      |             ^
+Armazenar.cpp:16:5: error: expected primary-expression before '}' token
+   16 |     }
+      |     ^

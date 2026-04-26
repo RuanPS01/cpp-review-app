@@ -1,0 +1,11 @@
+patrick.cpp: In function 'int main()':
+patrick.cpp:20:16: error: cannot convert 'int*' to 'char*'
+   20 |         strcpy(numeros, N);
+      |                ^~~~~~~
+      |                |
+      |                int*
+In file included from /usr/include/c++/9/cstring:42,
+                 from patrick.cpp:3:
+/usr/include/string.h:122:39: note:   initializing argument 1 of 'char* strcpy(char*, const char*)'
+  122 | extern char *strcpy (char *__restrict __dest, const char *__restrict __src)
+      |                      ~~~~~~~~~~~~~~~~~^~~~~~

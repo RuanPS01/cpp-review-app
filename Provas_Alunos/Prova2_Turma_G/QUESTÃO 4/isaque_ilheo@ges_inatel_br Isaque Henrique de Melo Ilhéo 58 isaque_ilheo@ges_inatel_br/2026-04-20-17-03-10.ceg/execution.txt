@@ -1,0 +1,74 @@
+Testing 1/18 : 0
+Testing 2/18 : 1
+Testing 3/18 : 2
+Testing 4/18 : 3
+Testing 5/18 : 4
+Testing 6/18 : 5
+Testing 7/18 : 6
+Testing 8/18 : 7
+Testing 9/18 : 8
+Testing 10/18 : 9
+Testing 11/18 : 10
+Testing 12/18 : 11
+Testing 13/18 : 12
+Testing 14/18 : 13
+Testing 15/18 : 14
+Testing 16/18 : 15
+Testing 17/18 : 16
+Testing 18/18 : 17
+
+<|--
+-Failed tests
+Test 8: 7
+Test 14: 13
+Test 17: 16
+--|>
+
+<|--
+-Test 8: 7 (-10.000)
+Incorrect program output
+ --- Input ---
+>2.5 2.5 2.5 0
+>2.5
+
+ --- Program output ---
+>2.5 encontrado na posicao 2
+
+ --- Expected output (exact text)---
+>2.5 encontrado na posicao 0
+
+-Test 14: 13 (-10.000)
+Incorrect program output
+ --- Input ---
+>5.0 6.0 7.0 0
+>5.0
+
+ --- Program output ---
+>5 encontrado na posicao 0
+
+ --- Expected output (exact text)---
+>5.0 encontrado na posicao 0
+
+-Test 17: 16 (-10.000)
+Incorrect program output
+ --- Input ---
+>4.2 4.2 4.2 4.2 0
+>4.2
+
+ --- Program output ---
+>4.2 encontrado na posicao 3
+
+ --- Expected output (exact text)---
+>4.2 encontrado na posicao 0
+
+--|>
+
+<|--
+-Summary of tests
+>+------------------------------+
+>| 18 tests run/15 tests passed |
+>+------------------------------+
+
+--|>
+
+Grade :=>> 0

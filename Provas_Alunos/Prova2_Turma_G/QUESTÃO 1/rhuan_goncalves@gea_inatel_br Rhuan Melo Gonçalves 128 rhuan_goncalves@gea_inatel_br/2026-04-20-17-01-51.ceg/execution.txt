@@ -1,0 +1,165 @@
+Testing 1/7 : 0
+Testing 2/7 : 1
+Testing 3/7 : 2
+Testing 4/7 : 3
+Testing 5/7 : 4
+Testing 6/7 : 5
+Testing 7/7 : 6
+
+<|--
+-Failed tests
+Test 1: 0
+Test 2: 1
+Test 3: 2
+Test 4: 3
+Test 5: 4
+Test 6: 5
+Test 7: 6
+--|>
+
+<|--
+-Test 1: 0 (-10.000)
+Incorrect program output
+ --- Input ---
+> 10
+>2 3 5 6 9 12 -11 -9 -21 36
+
+ --- Program output ---
+>2 numeros pares
+>3 numeros impares
+>5 numeros impares
+>6 numeros pares
+>9 numeros impares
+>12 numeros pares
+>-11 numeros negativos
+>-9 numeros negativos
+>-21 numeros negativos
+>36 numeros pares
+
+ --- Expected output (exact text)---
+>4 numeros pares
+>6 numeros impares
+>7 numeros positivos
+>3 numeros negativos
+
+-Test 2: 1 (-10.000)
+Incorrect program output
+ --- Input ---
+> 5
+>1 2 3 4 5
+
+ --- Program output ---
+>1 numeros impares
+>2 numeros pares
+>3 numeros impares
+>4 numeros pares
+>5 numeros impares
+
+ --- Expected output (exact text)---
+>2 numeros pares
+>3 numeros impares
+>5 numeros positivos
+>0 numeros negativos
+
+-Test 3: 2 (-10.000)
+Incorrect program output
+ --- Input ---
+> 6
+>-1 -2 -3 -4 -5 -6
+
+ --- Program output ---
+>-1 numeros negativos
+>-2 numeros pares
+>-3 numeros negativos
+>-4 numeros pares
+>-5 numeros negativos
+>-6 numeros pares
+
+ --- Expected output (exact text)---
+>3 numeros pares
+>3 numeros impares
+>0 numeros positivos
+>6 numeros negativos
+
+-Test 4: 3 (-10.000)
+Incorrect program output
+ --- Input ---
+> 7
+>0 1 2 3 -1 -2 -3
+
+ --- Program output ---
+>0 numeros pares
+>1 numeros impares
+>2 numeros pares
+>3 numeros impares
+>-1 numeros negativos
+>-2 numeros pares
+>-3 numeros negativos
+
+ --- Expected output (exact text)---
+>3 numeros pares
+>4 numeros impares
+>3 numeros positivos
+>3 numeros negativos
+
+-Test 5: 4 (-10.000)
+Incorrect program output
+ --- Input ---
+> 4
+>2 4 6 8
+
+ --- Program output ---
+>2 numeros pares
+>4 numeros pares
+>6 numeros pares
+>8 numeros pares
+
+ --- Expected output (exact text)---
+>4 numeros pares
+>0 numeros impares
+>4 numeros positivos
+>0 numeros negativos
+
+-Test 6: 5 (-10.000)
+Incorrect program output
+ --- Input ---
+> 3
+>-1 -3 -5
+
+ --- Program output ---
+>-1 numeros negativos
+>-3 numeros negativos
+>-5 numeros negativos
+
+ --- Expected output (exact text)---
+>0 numeros pares
+>3 numeros impares
+>0 numeros positivos
+>3 numeros negativos
+
+-Test 7: 6 (-10.000)
+Incorrect program output
+ --- Input ---
+> 1
+>0
+
+ --- Program output ---
+>0 numeros pares
+
+ --- Expected output (exact text)---
+>1 numeros pares
+>0 numeros impares
+>0 numeros positivos
+>0 numeros negativos
+
+--|>
+
+<|--
+-Summary of tests
+>+------------------------------+
+>|  7 tests run/ 0 tests passed |
+>+------------------------------+
+
+--|>
+
+Grade :=>> 0

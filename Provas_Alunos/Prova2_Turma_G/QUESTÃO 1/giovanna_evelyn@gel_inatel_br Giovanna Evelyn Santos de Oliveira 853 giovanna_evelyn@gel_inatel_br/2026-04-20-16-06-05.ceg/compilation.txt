@@ -1,0 +1,4 @@
+leituraDeNumeros.cpp: In function 'int main()':
+leituraDeNumeros.cpp:22:20: error: lvalue required as left operand of assignment
+   22 |        if (N % 2 = 0)
+      |                    ^

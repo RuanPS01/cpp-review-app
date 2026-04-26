@@ -1,0 +1,17 @@
+-Test 14: 13 (-10.000)
+Incorrect program output
+ --- Input ---
+>5.0 6.0 7.0 0
+>5.0
+
+ --- Program output ---
+>5 encontrado na posicao 0
+
+ --- Expected output (exact text)---
+>5.0 encontrado na posicao 0
+
+-Summary of tests
+>+------------------------------+
+>| 18 tests run/17 tests passed |
+>+------------------------------+
+

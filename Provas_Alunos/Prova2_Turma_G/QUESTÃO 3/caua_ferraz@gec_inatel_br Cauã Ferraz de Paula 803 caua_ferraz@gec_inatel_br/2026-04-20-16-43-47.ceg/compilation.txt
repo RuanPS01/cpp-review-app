@@ -1,0 +1,17 @@
+main.cpp: In function 'int main()':
+main.cpp:18:24: error: cannot convert 'char*' to 'double' in assignment
+   18 |         pck[i] = strtok(numeros[i]," ,.-");
+      |                  ~~~~~~^~~~~~~~~~~~~~~~~~~
+      |                        |
+      |                        char*
+main.cpp:24:19: error: invalid operands of types 'double' and 'char*' to binary 'operator>'
+   24 |         if(pck[j] > maior)
+      |            ~~~~~~ ^ ~~~~~
+      |                 |   |
+      |                 |   char*
+      |                 double
+main.cpp:26:26: error: cannot convert 'double' to 'char*' in assignment
+   26 |             maior = pck[j];
+      |                     ~~~~~^
+      |                          |
+      |                          double

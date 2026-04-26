@@ -1,0 +1,4 @@
+academia.cpp: In function 'int main()':
+academia.cpp:17:27: error: expected primary-expression before '<' token
+   17 |         if (Ttreino >0 && <0)
+      |                           ^
