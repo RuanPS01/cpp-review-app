@@ -1,0 +1,20 @@
+Testing 1/10 : 0
+Testing 2/10 : 1
+Testing 3/10 : 2
+Testing 4/10 : 3
+Testing 5/10 : 4
+Testing 6/10 : 5
+Testing 7/10 : 6
+Testing 8/10 : 7
+Testing 9/10 : 8
+Testing 10/10 : 9
+
+<|--
+-Summary of tests
+>+------------------------------+
+>| 10 tests run/10 tests passed |
+>+------------------------------+
+
+--|>
+
+Grade :=>>10

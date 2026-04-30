@@ -1,0 +1,7 @@
+questao2.cpp:4:6: warning: ISO C++ forbids declaration of 'main' with no type [-Wpedantic]
+    4 | main(){
+      |      ^
+questao2.cpp: In function 'int main()':
+questao2.cpp:9:12: warning: ISO C++ forbids variable length array 'alturas' [-Wvla]
+    9 |     double alturas[n], maior = 0, menor = 99999;
+      |            ^~~~~~~

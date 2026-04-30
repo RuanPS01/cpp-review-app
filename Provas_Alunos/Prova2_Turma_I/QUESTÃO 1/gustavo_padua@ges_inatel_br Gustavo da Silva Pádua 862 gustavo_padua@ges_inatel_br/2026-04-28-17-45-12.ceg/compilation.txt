@@ -1,0 +1,4 @@
+questao1.cpp: In function 'int main()':
+questao1.cpp:9:9: warning: ISO C++ forbids variable length array 'num' [-Wvla]
+    9 |     int num[N], divisao = 0, divPorZero = 0;
+      |         ^~~

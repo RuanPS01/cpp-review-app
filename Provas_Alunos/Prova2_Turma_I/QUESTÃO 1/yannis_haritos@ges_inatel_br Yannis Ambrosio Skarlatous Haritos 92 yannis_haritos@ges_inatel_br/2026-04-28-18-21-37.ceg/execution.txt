@@ -1,0 +1,51 @@
+Testing 1/10 : 0
+Testing 2/10 : 1
+Testing 3/10 : 2
+Testing 4/10 : 3
+Testing 5/10 : 4
+Testing 6/10 : 5
+Testing 7/10 : 6
+Testing 8/10 : 7
+Testing 9/10 : 8
+Testing 10/10 : 9
+
+<|--
+-Failed tests
+Test 5: 4
+Test 6: 5
+--|>
+
+<|--
+-Test 5: 4 (-10.000)
+Incorrect program output
+ --- Input ---
+> 1 0
+
+ --- Program output ---
+>0
+
+ --- Expected output (exact text)---
+>1
+
+-Test 6: 5 (-10.000)
+Incorrect program output
+ --- Input ---
+> 5 0 1 2 3 4
+
+ --- Program output ---
+>1
+
+ --- Expected output (exact text)---
+>2
+
+--|>
+
+<|--
+-Summary of tests
+>+------------------------------+
+>| 10 tests run/ 8 tests passed |
+>+------------------------------+
+
+--|>
+
+Grade :=>> 0

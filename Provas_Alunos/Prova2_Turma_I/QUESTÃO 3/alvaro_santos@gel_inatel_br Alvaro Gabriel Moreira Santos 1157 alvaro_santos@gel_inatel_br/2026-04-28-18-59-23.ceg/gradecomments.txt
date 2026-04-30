@@ -1,0 +1,226 @@
+-Failed tests
+Test 1: 0
+Test 2: 1
+Test 3: 2
+Test 4: 3
+Test 5: 4
+Test 6: 5
+Test 7: 6
+Test 8: 7
+Test 9: 8
+Test 10: 9
+Test 11: 10
+-Test 1: 0 (-10.000)
+Incorrect program output
+ --- Input ---
+> 3 2 2 3 3 4 4 4 4 5 6
+
+ --- Program output ---
+>1 estrela: 32692
+>2 estrela: -595511870
+>3 estrela: 22027
+>4 estrela: 4
+>5 estrela: 0
+
+ --- Expected output (exact text)---
+>1 estrela: 0.00%
+>2 estrelas: 20.00%
+>3 estrelas: 30.00%
+>4 estrelas: 40.00%
+>5 estrelas: 10.00%
+
+-Test 2: 1 (-10.000)
+Incorrect program output
+ --- Input ---
+> 1 1 1 1 1 6
+
+ --- Program output ---
+>1 estrela: 32546
+>2 estrela: 1620800960
+>3 estrela: 22027
+>4 estrela: 0
+>5 estrela: 0
+
+ --- Expected output (exact text)---
+>1 estrela: 100.00%
+>2 estrelas: 0.00%
+>3 estrelas: 0.00%
+>4 estrelas: 0.00%
+>5 estrelas: 0.00%
+
+-Test 3: 2 (-10.000)
+Incorrect program output
+ --- Input ---
+> 2 2 2 3 3 3 4 4 5 5 5 6
+
+ --- Program output ---
+>1 estrela: 32609
+>2 estrela: 133375427
+>3 estrela: 21930
+>4 estrela: 2
+>5 estrela: 0
+
+ --- Expected output (exact text)---
+>1 estrela: 0.00%
+>2 estrelas: 27.27%
+>3 estrelas: 27.27%
+>4 estrelas: 18.18%
+>5 estrelas: 27.27%
+
+-Test 4: 3 (-10.000)
+Incorrect program output
+ --- Input ---
+> 5 5 5 5 5 5 6
+
+ --- Program output ---
+>1 estrela: 32526
+>2 estrela: 577234368
+>3 estrela: 21874
+>4 estrela: 0
+>5 estrela: 0
+
+ --- Expected output (exact text)---
+>1 estrela: 0.00%
+>2 estrelas: 0.00%
+>3 estrelas: 0.00%
+>4 estrelas: 0.00%
+>5 estrelas: 100.00%
+
+-Test 5: 4 (-10.000)
+Incorrect program output
+ --- Input ---
+> 1 2 3 4 5 6
+
+ --- Program output ---
+>1 estrela: 32707
+>2 estrela: 1584543169
+>3 estrela: 21890
+>4 estrela: 1
+>5 estrela: 0
+
+ --- Expected output (exact text)---
+>1 estrela: 20.00%
+>2 estrelas: 20.00%
+>3 estrelas: 20.00%
+>4 estrelas: 20.00%
+>5 estrelas: 20.00%
+
+-Test 6: 5 (-10.000)
+Incorrect program output
+ --- Input ---
+> 3 3 3 3 3 3 6
+
+ --- Program output ---
+>1 estrela: 32682
+>2 estrela: -1912945216
+>3 estrela: 21913
+>4 estrela: 0
+>5 estrela: 0
+
+ --- Expected output (exact text)---
+>1 estrela: 0.00%
+>2 estrelas: 0.00%
+>3 estrelas: 100.00%
+>4 estrelas: 0.00%
+>5 estrelas: 0.00%
+
+-Test 7: 6 (-10.000)
+Incorrect program output
+ --- Input ---
+> 2 2 4 4 5 5 5 6
+
+ --- Program output ---
+>1 estrela: 32531
+>2 estrela: -800717374
+>3 estrela: 21970
+>4 estrela: 2
+>5 estrela: 0
+
+ --- Expected output (exact text)---
+>1 estrela: 0.00%
+>2 estrelas: 28.57%
+>3 estrelas: 0.00%
+>4 estrelas: 28.57%
+>5 estrelas: 42.86%
+
+-Test 8: 7 (-10.000)
+Incorrect program output
+ --- Input ---
+> 1 1 6
+
+ --- Program output ---
+>1 estrela: 32663
+>2 estrela: 559019456
+>3 estrela: 22025
+>4 estrela: 0
+>5 estrela: 0
+
+ --- Expected output (exact text)---
+>1 estrela: 100.00%
+>2 estrelas: 0.00%
+>3 estrelas: 0.00%
+>4 estrelas: 0.00%
+>5 estrelas: 0.00%
+
+-Test 9: 8 (-10.000)
+Incorrect program output
+ --- Input ---
+> 4 4 4 4 6
+
+ --- Program output ---
+>1 estrela: 32628
+>2 estrela: -2109516352
+>3 estrela: 21975
+>4 estrela: 4
+>5 estrela: 0
+
+ --- Expected output (exact text)---
+>1 estrela: 0.00%
+>2 estrelas: 0.00%
+>3 estrelas: 0.00%
+>4 estrelas: 100.00%
+>5 estrelas: 0.00%
+
+-Test 10: 9 (-10.000)
+Incorrect program output
+ --- Input ---
+> 3 3 6
+
+ --- Program output ---
+>1 estrela: 32532
+>2 estrela: -610880064
+>3 estrela: 21939
+>4 estrela: 0
+>5 estrela: 0
+
+ --- Expected output (exact text)---
+>1 estrela: 0.00%
+>2 estrelas: 0.00%
+>3 estrelas: 100.00%
+>4 estrelas: 0.00%
+>5 estrelas: 0.00%
+
+-Test 11: 10 (-10.000)
+Incorrect program output
+ --- Input ---
+> 1 2 3 4 6
+
+ --- Program output ---
+>1 estrela: 32662
+>2 estrela: -720652863
+>3 estrela: 21881
+>4 estrela: 1
+>5 estrela: 0
+
+ --- Expected output (exact text)---
+>1 estrela: 25.00%
+>2 estrelas: 25.00%
+>3 estrelas: 25.00%
+>4 estrelas: 25.00%
+>5 estrelas: 0.00%
+
+-Summary of tests
+>+------------------------------+
+>| 11 tests run/ 0 tests passed |
+>+------------------------------+
+

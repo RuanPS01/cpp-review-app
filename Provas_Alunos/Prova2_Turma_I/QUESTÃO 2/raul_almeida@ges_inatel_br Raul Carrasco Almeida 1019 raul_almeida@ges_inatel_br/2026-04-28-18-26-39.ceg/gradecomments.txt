@@ -1,0 +1,51 @@
+-Failed tests
+Test 2: 1
+Test 5: 4
+Test 6: 5
+-Test 2: 1 (-10.000)
+Incorrect program output
+ --- Input ---
+> 3
+>1.60 1.75 1.68
+
+ --- Program output ---
+>Menor altura: 1.68
+>Maior altura: 1.75
+
+ --- Expected output (exact text)---
+>Menor altura: 1.60
+>Maior altura: 1.75
+
+-Test 5: 4 (-10.000)
+Incorrect program output
+ --- Input ---
+> 2
+>1.65 1.80
+
+ --- Program output ---
+>Menor altura: 3.00
+>Maior altura: 1.80
+
+ --- Expected output (exact text)---
+>Menor altura: 1.65
+>Maior altura: 1.80
+
+-Test 6: 5 (-10.000)
+Incorrect program output
+ --- Input ---
+> 7
+>1.55 1.60 1.58 1.62 1.59 1.61 1.57
+
+ --- Program output ---
+>Menor altura: 1.57
+>Maior altura: 1.62
+
+ --- Expected output (exact text)---
+>Menor altura: 1.55
+>Maior altura: 1.62
+
+-Summary of tests
+>+------------------------------+
+>|  6 tests run/ 3 tests passed |
+>+------------------------------+
+
