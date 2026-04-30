@@ -1,0 +1,198 @@
+[
+  {
+    "folder_name": "alan_silva@ges_inatel_br Alan Donizeti da Silva 770 alan_silva@ges_inatel_br",
+    "q1": {"score": 20, "comment": "Lógica incorreta e erro no processamento da entrada (sobrescrevendo o contador do laço)."},
+    "q2": {"score": 0, "comment": "Código incompleto e lógica incorreta (N não inicializado)."},
+    "q3": {"score": 0, "comment": "Questão não resolvida."},
+    "q4": {"score": 0, "comment": "Questão não resolvida."}
+  },
+  {
+    "folder_name": "alvaro_santos@gel_inatel_br Alvaro Gabriel Moreira Santos 1157 alvaro_santos@gel_inatel_br",
+    "q1": {"score": 100, "comment": "Questão correta."},
+    "q2": {"score": 90, "comment": "Lógica correta, mas falhou nos testes devido a uma linha em branco extra na saída."},
+    "q3": {"score": 10, "comment": "Lógica incompleta e variáveis não inicializadas."},
+    "q4": {"score": 0, "comment": "Questão não resolvida."}
+  },
+  {
+    "folder_name": "ana_csiqueira@gea_inatel_br Ana Beatriz Carvalho Siqueira 776 ana_csiqueira@gea_inatel_br",
+    "q1": {"score": 0, "comment": "Lógica incompleta e incorreta."},
+    "q2": {"score": 0, "comment": "Erro de compilação."},
+    "q3": {"score": 0, "comment": "Erro de compilação."},
+    "q4": {"score": 0, "comment": "Erro de compilação."}
+  },
+  {
+    "folder_name": "anna_pedro@gec_inatel_br Anna Vitória Rosa Pedro 94 anna_pedro@gec_inatel_br",
+    "q1": {"score": 100, "comment": "Questão correta."},
+    "q2": {"score": 40, "comment": "Lógica para encontrar a menor altura incorreta (inicializada com 0)."},
+    "q3": {"score": 20, "comment": "Lógica para cálculo de porcentagem incorreta (uso de variável não inicializada)."},
+    "q4": {"score": 20, "comment": "Lógica de substituição incorreta (uso de == em vez de =) e erro na saída (impressão de apenas um elemento fora dos limites)."}
+  },
+  {
+    "folder_name": "beatriz_mayumi@ges_inatel_br Beatriz Mayumi Parreira Hayashida 793 beatriz_mayumi@ges_inatel_br",
+    "q1": {"score": 100, "comment": "Questão correta."},
+    "q2": {"score": 100, "comment": "Questão correta."},
+    "q3": {"score": 70, "comment": "Lógica de contagem correta, mas utilizou divisão inteira no cálculo das porcentagens."},
+    "q4": {"score": 100, "comment": "Questão correta."}
+  },
+  {
+    "folder_name": "camila_andrade@geb_inatel_br Camila Andrade Almeida Pereira 800 camila_andrade@geb_inatel_br",
+    "q1": {"score": 0, "comment": "Lógica incorreta (sobrescrevendo N dentro do laço)."},
+    "q2": {"score": 0, "comment": "Lógica incorreta (sobrescrevendo N dentro do laço e menor altura inicializada com 0)."},
+    "q3": {"score": 10, "comment": "Lógica incompleta."},
+    "q4": {"score": 0, "comment": "Questão não resolvida."}
+  },
+  {
+    "folder_name": "caua_galvao@ges_inatel_br Cauã Fonseca Galvão 41 caua_galvao@ges_inatel_br",
+    "q1": {"score": 20, "comment": "Lógica de contagem e processamento incorretos."},
+    "q2": {"score": 10, "comment": "Lógica incorreta e variáveis não inicializadas."},
+    "q3": {"score": 0, "comment": "Questão incompleta."},
+    "q4": {"score": 0, "comment": "Questão não resolvida."}
+  },
+  {
+    "folder_name": "eduardo_benfato@ges_inatel_br Eduardo Junqueira Benfato 817 eduardo_benfato@ges_inatel_br",
+    "q1": {"score": 0, "comment": "Lógica incompleta e saída incorreta."},
+    "q2": {"score": 0, "comment": "Lógica incompleta."},
+    "q3": {"score": 0, "comment": "Questão não resolvida."},
+    "q4": {"score": 0, "comment": "Questão não resolvida."}
+  },
+  {
+    "folder_name": "gabriel_gr@geb_inatel_br Gabriel Reis Fernandes Carvalho 848 gabriel_gr@geb_inatel_br",
+    "q1": {"score": 20, "comment": "Lógica de filtro e saída incorretas."},
+    "q2": {"score": 0, "comment": "Lógica incompleta."},
+    "q3": {"score": 0, "comment": "Lógica incompleta."},
+    "q4": {"score": 0, "comment": "Erro de compilação/Lógica incompleta."}
+  },
+  {
+    "folder_name": "gustavo_padua@ges_inatel_br Gustavo da Silva Pádua 862 gustavo_padua@ges_inatel_br",
+    "q1": {"score": 100, "comment": "Questão correta."},
+    "q2": {"score": 100, "comment": "Questão correta."},
+    "q3": {"score": 70, "comment": "Lógica de contagem correta, mas utilizou divisão inteira no cálculo das porcentagens."},
+    "q4": {"score": 20, "comment": "Questão incompleta (apenas leitura parcial da entrada)."}
+  },
+  {
+    "folder_name": "henrique_balla@ges_inatel_br Henrique Rezende Balla 55 henrique_balla@ges_inatel_br",
+    "q1": {"score": 10, "comment": "Saída incorreta (imprimindo números incrementados em vez da contagem total)."},
+    "q2": {"score": 0, "comment": "Lógica incompleta."},
+    "q3": {"score": 0, "comment": "Questão não resolvida."},
+    "q4": {"score": 0, "comment": "Questão não resolvida."}
+  },
+  {
+    "folder_name": "jose_leandro@ges_inatel_br José Leandro de Siqueira Júnior 160 jose_leandro@ges_inatel_br",
+    "q1": {"score": 0, "comment": "Lógica incompleta e incorreta."},
+    "q2": {"score": 0, "comment": "Erro de compilação."},
+    "q3": {"score": 0, "comment": "Lógica incompleta."},
+    "q4": {"score": 0, "comment": "Questão não resolvida."}
+  },
+  {
+    "folder_name": "joyce_vieira@geb_inatel_br Joyce Hemily Amorim Vieira 116 joyce_vieira@geb_inatel_br",
+    "q1": {"score": 0, "comment": "Lógica incorreta (contando números não divisíveis por 3)."},
+    "q2": {"score": 0, "comment": "Erro de compilação."},
+    "q3": {"score": 0, "comment": "Questão não resolvida."},
+    "q4": {"score": 0, "comment": "Erro de compilação."}
+  },
+  {
+    "folder_name": "kaua_bastos@gea_inatel_br Kauã Bastos do Couto Araújo 910 kaua_bastos@gea_inatel_br",
+    "q1": {"score": 100, "comment": "Questão correta."},
+    "q2": {"score": 100, "comment": "Questão correta."},
+    "q3": {"score": 100, "comment": "Questão correta."},
+    "q4": {"score": 100, "comment": "Questão correta."}
+  },
+  {
+    "folder_name": "lucas_marinho@gea_inatel_br Lucas Marinho Rodrigues de Souza 119 lucas_marinho@gea_inatel_br",
+    "q1": {"score": 20, "comment": "Lógica incorreta para contagem de divisíveis por 3. Uso incorreto da variável N para leitura de valores."},
+    "q2": {"score": 10, "comment": "Código incompleto e utiliza variáveis não inicializadas."},
+    "q3": {"score": 10, "comment": "Código incompleto, não lê os dados corretamente e possui return prematuro."},
+    "q4": {"score": 5, "comment": "Código incompleto, o loop principal não executa."}
+  },
+  {
+    "folder_name": "marcelo_gomes@gep_inatel_br Marcelo Gomes de Sousa Pereira 942 marcelo_gomes@gep_inatel_br",
+    "q1": {"score": 100, "comment": "Implementação correta."},
+    "q2": {"score": 20, "comment": "Lógica para encontrar maior e menor altura está incorreta e utiliza variáveis não inicializadas."},
+    "q3": {"score": 15, "comment": "Uso de atribuição em vez de comparação no if e blocos de código vazios."},
+    "q4": {"score": 1, "comment": "Estrutura básica incompleta."}
+  },
+  {
+    "folder_name": "matheus_delpino@get_inatel_br Matheus Gonçalves Delpino Oliveira 968 matheus_delpino@get_inatel_br",
+    "q1": {"score": 10, "comment": "Erros de sintaxe e lógica que não condiz com o pedido."},
+    "q2": {"score": 5, "comment": "Lógica inconsistente e uso de variáveis não inicializadas."},
+    "q3": {"score": 1, "comment": "Estrutura básica incompleta."},
+    "q4": {"score": 10, "comment": "Erro de sintaxe na atribuição e lógica insuficiente."}
+  },
+  {
+    "folder_name": "miguel_cunha@gea_inatel_br MIGUEL CUNHA DE SÁ 617 miguel_cunha@gea_inatel_br",
+    "q1": {"score": 100, "comment": "Implementação correta."},
+    "q2": {"score": 70, "comment": "Erro de lógica na inicialização e busca da menor altura."},
+    "q3": {"score": 40, "comment": "Leitura dupla de valores no loop e falta de lógica para cálculo de porcentagem."},
+    "q4": {"score": 20, "comment": "Erros de atribuição e uso de variáveis não inicializadas no vetor."}
+  },
+  {
+    "folder_name": "nicole_cardoso@gec_inatel_br Nicole Souza Rocha Cardoso 987 nicole_cardoso@gec_inatel_br",
+    "q1": {"score": 100, "comment": "Implementação correta."},
+    "q2": {"score": 100, "comment": "Implementação correta."},
+    "q3": {"score": 40, "comment": "Comparação incorreta de tipos (int com char) e erro de divisão por zero (floating point exception)."},
+    "q4": {"score": 100, "comment": "Implementação correta."}
+  },
+  {
+    "folder_name": "otavio_fraga@gea_inatel_br Otavio Augusto Junqueira e Silva Fraga Ferreira 993 otavio_fraga@gea_inatel_br",
+    "q1": {"score": 10, "comment": "Código incompleto."},
+    "q2": {"score": 5, "comment": "Código incompleto com erros de sintaxe."},
+    "q3": {"score": 0, "comment": "Não implementado."},
+    "q4": {"score": 0, "comment": "Não implementado."}
+  },
+  {
+    "folder_name": "pedro_bitencourt@gea_inatel_br Pedro Henrique Pereira Bitencourt 81 pedro_bitencourt@gea_inatel_br",
+    "q1": {"score": 100, "comment": "Implementação correta."},
+    "q2": {"score": 100, "comment": "Implementação correta."},
+    "q3": {"score": 70, "comment": "Uso de divisão inteira no cálculo das porcentagens."},
+    "q4": {"score": 1, "comment": "Estrutura básica incompleta."}
+  },
+  {
+    "folder_name": "pedro_ferencile@ges_inatel_br PEDRO HENRIQUE FERENCILE 420 pedro_ferencile@ges_inatel_br",
+    "q1": {"score": 100, "comment": "Implementação correta."},
+    "q2": {"score": 10, "comment": "Código incompleto."},
+    "q3": {"score": 5, "comment": "Código incompleto."},
+    "q4": {"score": 1, "comment": "Estrutura básica incompleta."}
+  },
+  {
+    "folder_name": "pedro_sarno@gel_inatel_br Pedro Henrique Sarno Vilela 1008 pedro_sarno@gel_inatel_br",
+    "q1": {"score": 20, "comment": "Lógica incorreta e saída de dados não condizente com o pedido."},
+    "q2": {"score": 10, "comment": "Erro de compilação."},
+    "q3": {"score": 10, "comment": "Erro de compilação."},
+    "q4": {"score": 0, "comment": "Não implementado."}
+  },
+  {
+    "folder_name": "raul_almeida@ges_inatel_br Raul Carrasco Almeida 1019 raul_almeida@ges_inatel_br",
+    "q1": {"score": 100, "comment": "Implementação correta."},
+    "q2": {"score": 70, "comment": "Erro de lógica estrutural na busca da menor altura."},
+    "q3": {"score": 20, "comment": "Loop infinito por falta de leitura de dados dentro do while."},
+    "q4": {"score": 20, "comment": "Lógica de leitura e manipulação do vetor incorreta."}
+  },
+  {
+    "folder_name": "rodrigo_macedo@gec_inatel_br Rodrigo Campos Macedo 85 rodrigo_macedo@gec_inatel_br",
+    "q1": {"score": 100, "comment": "Implementação correta."},
+    "q2": {"score": 100, "comment": "Implementação correta."},
+    "q3": {"score": 100, "comment": "Implementação correta."},
+    "q4": {"score": 10, "comment": "Código incompleto, realiza apenas a leitura parcial dos dados."}
+  },
+  {
+    "folder_name": "victor_bussab@gel_inatel_br Victor Brentan Cunha Bussab 1048 victor_bussab@gel_inatel_br",
+    "q1": {"score": 20, "comment": "Lógica incorreta para verificar divisibilidade por 3."},
+    "q2": {"score": 20, "comment": "Erro de segmentação devido ao uso de variável não inicializada para definir o tamanho do vetor."},
+    "q3": {"score": 20, "comment": "Lógica de loop invertida e comparação incorreta de tipos (int com char)."},
+    "q4": {"score": 0, "comment": "Não implementado."}
+  },
+  {
+    "folder_name": "yannis_haritos@ges_inatel_br Yannis Ambrosio Skarlatous Haritos 92 yannis_haritos@ges_inatel_br",
+    "q1": {"score": 80, "comment": "Lógica falha ao desconsiderar o número 0 como divisível por 3."},
+    "q2": {"score": 100, "comment": "Implementação correta."},
+    "q3": {"score": 30, "comment": "Uso de atribuição em vez de comparação no if e falta de formatação na saída."},
+    "q4": {"score": 1, "comment": "Estrutura básica incompleta."}
+  },
+  {
+    "folder_name": "ygor_souza@gep_inatel_br Ygor Ribeiro de Castro Souza 415 ygor_souza@gep_inatel_br",
+    "q1": {"score": 100, "comment": "Implementação correta."},
+    "q2": {"score": 100, "comment": "Implementação correta."},
+    "q3": {"score": 100, "comment": "Implementação correta."},
+    "q4": {"score": 100, "comment": "Implementação correta."}
+  }
+]
