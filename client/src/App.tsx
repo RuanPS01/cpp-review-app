@@ -3,7 +3,7 @@ import axios from 'axios';
 import { 
   ChevronLeft, ChevronRight, Copy, Save, Table as TableIcon, 
   FileText, CheckCircle2, Play, Upload, Plus, Trash2, 
-  Settings, Sparkles, BookOpen, X, Loader2, Download, Info, Terminal, Monitor, Cpu
+  Settings, Sparkles, BookOpen, X, Loader2, Download, Info, Terminal, Monitor, Cpu, Folder
 } from 'lucide-react';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism-tomorrow.css';
@@ -112,6 +112,7 @@ const App = () => {
   const [isCustomOllama, setIsCustomOllama] = useState(false);
   const [showJsonHelp, setShowJsonHelp] = useState(false);
   const [showOllamaHelp, setShowOllamaHelp] = useState(false);
+  const [showZipHelp, setShowZipHelp] = useState(false);
   const [statements, setStatements] = useState<Record<string, string>>({});
   const [showStatementModal, setShowStatementModal] = useState(false);
   const [showAIPreviewModal, setShowAIPreviewModal] = useState(false);
@@ -727,7 +728,16 @@ const App = () => {
                     </div>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium mb-2 text-neutral-400">{t.submissionsZip}</label>
+                    <div className="flex justify-between items-end mb-2">
+                        <label className="block text-sm font-medium text-neutral-400">{t.submissionsZip}</label>
+                        <button 
+                            type="button"
+                            onClick={() => setShowZipHelp(true)}
+                            className="text-[10px] font-bold text-cyan-500 hover:text-cyan-400 underline flex items-center gap-1"
+                        >
+                            <Info size={10} /> {t.zipHierarchy}
+                        </button>
+                    </div>
                     <label className="relative group block cursor-pointer">
                         <input 
                             type="file" 
@@ -1147,6 +1157,59 @@ const App = () => {
                 className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white font-bold uppercase tracking-widest text-[10px] rounded-lg transition-all active:scale-95"
             >
                 {t.readyToCode}
+            </button>
+        </div>
+      </Modal>
+
+      {/* ZIP Hierarchy Help Modal */}
+      <Modal
+        isOpen={showZipHelp}
+        onClose={() => setShowZipHelp(false)}
+        title={t.zipHierarchyTitle}
+        icon={Plus}
+        maxWidth="max-w-md"
+      >
+        <p className="text-xs text-neutral-400 mb-6 leading-relaxed">
+            The ZIP file should contain folders for each question at the root level. Inside each question, there must be a folder for each student containing their code.
+        </p>
+        
+        <div className="bg-black/50 border border-neutral-800 rounded-lg p-6 font-mono text-[11px] space-y-3">
+            <div className="flex items-center gap-2 text-cyan-400">
+                <FileText size={14} className="text-neutral-500" /> submissions.zip
+            </div>
+            <div className="pl-6 space-y-3 border-l border-neutral-800 ml-1.5">
+                <div className="flex items-center gap-2 text-white">
+                    <Folder size={14} className="text-cyan-500" /> QUESTION 1/
+                </div>
+                <div className="pl-6 space-y-2 border-l border-neutral-800 ml-1.5">
+                    <div className="flex items-center gap-2 text-neutral-300">
+                        <Folder size={14} className="text-neutral-500" /> student_name_id/
+                    </div>
+                    <div className="pl-6 flex items-center gap-2 text-cyan-500/80">
+                        <FileText size={12} /> solution.cpp
+                    </div>
+                    <div className="flex items-center gap-2 text-neutral-300">
+                        <Folder size={14} className="text-neutral-500" /> other_student_id/
+                    </div>
+                    <div className="pl-6 flex items-center gap-2 text-cyan-500/80">
+                        <FileText size={12} /> main.cpp
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 text-white pt-2">
+                    <Folder size={14} className="text-cyan-500" /> QUESTION 2/
+                </div>
+                <div className="pl-6 text-neutral-500 italic text-[10px]">
+                    (repeated structure...)
+                </div>
+            </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+            <button 
+                onClick={() => setShowZipHelp(false)}
+                className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white font-bold uppercase tracking-widest text-[10px] rounded-lg transition-all active:scale-95"
+            >
+                Got it
             </button>
         </div>
       </Modal>
