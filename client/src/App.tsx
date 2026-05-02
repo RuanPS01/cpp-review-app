@@ -463,7 +463,28 @@ const App = () => {
     return (sum / scores.length).toFixed(2);
   };
 
-  if (loading) return <div className="p-10 text-center text-cyan-500 font-bold animate-pulse">{t.loading}</div>;
+  if (loading) return (
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6">
+        <div className="relative">
+            <div className="absolute inset-0 bg-cyan-500/20 blur-2xl rounded-full animate-pulse"></div>
+            <Loader2 size={64} className="text-cyan-500 animate-spin relative z-10" />
+        </div>
+        <div className="text-center space-y-2 relative z-10">
+            <h2 className="text-cyan-500 font-black tracking-[0.3em] uppercase text-sm animate-pulse drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]">
+                {t.loading}
+            </h2>
+            <div className="w-48 h-1 bg-neutral-900 mx-auto rounded-full overflow-hidden">
+                <div className="h-full bg-cyan-500 w-1/2 animate-[loading-bar_1.5s_infinite_ease-in-out]"></div>
+            </div>
+        </div>
+        <style>{`
+            @keyframes loading-bar {
+                0% { transform: translateX(-100%); }
+                100% { transform: translateX(200%); }
+            }
+        `}</style>
+    </div>
+  );
 
   const turmas = Array.from(new Set(students.map(s => s.turma)));
   const currentStudent = students[currentIndex];
