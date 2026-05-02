@@ -31,6 +31,7 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'review' | 'table'>('review');
   const [saving, setSaving] = useState(false);
+  const [selectedTurma, setSelectedTurma] = useState<string>('A');
 
   const [editScore, setEditScore] = useState(0);
   const [editComment, setEditComment] = useState('');
@@ -137,25 +138,27 @@ const App = () => {
         {view === 'review' ? (
           <div className="flex flex-col gap-4 h-[calc(100vh-120px)]">
             <div className="flex justify-between items-center bg-gray-800 p-4 rounded-lg shadow-lg">
-              <div className="flex items-center gap-4">
-                <button 
-                  disabled={currentIndex === 0}
-                  onClick={() => setCurrentIndex(prev => prev - 1)}
-                  className="p-2 bg-gray-700 rounded disabled:opacity-30 hover:bg-gray-600"
-                >
-                  <ChevronLeft />
-                </button>
+              <div className="flex items-center gap-6">
+                <div className="flex gap-2">
+                  <button 
+                    disabled={currentIndex === 0}
+                    onClick={() => setCurrentIndex(prev => prev - 1)}
+                    className="p-2 bg-gray-700 rounded disabled:opacity-30 hover:bg-gray-600"
+                  >
+                    <ChevronLeft />
+                  </button>
+                  <button 
+                    disabled={currentIndex === students.length - 1}
+                    onClick={() => setCurrentIndex(prev => prev + 1)}
+                    className="p-2 bg-gray-700 rounded disabled:opacity-30 hover:bg-gray-600"
+                  >
+                    <ChevronRight />
+                  </button>
+                </div>
                 <div>
                   <h2 className="text-lg font-semibold">{currentStudent.name} ({currentStudent.turma})</h2>
                   <p className="text-xs text-gray-400">{currentStudent.id}</p>
                 </div>
-                <button 
-                  disabled={currentIndex === students.length - 1}
-                  onClick={() => setCurrentIndex(prev => prev + 1)}
-                  className="p-2 bg-gray-700 rounded disabled:opacity-30 hover:bg-gray-600"
-                >
-                  <ChevronRight />
-                </button>
               </div>
 
               <div className="flex gap-2">
@@ -232,36 +235,61 @@ const App = () => {
             </div>
           </div>
         ) : (
-          <div className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 shadow-xl">
-            <div className="overflow-x-auto max-h-[calc(100vh-120px)]">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-gray-700 sticky top-0">
-                  <tr>
-                    <th className="p-3 border-b border-gray-600">Turma</th>
-                    <th className="p-3 border-b border-gray-600">Student Name</th>
-                    <th className="p-3 border-b border-gray-600 text-center">Q1</th>
-                    <th className="p-3 border-b border-gray-600 text-center">Q2</th>
-                    <th className="p-3 border-b border-gray-600 text-center">Q3</th>
-                    <th className="p-3 border-b border-gray-600 text-center">Q4</th>
-                    <th className="p-3 border-b border-gray-600 text-center font-bold">Total</th>
-                    <th className="p-3 border-b border-gray-600 text-center font-bold text-green-400">Média</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {students.map((s, idx) => (
-                    <tr key={s.id} className="hover:bg-gray-700 transition-colors cursor-pointer" onClick={() => { setCurrentIndex(idx); setView('review'); }}>
-                      <td className="p-3 text-center">{s.turma}</td>
-                      <td className="p-3">{s.name}</td>
-                      <td className="p-3 text-center">{s.questions.q1.score}</td>
-                      <td className="p-3 text-center">{s.questions.q2.score}</td>
-                      <td className="p-3 text-center">{s.questions.q3.score}</td>
-                      <td className="p-3 text-center">{s.questions.q4.score}</td>
-                      <td className="p-3 text-center font-bold text-blue-400">{calculateTotal(s)}</td>
-                      <td className="p-3 text-center font-bold text-green-400">{(calculateTotal(s) / 4).toFixed(1)}</td>
+          <div className="flex flex-col gap-4">
+            <div className="flex gap-2 bg-gray-800 p-2 rounded-lg border border-gray-700">
+              {['A', 'G', 'I'].map(t => (
+                <button
+                  key={t}
+                  onClick={() => setSelectedTurma(t)}
+                  className={`px-6 py-2 rounded font-bold transition-colors ${selectedTurma === t ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'}`}
+                >
+                  Turma {t}
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 shadow-xl">
+              <div className="overflow-x-auto max-h-[calc(100vh-180px)]">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-gray-700 sticky top-0">
+                    <tr>
+                      <th className="p-3 border-b border-gray-600">Student Name</th>
+                      <th className="p-3 border-b border-gray-600 text-center">Q1</th>
+                      <th className="p-3 border-b border-gray-600 text-center">Q2</th>
+                      <th className="p-3 border-b border-gray-600 text-center">Q3</th>
+                      <th className="p-3 border-b border-gray-600 text-center">Q4</th>
+                      <th className="p-3 border-b border-gray-600 text-center font-bold">Total</th>
+                      <th className="p-3 border-b border-gray-600 text-center font-bold text-green-400">Média</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700">
+                    {students
+                      .filter(s => s.turma === selectedTurma)
+                      .map((s) => (
+                      <tr 
+                        key={s.id} 
+                        className="hover:bg-gray-700 transition-colors cursor-pointer" 
+                        onClick={() => { 
+                          const globalIdx = students.findIndex(student => student.id === s.id);
+                          setCurrentIndex(globalIdx); 
+                          setView('review'); 
+                        }}
+                      >
+                        <td className="p-3">
+                          <div className="font-medium">{s.name}</div>
+                          <div className="text-[10px] text-gray-400 truncate max-w-xs">{s.id}</div>
+                        </td>
+                        <td className="p-3 text-center">{s.questions.q1.score}</td>
+                        <td className="p-3 text-center">{s.questions.q2.score}</td>
+                        <td className="p-3 text-center">{s.questions.q3.score}</td>
+                        <td className="p-3 text-center">{s.questions.q4.score}</td>
+                        <td className="p-3 text-center font-bold text-blue-400">{calculateTotal(s)}</td>
+                        <td className="p-3 text-center font-bold text-green-400">{(calculateTotal(s) / 4).toFixed(1)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

@@ -17,19 +17,65 @@ const GRADES_FILES = {
   'I': path.join(ROOT_DIR, 'grades_turma_i.json')
 };
 
-function findCppFile(turma, questionNum, studentFolder) {
-  const qFolder = path.join(ROOT_DIR, 'Provas_Alunos', `Prova2_Turma_${turma}`, `QUESTÃO ${questionNum}`, studentFolder);
-  if (!fs.existsSync(qFolder)) return null;
+function findStudentFolder(questaoPath, studentFolder) {
+  if (fs.existsSync(path.join(questaoPath, studentFolder))) {
+    return studentFolder;
+  }
 
-  const subfolders = fs.readdirSync(qFolder).filter(f => fs.statSync(path.join(qFolder, f)).isDirectory());
-  if (subfolders.length === 0) return null;
+  // If exact match fails, try fuzzy matching due to encoding issues
+  if (!fs.existsSync(questaoPath)) return null;
+  const folders = fs.readdirSync(questaoPath);
+  
+  // Try matching by email/login if present in the folder name
+  const emailMatch = studentFolder.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  if (emailMatch) {
+    const email = emailMatch[0];
+    const match = folders.find(f => f.includes(email));
+    if (match) return match;
+  }
 
-  // Assume the first timestamp folder contains main.cpp
-  const cppPath = path.join(qFolder, subfolders[0], 'main.cpp');
-  if (fs.existsSync(cppPath)) {
-    return cppPath;
+  // Fallback: match by the first word that doesn't look like an email
+  const parts = studentFolder.split(' ').filter(p => !p.includes('@') && p.length > 3);
+  if (parts.length > 0) {
+    const match = folders.find(f => parts.every(p => {
+        // Remove special characters from both to compare
+        const cleanP = p.replace(/[^a-zA-Z0-9]/g, '');
+        return f.replace(/[^a-zA-Z0-9]/g, '').includes(cleanP);
+    }));
+    if (match) return match;
+  }
+
+  return null;
+}
+
+function findCppInDir(dirPath) {
+  if (!fs.existsSync(dirPath)) return null;
+  const items = fs.readdirSync(dirPath);
+  
+  // First look for any .cpp file in the current directory
+  const cppFile = items.find(f => f.toLowerCase().endsWith('.cpp'));
+  if (cppFile) return path.join(dirPath, cppFile);
+
+  // Then look in subdirectories
+  for (const item of items) {
+    const itemPath = path.join(dirPath, item);
+    if (fs.statSync(itemPath).isDirectory()) {
+      if (item.endsWith('.ceg')) continue;
+      const found = findCppInDir(itemPath);
+      if (found) return found;
+    }
   }
   return null;
+}
+
+function findCppFile(turma, questionNum, studentFolder) {
+  const questaoPath = path.join(ROOT_DIR, 'Provas_Alunos', `Prova2_Turma_${turma}`, `QUESTÃO ${questionNum}`);
+  const actualFolder = findStudentFolder(questaoPath, studentFolder);
+  
+  if (!actualFolder) return null;
+  
+  const qFolder = path.join(questaoPath, actualFolder);
+  return findCppInDir(qFolder);
 }
 
 app.get('/api/students', (req, res) => {
@@ -37,11 +83,36 @@ app.get('/api/students', (req, res) => {
   
   Object.entries(GRADES_FILES).forEach(([turma, filePath]) => {
     if (fs.existsSync(filePath)) {
-      const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-      Object.entries(data).forEach(([folderName, studentData]) => {
+      const rawData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      
+      // Normalize data to an array of [id, studentData]
+      let studentEntries = [];
+      if (Array.isArray(rawData)) {
+        studentEntries = rawData.map(item => [item.folder_name, item]);
+      } else {
+        studentEntries = Object.entries(rawData);
+      }
+
+      studentEntries.forEach(([folderName, studentData]) => {
+        // Try to extract name if not present
+        let name = studentData.name;
+        if (!name && folderName) {
+          // Attempt to extract name from folderName: "login Name Code login" or "Name Code login"
+          // Pattern: usually name is between email/login and code (number)
+          const parts = folderName.split(' ');
+          const numberIndex = parts.findIndex(p => /^\d{2,5}$/.test(p));
+          if (numberIndex !== -1) {
+            // If the first part looks like an email/login, start from second
+            const start = parts[0].includes('@') ? 1 : 0;
+            name = parts.slice(start, numberIndex).join(' ');
+          } else {
+            name = folderName;
+          }
+        }
+
         const student = {
           id: folderName,
-          name: studentData.name,
+          name: name || folderName,
           turma: turma,
           questions: {}
         };
@@ -84,13 +155,25 @@ app.post('/api/update-grade', (req, res) => {
     return res.status(404).send('Grades file not found');
   }
 
-  const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  if (data[studentId]) {
-    data[studentId][`q${questionNum}`] = { score, comment };
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-    res.json({ success: true });
+  let data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  
+  if (Array.isArray(data)) {
+    const index = data.findIndex(item => item.folder_name === studentId);
+    if (index !== -1) {
+      data[index][`q${questionNum}`] = { score, comment };
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+      res.json({ success: true });
+    } else {
+      res.status(404).send('Student not found');
+    }
   } else {
-    res.status(404).send('Student not found');
+    if (data[studentId]) {
+      data[studentId][`q${questionNum}`] = { score, comment };
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+      res.json({ success: true });
+    } else {
+      res.status(404).send('Student not found');
+    }
   }
 });
 

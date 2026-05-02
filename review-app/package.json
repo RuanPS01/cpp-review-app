@@ -4,7 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "install:all": "npm install --prefix client && npm install --prefix server",
+    "dev": "npx concurrently \"npm run dev --prefix client\" \"node server/index.js\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   },
   "keywords": [],
   "author": "",
