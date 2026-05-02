@@ -3,7 +3,8 @@ import axios from 'axios';
 import { 
   ChevronLeft, ChevronRight, Copy, Save, Table as TableIcon, 
   FileText, CheckCircle2, Play, Upload, Plus, Trash2, 
-  Settings, Sparkles, BookOpen, X, Loader2, Download, Info, Terminal, Monitor, Cpu, Folder
+  Settings, Sparkles, BookOpen, X, Loader2, Download, Info, Terminal, Monitor, Cpu, Folder,
+  Sun, Moon
 } from 'lucide-react';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism-tomorrow.css';
@@ -71,16 +72,16 @@ const Modal = ({ isOpen, onClose, title, icon: Icon, children, maxWidth = "max-w
   if (!shouldRender) return null;
 
   return (
-    <div className={`fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity duration-150 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
+    <div className={`fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md transition-opacity duration-150 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
       <div 
         onAnimationEnd={handleAnimationEnd}
-        className={`${isOpen ? 'animate-crt-open' : 'animate-crt-close'} bg-neutral-900 w-full ${maxWidth} rounded-xl border border-neutral-800 shadow-2xl flex flex-col overflow-hidden`}
+        className={`${isOpen ? 'animate-crt-open' : 'animate-crt-close'} bg-panel w-full ${maxWidth} rounded-xl border border-border-main shadow-2xl flex flex-col overflow-hidden transition-colors`}
       >
-        <div className="p-4 border-b border-neutral-800 flex justify-between items-center bg-black">
-          <h3 className="text-sm font-black uppercase tracking-widest text-white flex items-center gap-2">
-              <Icon size={16} className="text-cyan-500" /> {title}
+        <div className="p-4 border-b border-border-main flex justify-between items-center bg-header">
+          <h3 className="text-sm font-black uppercase tracking-widest text-text-bright flex items-center gap-2">
+              <Icon size={16} className="text-accent" /> {title}
           </h3>
-          <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors"><X size={20} /></button>
+          <button onClick={onClose} className="text-text-dim hover:text-text-bright transition-colors"><X size={20} /></button>
         </div>
         <div className="p-6">
           {children}
@@ -101,8 +102,22 @@ const App = () => {
   const [selectedTurma, setSelectedTurma] = useState<string>('');
   const [showTerminal, setShowTerminal] = useState(false);
   const [lang, setLang] = useState<'pt-BR' | 'en-US'>('pt-BR');
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
 
   const t = translations[lang];
+
+  useEffect(() => {
+    if (theme === 'light') {
+      document.documentElement.classList.add('light');
+    } else {
+      document.documentElement.classList.remove('light');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   const [editScore, setEditScore] = useState(0);
   const [editComment, setEditComment] = useState('');
@@ -131,6 +146,21 @@ const App = () => {
   const [folderTemplate, setFolderTemplate] = useState('[EMAIL] [NAME] [ID] [EMAIL]');
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
+
+  // Utility Functions
+  const calculateTotal = (student: Student) => {
+    const scores = Object.values(student.questions).map(q => q.score);
+    if (scores.length === 0) return '0.00';
+    const sum = scores.reduce((acc, s) => acc + s, 0);
+    return (sum / scores.length).toFixed(2);
+  };
+
+  const calculateClassAverage = () => {
+    const classStudents = students.filter(s => s.turma === selectedTurma);
+    if (classStudents.length === 0) return '0.00';
+    const sum = classStudents.reduce((acc, s) => acc + parseFloat(calculateTotal(s)), 0);
+    return (sum / classStudents.length).toFixed(2);
+  };
 
   useEffect(() => {
     fetchStudents();
@@ -282,21 +312,21 @@ const App = () => {
       <div
         className={`${
           toastObj.visible ? 'animate-crt-open' : 'animate-crt-close'
-        } max-w-md w-full bg-black shadow-[0_0_50px_rgba(0,0,0,0.8)] rounded-xl pointer-events-auto flex flex-col p-6 border border-neutral-800 mx-auto`}
+        } max-w-md w-full bg-panel shadow-[0_0_50px_rgba(0,0,0,0.8)] rounded-xl pointer-events-auto flex flex-col p-6 border border-border-main mx-auto`}
       >
         <div className="flex items-center gap-3 mb-4">
             <div className="bg-red-950/20 p-2 rounded-lg border border-red-900/30">
                 <Trash2 size={20} className="text-red-500" />
             </div>
-            <h3 className="text-lg font-black uppercase tracking-widest text-white">{t.confirmDeleteTitle}</h3>
+            <h3 className="text-lg font-black uppercase tracking-widest text-text-bright">{t.confirmDeleteTitle}</h3>
         </div>
-        <p className="text-sm text-neutral-400 mb-8 leading-relaxed">
-          {t.confirmDeleteMsg} <span className="text-cyan-400 font-bold drop-shadow-[0_0_5px_rgba(34,211,238,0.3)]">{turmaName}</span>. This action cannot be reversed.
+        <p className="text-sm text-text-dim mb-8 leading-relaxed">
+          {t.confirmDeleteMsg} <span className="text-accent font-bold drop-shadow-[0_0_5px_var(--accent-glow)]">{turmaName}</span>. This action cannot be reversed.
         </p>
         <div className="flex gap-4 justify-end">
           <button
             onClick={() => toast.dismiss(toastObj.id)}
-            className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-neutral-500 hover:text-white transition-colors"
+            className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-text-dim hover:text-text-bright transition-colors"
           >
             {t.cancel}
           </button>
@@ -314,7 +344,7 @@ const App = () => {
                 toast.error(t.failedToClear);
               }
             }}
-            className="px-6 py-2 bg-neutral-900 border border-red-900/50 hover:bg-red-600 hover:border-red-500 text-red-500 hover:text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all active:scale-95 shadow-lg shadow-red-900/10"
+            className="px-6 py-2 bg-panel border border-red-900/50 hover:bg-red-600 hover:border-red-500 text-red-500 hover:text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all active:scale-95 shadow-lg shadow-red-900/10"
           >
             {t.confirmDeleteAction}
           </button>
@@ -464,17 +494,17 @@ const App = () => {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6">
+    <div className="min-h-screen bg-app flex flex-col items-center justify-center gap-6">
         <div className="relative">
-            <div className="absolute inset-0 bg-cyan-500/20 blur-2xl rounded-full animate-pulse"></div>
-            <Loader2 size={64} className="text-cyan-500 animate-spin relative z-10" />
+            <div className="absolute inset-0 bg-accent/20 blur-2xl rounded-full animate-pulse"></div>
+            <Loader2 size={64} className="text-accent animate-spin relative z-10" />
         </div>
         <div className="text-center space-y-2 relative z-10">
-            <h2 className="text-cyan-500 font-black tracking-[0.3em] uppercase text-sm animate-pulse drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]">
+            <h2 className="text-accent font-black tracking-[0.3em] uppercase text-sm animate-pulse drop-shadow-[0_0_8px_var(--accent-glow)]">
                 {t.loading}
             </h2>
-            <div className="w-48 h-1 bg-neutral-900 mx-auto rounded-full overflow-hidden">
-                <div className="h-full bg-cyan-500 w-1/2 animate-[loading-bar_1.5s_infinite_ease-in-out]"></div>
+            <div className="w-48 h-1 bg-panel mx-auto rounded-full overflow-hidden">
+                <div className="h-full bg-accent w-1/2 animate-[loading-bar_1.5s_infinite_ease-in-out]"></div>
             </div>
         </div>
         <style>{`
@@ -495,14 +525,21 @@ const App = () => {
   )).sort((a, b) => a - b);
 
   return (
-    <div className="min-h-screen bg-black text-gray-300 font-sans">
-      <header className="bg-neutral-900 p-4 border-b border-neutral-800 flex justify-between items-center sticky top-0 z-10 shadow-[0_0_15px_rgba(0,255,255,0.1)]">
+    <div className="min-h-screen bg-app text-text-main font-sans">
+      <header className="bg-header p-4 border-b border-border-main flex justify-between items-center sticky top-0 z-10 shadow-[0_0_15px_rgba(0,255,255,0.1)]">
         <div className="flex items-center gap-4">
             <div className="flex gap-2">
+                <button 
+                  onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                  className="p-2 bg-button border border-border-main rounded text-text-dim hover:text-accent transition-all active:scale-95"
+                  title={theme === 'light' ? 'Dark Mode' : 'Light Mode'}
+                >
+                  {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+                </button>
                 <select 
                   value={lang} 
                   onChange={(e) => setLang(e.target.value as any)}
-                  className="bg-neutral-800 text-xs font-bold text-gray-400 border border-neutral-700 rounded px-4 py-2 focus:outline-none focus:border-cyan-500 hover:border-cyan-500/50 hover:text-cyan-400 transition-all cursor-pointer appearance-none"
+                  className="bg-button text-xs font-bold text-text-dim border border-border-main rounded px-4 py-2 focus:outline-none focus:border-accent hover:border-accent/50 hover:text-accent transition-all cursor-pointer appearance-none"
                 >
                   <option value="pt-BR">PT-BR</option>
                   <option value="en-US">EN-US</option>
@@ -513,10 +550,10 @@ const App = () => {
                     {turmas.map(turmaName => (
                         <div 
                             key={turmaName} 
-                            className={`flex items-center bg-neutral-800 rounded border transition-all group overflow-hidden ${
+                            className={`flex items-center bg-button rounded border transition-all group overflow-hidden ${
                                 selectedTurma === turmaName 
-                                ? 'border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.4)]' 
-                                : 'border-neutral-700 hover:border-cyan-500/50'
+                                ? 'border-accent shadow-[0_0_15px_var(--accent-glow)]' 
+                                : 'border-border-main hover:border-accent/50'
                             }`}
                         >
                             <button
@@ -527,16 +564,16 @@ const App = () => {
                                 }}
                                 className={`px-4 py-2 text-xs font-bold transition-all ${
                                     selectedTurma === turmaName 
-                                    ? 'bg-cyan-500 text-black' 
-                                    : 'text-gray-400 hover:text-cyan-400'
+                                    ? 'bg-accent text-black' 
+                                    : 'text-text-dim hover:text-accent'
                                 }`}
                             >
                                 {turmaName}
                             </button>
                             <button 
                                 onClick={() => handleClearTurma(turmaName)}
-                                className={`px-3 py-2 text-neutral-600 hover:text-red-500 transition-colors border-l border-neutral-700 h-full flex items-center ${
-                                    selectedTurma === turmaName ? 'bg-cyan-500/10' : ''
+                                className={`px-3 py-2 text-text-dim hover:text-red-500 transition-colors border-l border-border-main h-full flex items-center ${
+                                    selectedTurma === turmaName ? 'bg-accent/10' : ''
                                 }`}
                                 title={t.clearData}
                             >
@@ -551,26 +588,26 @@ const App = () => {
           <button 
             onClick={() => setView('review')}
             disabled={!selectedTurma}
-            className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:border-transparent disabled:hover:text-gray-400 ${view === 'review' ? 'bg-cyan-500 !border-cyan-400 text-black font-bold shadow-[0_0_15px_rgba(6,182,212,0.6)]' : 'bg-neutral-800 text-gray-400 border-neutral-700 hover:border-cyan-500/50 hover:text-cyan-400'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:border-transparent disabled:hover:text-text-main ${view === 'review' ? 'bg-accent !border-accent text-black font-bold shadow-[0_0_15px_var(--accent-glow)]' : 'bg-button text-text-dim border-border-main hover:border-accent/50 hover:text-accent'}`}
           >
             <FileText size={18} /> {t.review}
           </button>
           <button 
             onClick={() => setView('table')}
             disabled={!selectedTurma}
-            className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:border-transparent disabled:hover:text-gray-400 ${view === 'table' ? 'bg-cyan-500 !border-cyan-400 text-black font-bold shadow-[0_0_15px_rgba(6,182,212,0.6)]' : 'bg-neutral-800 text-gray-400 border-neutral-700 hover:border-cyan-500/50 hover:text-cyan-400'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:border-transparent disabled:hover:text-text-main ${view === 'table' ? 'bg-accent !border-accent text-black font-bold shadow-[0_0_15px_var(--accent-glow)]' : 'bg-button text-text-dim border-border-main hover:border-accent/50 hover:text-accent'}`}
           >
             <TableIcon size={18} /> {t.table}
           </button>
           <button 
             onClick={() => setView('import')}
-            className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 ${view === 'import' ? 'bg-cyan-500 !border-cyan-400 text-black font-bold shadow-[0_0_15px_rgba(6,182,212,0.6)]' : 'bg-neutral-800 text-gray-400 border-neutral-700 hover:border-cyan-500/50 hover:text-cyan-400'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 ${view === 'import' ? 'bg-accent !border-accent text-black font-bold shadow-[0_0_15px_var(--accent-glow)]' : 'bg-button text-text-dim border-border-main hover:border-accent/50 hover:text-accent'}`}
           >
             <Plus size={18} /> {t.import}
           </button>
           <button 
             onClick={() => setView('settings')}
-            className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 ${view === 'settings' ? 'bg-cyan-500 !border-cyan-400 text-black font-bold shadow-[0_0_15px_rgba(6,182,212,0.6)]' : 'bg-neutral-800 text-gray-400 border-neutral-700 hover:border-cyan-500/50 hover:text-cyan-400'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 ${view === 'settings' ? 'bg-accent !border-accent text-black font-bold shadow-[0_0_15px_var(--accent-glow)]' : 'bg-button text-text-dim border-border-main hover:border-accent/50 hover:text-accent'}`}
           >
             <Settings size={18} /> {t.settings}
           </button>
@@ -579,14 +616,14 @@ const App = () => {
 
       <main className="p-4">
         {view === 'settings' ? (
-          <div className="max-w-3xl mx-auto mt-10 bg-neutral-900 p-8 rounded-xl shadow-2xl border border-neutral-800">
-            <h2 className="text-2xl font-bold mb-8 flex items-center gap-3 text-white">
-                <Settings className="text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.5)]" /> {t.aiConfig}
+          <div className="max-w-3xl mx-auto mt-10 bg-panel p-8 rounded-xl shadow-2xl border border-border-main">
+            <h2 className="text-2xl font-bold mb-8 flex items-center gap-3 text-text-bright">
+                <Settings className="text-accent drop-shadow-[0_0_5px_var(--accent-glow)]" /> {t.aiConfig}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-6">
                     <div>
-                        <label className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3">{t.aiProvider}</label>
+                        <label className="block text-xs font-bold uppercase tracking-widest text-text-dim mb-3">{t.aiProvider}</label>
                         <div className="grid grid-cols-2 gap-2">
                             {['ollama', 'openai', 'gemini', 'claude'].map(p => (
                                 <button
@@ -602,7 +639,7 @@ const App = () => {
                                         setIsCustomModel(false);
                                         setIsCustomOllama(false);
                                     }}
-                                    className={`py-2 rounded-lg border text-xs font-bold uppercase tracking-wider transition-all ${aiSettings.provider === p ? 'bg-cyan-500 text-black border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'bg-black text-neutral-500 border-neutral-800 hover:border-neutral-600'}`}
+                                    className={`py-2 rounded-lg border text-xs font-bold uppercase tracking-wider transition-all ${aiSettings.provider === p ? 'bg-accent text-black border-accent shadow-[0_0_10px_var(--accent-glow)]' : 'bg-input text-text-dim border-border-main hover:border-accent/50'}`}
                                 >
                                     {p}
                                 </button>
@@ -614,10 +651,10 @@ const App = () => {
                         <div className="space-y-4">
                             <div>
                                 <div className="flex justify-between items-end mb-2">
-                                    <label className="block text-xs font-bold uppercase tracking-widest text-neutral-500">{t.ollamaModel}</label>
+                                    <label className="block text-xs font-bold uppercase tracking-widest text-text-dim">{t.ollamaModel}</label>
                                     <button 
                                         onClick={() => setShowOllamaHelp(true)}
-                                        className="text-[10px] font-bold text-cyan-500 hover:text-cyan-400 underline flex items-center gap-1"
+                                        className="text-[10px] font-bold text-accent hover:text-accent/80 underline flex items-center gap-1"
                                     >
                                         <Terminal size={10} /> {t.howToConfigure}
                                     </button>
@@ -633,7 +670,7 @@ const App = () => {
                                             setAiSettings({ ...aiSettings, ollamaModel: val });
                                         }
                                     }}
-                                    className="w-full bg-black border border-neutral-800 rounded-lg p-3 text-cyan-400 font-mono text-sm focus:outline-none focus:border-cyan-500 mb-2"
+                                    className="w-full bg-input border border-border-main rounded-lg p-3 text-accent font-mono text-sm focus:outline-none focus:border-accent mb-2 transition-colors"
                                 >
                                     <option value="" disabled>Select a local model...</option>
                                     {RECOMMENDED_MODELS.ollama.map(m => (
@@ -647,7 +684,7 @@ const App = () => {
                                         type="text"
                                         value={aiSettings.ollamaModel}
                                         onChange={(e) => setAiSettings({ ...aiSettings, ollamaModel: e.target.value })}
-                                        className="w-full bg-black border border-cyan-500/50 rounded-lg p-3 text-cyan-400 font-mono text-sm focus:outline-none focus:border-cyan-500 animate-in slide-in-from-top-1 duration-200"
+                                        className="w-full bg-input border border-accent/50 rounded-lg p-3 text-accent font-mono text-sm focus:outline-none focus:border-accent animate-in slide-in-from-top-1 duration-200 transition-colors"
                                         placeholder="Enter model name (e.g. mistral:latest)"
                                         autoFocus
                                     />
@@ -657,7 +694,7 @@ const App = () => {
                     ) : (
                         <>
                             <div>
-                                <label className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-2">{t.cloudModel}</label>
+                                <label className="block text-xs font-bold uppercase tracking-widest text-text-dim mb-2">{t.cloudModel}</label>
                                 <select 
                                     value={isCustomModel ? 'custom' : aiSettings.cloudModel}
                                     onChange={(e) => {
@@ -669,7 +706,7 @@ const App = () => {
                                             setAiSettings({ ...aiSettings, cloudModel: val });
                                         }
                                     }}
-                                    className="w-full bg-black border border-neutral-800 rounded-lg p-3 text-cyan-400 font-mono text-sm focus:outline-none focus:border-cyan-500 mb-2"
+                                    className="w-full bg-input border border-border-main rounded-lg p-3 text-accent font-mono text-sm focus:outline-none focus:border-accent mb-2 transition-colors"
                                 >
                                     <option value="" disabled>Select a model...</option>
                                     {(RECOMMENDED_MODELS[aiSettings.provider] || []).map(m => (
@@ -683,19 +720,19 @@ const App = () => {
                                         type="text"
                                         value={aiSettings.cloudModel}
                                         onChange={(e) => setAiSettings({ ...aiSettings, cloudModel: e.target.value })}
-                                        className="w-full bg-black border border-cyan-500/50 rounded-lg p-3 text-cyan-400 font-mono text-sm focus:outline-none focus:border-cyan-500 animate-in slide-in-from-top-1 duration-200"
+                                        className="w-full bg-input border border-accent/50 rounded-lg p-3 text-accent font-mono text-sm focus:outline-none focus:border-accent animate-in slide-in-from-top-1 duration-200 transition-colors"
                                         placeholder="Enter custom model ID..."
                                         autoFocus
                                     />
                                 )}
                             </div>
                             <div>
-                                <label className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-2">{t.apiKey}</label>
+                                <label className="block text-xs font-bold uppercase tracking-widest text-text-dim mb-2">{t.apiKey}</label>
                                 <input 
                                     type="password"
                                     value={aiSettings.cloudKey}
                                     onChange={(e) => setAiSettings({ ...aiSettings, cloudKey: e.target.value })}
-                                    className="w-full bg-black border border-neutral-800 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-cyan-500"
+                                    className="w-full bg-input border border-border-main rounded-lg p-3 text-text-main text-sm focus:outline-none focus:border-accent transition-colors"
                                     placeholder="••••••••••••••••"
                                 />
                             </div>
@@ -704,62 +741,62 @@ const App = () => {
                 </div>
 
                 <div className="flex flex-col h-full">
-                    <label className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3">{t.globalCriteria}</label>
+                    <label className="block text-xs font-bold uppercase tracking-widest text-text-dim mb-3">{t.globalCriteria}</label>
                     <textarea 
                         value={aiSettings.evaluationCriteria}
                         onChange={(e) => setAiSettings({ ...aiSettings, evaluationCriteria: e.target.value })}
-                        className="flex-1 w-full bg-black border border-neutral-800 rounded-lg p-4 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 resize-none min-h-[250px]"
+                        className="flex-1 w-full bg-input border border-border-main rounded-lg p-4 text-text-main text-sm focus:outline-none focus:border-accent resize-none min-h-[250px] transition-colors"
                         placeholder="Define how the AI should grade the code..."
                     />
                 </div>
             </div>
             <button 
                 onClick={() => saveAISettings(aiSettings)}
-                className="mt-8 w-full bg-cyan-500 hover:bg-cyan-400 text-black py-4 rounded-lg font-bold flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg shadow-cyan-900/10"
+                className="mt-8 w-full bg-accent hover:bg-accent/80 text-black py-4 rounded-lg font-bold flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg shadow-accent/10"
             >
                 <CheckCircle2 size={20} /> {t.saveSettings}
             </button>
           </div>
         ) : view === 'import' ? (
-          <div className="max-w-xl mx-auto mt-10 bg-neutral-900 p-8 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-neutral-800">
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-white">
-                <Upload className="text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.5)]" /> {t.importClass}
+          <div className="max-w-xl mx-auto mt-10 bg-panel p-8 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-border-main">
+            <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-text-bright">
+                <Upload className="text-accent drop-shadow-[0_0_5px_var(--accent-glow)]" /> {t.importClass}
             </h2>
             <form onSubmit={handleImport} className="flex flex-col gap-6">
                 <div>
-                    <label className="block text-sm font-medium mb-2 text-neutral-400">{t.classIdentifier}</label>
+                    <label className="block text-sm font-medium mb-2 text-text-dim">{t.classIdentifier}</label>
                     <input 
                         type="text" 
                         required
                         value={importTurma}
                         onChange={(e) => setImportTurma(e.target.value)}
                         placeholder="Ex: Class A"
-                        className="w-full bg-black border border-neutral-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500 transition-all"
+                        className="w-full bg-input border border-border-main rounded-lg p-3 text-text-main focus:outline-none focus:border-accent transition-all"
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium mb-2 text-neutral-400">{t.folderTemplate}</label>
+                    <label className="block text-sm font-medium mb-2 text-text-dim">{t.folderTemplate}</label>
                     <input 
                         type="text" 
                         required
                         value={folderTemplate}
                         onChange={(e) => setFolderTemplate(e.target.value)}
                         placeholder="Ex: [EMAIL] [NAME] [ID] [EMAIL]"
-                        className="w-full bg-black border border-neutral-700 rounded-lg p-3 text-cyan-400 font-mono text-sm focus:outline-none focus:border-cyan-500 transition-all"
+                        className="w-full bg-input border border-border-main rounded-lg p-3 text-accent font-mono text-sm focus:outline-none focus:border-accent transition-all"
                     />
                     <div className="flex gap-2 mt-2 text-[10px]">
                         {['[EMAIL]', '[NAME]', '[ID]', '[IGNORE]'].map(tag => (
-                            <span key={tag} className="bg-neutral-800 text-neutral-500 px-1 rounded border border-neutral-700">{tag}</span>
+                            <span key={tag} className="bg-button text-text-dim px-1 rounded border border-border-main">{tag}</span>
                         ))}
                     </div>
                 </div>
                 <div>
                     <div className="flex justify-between items-end mb-2">
-                        <label className="block text-sm font-medium text-neutral-400">{t.submissionsZip}</label>
+                        <label className="block text-sm font-medium text-text-dim">{t.submissionsZip}</label>
                         <button 
                             type="button"
                             onClick={() => setShowZipHelp(true)}
-                            className="text-[10px] font-bold text-cyan-500 hover:text-cyan-400 underline flex items-center gap-1"
+                            className="text-[10px] font-bold text-accent hover:text-accent/80 underline flex items-center gap-1"
                         >
                             <Info size={10} /> {t.zipHierarchy}
                         </button>
@@ -772,25 +809,25 @@ const App = () => {
                             onChange={(e) => setImportFile(e.target.files?.[0] || null)}
                             className="sr-only"
                         />
-                        <div className="w-full bg-black border-2 border-neutral-800 border-dashed rounded-lg p-10 flex flex-col items-center justify-center text-center group-hover:border-cyan-500/50 group-hover:bg-neutral-900/50 transition-all">
+                        <div className="w-full bg-input border-2 border-border-main border-dashed rounded-lg p-10 flex flex-col items-center justify-center text-center group-hover:border-accent/50 group-hover:bg-panel transition-all">
                             {!importFile ? (
                                 <>
-                                    <div className="bg-neutral-900 p-4 rounded-full mb-4 border border-neutral-800 group-hover:border-cyan-500/30 transition-colors">
-                                        <Upload size={32} className="text-neutral-600 group-hover:text-cyan-400 transition-colors" />
+                                    <div className="bg-panel p-4 rounded-full mb-4 border border-border-main group-hover:border-accent/30 transition-colors">
+                                        <Upload size={32} className="text-text-dim group-hover:text-accent transition-colors" />
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                        <span className="text-neutral-400 font-semibold group-hover:text-neutral-200">{t.clickToUpload}</span>
-                                        <span className="text-neutral-600 text-xs">{t.zipNote}</span>
+                                        <span className="text-text-dim font-semibold group-hover:text-text-main">{t.clickToUpload}</span>
+                                        <span className="text-text-dim text-xs opacity-60">{t.zipNote}</span>
                                     </div>
                                 </>
                             ) : (
                                 <>
-                                    <div className="bg-cyan-900/20 p-4 rounded-full mb-4 border border-cyan-500/30">
-                                        <CheckCircle2 size={32} className="text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
+                                    <div className="bg-accent/20 p-4 rounded-full mb-4 border border-accent/30">
+                                        <CheckCircle2 size={32} className="text-accent drop-shadow-[0_0_8px_var(--accent-glow)]" />
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                        <span className="text-cyan-400 font-bold">{importFile.name}</span>
-                                        <span className="text-neutral-500 text-xs">{t.readyForImport}</span>
+                                        <span className="text-accent font-bold">{importFile.name}</span>
+                                        <span className="text-text-dim text-xs">{t.readyForImport}</span>
                                     </div>
                                 </>
                             )}
@@ -800,7 +837,7 @@ const App = () => {
                 <button 
                     type="submit"
                     disabled={importing || !importTurma || !importFile}
-                    className="w-full bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 disabled:hover:bg-cyan-500 text-black py-4 rounded-lg font-bold flex items-center justify-center gap-3 text-lg transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(6,182,212,0.2)] hover:shadow-[0_0_25px_rgba(6,182,212,0.4)]"
+                    className="w-full bg-accent hover:bg-accent/80 disabled:opacity-30 disabled:hover:bg-accent text-black py-4 rounded-lg font-bold flex items-center justify-center gap-3 text-lg transition-all active:scale-[0.98] shadow-[0_0_20px_var(--accent-glow)] hover:shadow-[0_0_25px_var(--accent-glow)]"
                 >
                     {importing ? <><Loader2 className="animate-spin" /> {t.importing}</> : <><Upload size={20} /> {t.importClass}</>}
                 </button>
@@ -809,32 +846,32 @@ const App = () => {
         ) : view === 'review' ? (
           <div className="flex flex-col gap-4 h-[calc(100vh-120px)]">
             {!currentStudent ? (
-                <div className="flex-1 flex items-center justify-center text-neutral-600 italic">
+                <div className="flex-1 flex items-center justify-center text-text-dim italic">
                     {t.selectStudent}
                 </div>
             ) : (
                 <>
-                <div className="flex justify-between items-center bg-neutral-900 p-4 rounded-lg border border-neutral-800 shadow-lg">
+                <div className="flex justify-between items-center bg-panel p-4 rounded-lg border border-border-main shadow-lg">
                     <div className="flex items-center gap-6">
                         <div className="flex gap-2">
                         <button 
                             disabled={currentIndex === 0}
                             onClick={() => setCurrentIndex(prev => prev - 1)}
-                            className="p-2 bg-neutral-800 border border-neutral-700 rounded text-neutral-400 disabled:opacity-20 hover:text-cyan-400 hover:border-cyan-500/50 active:scale-90 transition-all"
+                            className="p-2 bg-button border border-border-main rounded text-text-dim disabled:opacity-20 hover:text-accent hover:border-accent/50 active:scale-90 transition-all"
                         >
                             <ChevronLeft />
                         </button>
                         <button 
                             disabled={currentIndex === students.length - 1}
                             onClick={() => setCurrentIndex(prev => prev + 1)}
-                            className="p-2 bg-neutral-800 border border-neutral-700 rounded text-neutral-400 disabled:opacity-20 hover:text-cyan-400 hover:border-cyan-500/50 active:scale-90 transition-all"
+                            className="p-2 bg-button border border-border-main rounded text-text-dim disabled:opacity-20 hover:text-accent hover:border-accent/50 active:scale-90 transition-all"
                         >
                             <ChevronRight />
                         </button>
                         </div>
                         <div>
-                        <h2 className="text-lg font-semibold text-white">{currentStudent.name}</h2>
-                        <p className="text-xs text-neutral-500 font-mono">{currentStudent.id} • {currentStudent.turma}</p>
+                        <h2 className="text-lg font-semibold text-text-bright">{currentStudent.name}</h2>
+                        <p className="text-xs text-text-dim font-mono">{currentStudent.id} • {currentStudent.turma}</p>
                         </div>
                     </div>
 
@@ -843,7 +880,7 @@ const App = () => {
                         <button
                             key={q}
                             onClick={() => setCurrentQ(q)}
-                            className={`px-4 py-2 rounded border border-transparent font-bold transition-all duration-200 active:scale-90 ${currentQ === q ? 'bg-cyan-500 !border-cyan-400 text-black shadow-[0_0_15px_rgba(6,182,212,0.5)]' : 'bg-neutral-800 text-neutral-500 border-neutral-700 hover:border-cyan-500/30 hover:text-cyan-400'}`}
+                            className={`px-4 py-2 rounded border border-transparent font-bold transition-all duration-200 active:scale-90 ${currentQ === q ? 'bg-accent !border-accent text-black shadow-[0_0_15px_var(--accent-glow)]' : 'bg-button text-text-dim border-border-main hover:border-accent/30 hover:text-accent'}`}
                         >
                             Q{q}
                         </button>
@@ -852,26 +889,26 @@ const App = () => {
                 </div>
 
                 <div className="flex gap-4 flex-1 overflow-hidden">
-                    <div className="flex-1 bg-black rounded-lg overflow-hidden flex flex-col border border-neutral-800 shadow-inner">
-                        <div className="bg-neutral-900/80 p-2 text-[10px] flex justify-between items-center border-b border-neutral-800">
+                    <div className="flex-1 bg-app rounded-lg overflow-hidden flex flex-col border border-border-main shadow-inner">
+                        <div className="bg-panel p-2 text-[10px] flex justify-between items-center border-b border-border-main">
                         <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-1.5 px-2 py-1 bg-black rounded border border-neutral-800 mr-2">
-                                <BookOpen size={10} className="text-cyan-500" />
-                                <span className="truncate max-w-[200px] font-mono text-neutral-400">
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-app rounded border border-border-main mr-2">
+                                <BookOpen size={10} className="text-accent" />
+                                <span className="truncate max-w-[200px] font-mono text-text-dim">
                                     {statements[`q${currentQ}`] ? t.statementLoaded : t.noStatement}
                                 </span>
                                 <button 
                                     onClick={() => setShowStatementModal(true)}
-                                    className="ml-1 text-cyan-500 hover:text-cyan-400 underline"
+                                    className="ml-1 text-accent hover:text-accent/80 underline"
                                 >
                                     {t.edit}
                                 </button>
                             </div>
-                            <span className="truncate max-w-md font-mono text-neutral-600">{currentStudent.questions[`q${currentQ}`]?.path || 'No file path'}</span>
+                            <span className="truncate max-w-md font-mono text-text-dim opacity-60">{currentStudent.questions[`q${currentQ}`]?.path || 'No file path'}</span>
                             {currentStudent.questions[`q${currentQ}`]?.path && (
                             <button 
                                 onClick={() => copyToClipboard(currentStudent.questions[`q${currentQ}`].path!)}
-                                className="hover:text-cyan-400 text-neutral-600 transition-colors"
+                                className="hover:text-accent text-text-dim transition-colors"
                                 title={t.copyPath}
                             >
                                 <Copy size={12} />
@@ -883,13 +920,13 @@ const App = () => {
                                 <>
                                 <button 
                                     onClick={handleAIAnalyze}
-                                    className="flex items-center gap-2 bg-neutral-800 border border-cyan-500/50 hover:bg-cyan-500 hover:text-black hover:border-cyan-400 px-3 py-1 rounded text-cyan-400 text-[10px] font-bold transition-all active:scale-95 group shadow-[0_0_10px_rgba(6,182,212,0.1)]"
+                                    className="flex items-center gap-2 bg-button border border-accent/50 hover:bg-accent hover:text-black hover:border-accent px-3 py-1 rounded text-accent text-[10px] font-bold transition-all active:scale-95 group shadow-[0_0_10px_rgba(6,182,212,0.1)]"
                                 >
                                     <Sparkles size={10} className="fill-current" /> {t.aiAnalyze}
                                 </button>
                                 <button 
                                     onClick={() => setShowTerminal(true)}
-                                    className="flex items-center gap-2 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-3 py-1 rounded text-gray-400 text-[10px] font-bold transition-all active:scale-95"
+                                    className="flex items-center gap-2 bg-button hover:bg-panel border border-border-main px-3 py-1 rounded text-text-dim text-[10px] font-bold transition-all active:scale-95"
                                 >
                                     <Play size={10} className="fill-current" /> {t.runCode}
                                 </button>
@@ -897,49 +934,49 @@ const App = () => {
                             )}
                         </div>
                         </div>
-                        <pre className="flex-1 overflow-auto m-0 text-sm leading-relaxed scrollbar-thin line-numbers">
-                        <code className="language-cpp block p-4 min-h-full !py-4">
+                        <pre className="flex-1 overflow-auto m-0 text-sm leading-relaxed scrollbar-thin line-numbers !bg-app">
+                        <code className="language-cpp block p-4 min-h-full !py-4 !bg-app">
                             {code}
                         </code>
                         </pre>
                     </div>
 
-                    <div className="w-80 bg-neutral-900 p-5 rounded-lg flex flex-col gap-5 border border-neutral-800 shadow-2xl">
+                    <div className="w-80 bg-panel p-5 rounded-lg flex flex-col gap-5 border border-border-main shadow-2xl">
                         <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">{t.score}</label>
+                        <label className="block text-xs font-bold uppercase tracking-wider text-text-dim mb-2">{t.score}</label>
                         <input 
                             type="number" 
                             step="0.1"
                             value={editScore}
                             onChange={(e) => setEditScore(Number(e.target.value))}
-                            className="w-full bg-black border border-neutral-800 rounded p-3 text-cyan-400 font-bold focus:outline-none focus:border-cyan-500 transition-all"
+                            className="w-full bg-input border border-border-main rounded p-3 text-accent font-bold focus:outline-none focus:border-accent transition-all"
                         />
                         </div>
                         <div className="flex-1 flex flex-col">
-                        <label className="block text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">{t.feedbackComment}</label>
+                        <label className="block text-xs font-bold uppercase tracking-wider text-text-dim mb-2">{t.feedbackComment}</label>
                         <textarea 
                             value={editComment}
                             onChange={(e) => setEditComment(e.target.value)}
-                            className="flex-1 w-full bg-black border border-neutral-800 rounded p-3 text-gray-300 focus:outline-none focus:border-cyan-500 resize-none text-sm transition-all"
+                            className="flex-1 w-full bg-input border border-border-main rounded p-3 text-text-main focus:outline-none focus:border-accent resize-none text-sm transition-all"
                             placeholder={t.enterFeedback}
                         />
                         </div>
                         <button 
                         onClick={handleSave}
                         disabled={saving}
-                        className="w-full bg-neutral-800 border border-neutral-700 hover:bg-cyan-500 hover:text-black hover:border-cyan-400 py-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg hover:shadow-[0_0_20px_rgba(6,182,212,0.3)]"
+                        className="w-full bg-button border border-border-main hover:bg-accent hover:text-black hover:border-accent py-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg hover:shadow-[0_0_20px_var(--accent-glow)]"
                         >
                         <Save size={18} /> {saving ? t.saving : t.saveGrade}
                         </button>
                         
-                        <div className="mt-2 pt-4 border-t border-neutral-800">
+                        <div className="mt-2 pt-4 border-t border-border-main">
                         <div className="flex justify-between items-baseline mb-3">
-                            <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest">{t.performance}</span>
-                            <span className="text-xl font-black text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.2)]">{calculateTotal(currentStudent)}</span>
+                            <span className="text-[10px] font-bold text-text-dim uppercase tracking-widest">{t.performance}</span>
+                            <span className="text-xl font-black text-text-bright drop-shadow-[0_0_5px_rgba(255,255,255,0.2)]">{calculateTotal(currentStudent)}</span>
                         </div>
                         <div className="grid grid-cols-4 gap-1.5">
                             {questions.map(q => (
-                                <div key={q} className={`text-center text-[9px] font-bold p-1.5 rounded border ${currentQ === q ? 'bg-cyan-500/10 border-cyan-500/50 text-cyan-400' : 'bg-black border-neutral-800 text-neutral-600'}`}>
+                                <div key={q} className={`text-center text-[9px] font-bold p-1.5 rounded border ${currentQ === q ? 'bg-accent/10 border-accent/50 text-accent' : 'bg-input border-border-main text-text-dim'}`}>
                                 Q{q}: {currentStudent.questions[`q${q}`]?.score || 0}
                                 </div>
                             ))}
@@ -953,26 +990,26 @@ const App = () => {
         ) : (
           <div className="flex flex-col gap-4">
             <div className="flex justify-between items-center px-2">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                    {t.activeClass}: <span className="text-cyan-500">{selectedTurma}</span> • <span className="text-white">{students.filter(s => s.turma === selectedTurma).length}</span> {t.studentsCount} • {t.classAverage}: <span className="text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.3)]">{calculateClassAverage()}</span>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-text-dim">
+                    {t.activeClass}: <span className="text-accent">{selectedTurma}</span> • <span className="text-text-bright">{students.filter(s => s.turma === selectedTurma).length}</span> {t.studentsCount} • {t.classAverage}: <span className="text-accent drop-shadow-[0_0_5px_var(--accent-glow)]">{calculateClassAverage()}</span>
                 </div>
                 <div className="flex gap-2">
                     <button 
                         onClick={handleExportExcel}
-                        className="flex items-center gap-2 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] text-green-500 transition-all active:scale-95 shadow-lg group"
+                        className="flex items-center gap-2 bg-panel hover:bg-button border border-border-main px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] text-green-500 transition-all active:scale-95 shadow-lg group"
                     >
                         <FileText size={14} className="group-hover:translate-y-0.5 transition-transform" />
                         {t.exportExcel}
                     </button>
                     <button 
                         onClick={handleExportGrades}
-                        className="flex items-center gap-2 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] text-cyan-500 transition-all active:scale-95 shadow-lg group"
+                        className="flex items-center gap-2 bg-panel hover:bg-button border border-border-main px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] text-accent transition-all active:scale-95 shadow-lg group"
                     >
                         <Download size={14} className="group-hover:translate-y-0.5 transition-transform" />
                         {t.exportJson}
                     </button>
-                    <div className="flex items-center bg-neutral-900 rounded-lg border border-neutral-700 overflow-hidden shadow-lg">
-                        <label className="flex items-center gap-2 hover:bg-neutral-800 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-500 cursor-pointer transition-all active:scale-95 group">
+                    <div className="flex items-center bg-panel rounded-lg border border-border-main overflow-hidden shadow-lg">
+                        <label className="flex items-center gap-2 hover:bg-button px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-accent cursor-pointer transition-all active:scale-95 group">
                             <Upload size={14} className="group-hover:animate-bounce" />
                             {t.importJson}
                             <input 
@@ -984,7 +1021,7 @@ const App = () => {
                         </label>
                         <button 
                             onClick={() => setShowJsonHelp(true)}
-                            className="px-3 py-2 border-l border-neutral-700 hover:bg-neutral-800 text-neutral-500 hover:text-cyan-400 transition-colors"
+                            className="px-3 py-2 border-l border-border-main hover:bg-button text-text-dim hover:text-accent transition-colors"
                             title={t.expectedJson}
                         >
                             <Info size={14} />
@@ -992,39 +1029,39 @@ const App = () => {
                     </div>
                 </div>
             </div>
-            <div className="bg-neutral-900 rounded-xl overflow-hidden border border-neutral-800 shadow-2xl">
+            <div className="bg-panel rounded-xl overflow-hidden border border-border-main shadow-2xl">
               <div className="overflow-x-auto max-h-[calc(100vh-180px)]">
                 <table className="w-full text-left border-collapse">
-                  <thead className="bg-neutral-800/50 border-b border-neutral-800">
+                  <thead className="bg-button/50 border-b border-border-main">
                     <tr>
-                      <th className="py-1 px-4 text-xs font-bold uppercase tracking-wider text-neutral-500">{t.studentName}</th>
+                      <th className="py-1 px-4 text-xs font-bold uppercase tracking-wider text-text-dim">{t.studentName}</th>
                       {questions.map(q => (
-                        <th key={q} className="py-1 px-2 text-xs font-bold uppercase tracking-wider text-neutral-500 text-center border-l border-neutral-800/50">Q{q}</th>
+                        <th key={q} className="py-1 px-2 text-xs font-bold uppercase tracking-wider text-text-dim text-center border-l border-border-main/50">Q{q}</th>
                       ))}
-                      <th className="py-1 px-2 text-xs font-bold uppercase tracking-wider text-cyan-500 text-center border-l border-neutral-800">{t.total}</th>
+                      <th className="py-1 px-2 text-xs font-bold uppercase tracking-wider text-accent text-center border-l border-border-main">{t.total}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-neutral-800/50">
+                  <tbody className="divide-y divide-border-main/50">
                     {students
                       .filter(s => s.turma === selectedTurma)
                       .map((s) => (
                       <tr 
                         key={s.id} 
-                        className="hover:bg-cyan-500/5 transition-colors cursor-pointer group" 
+                        className="hover:bg-accent/5 transition-colors cursor-pointer group" 
                         onClick={() => { 
                           const globalIdx = students.findIndex(student => student.id === s.id);
                           setCurrentIndex(globalIdx); 
                           setView('review'); 
                         }}
                       >
-                        <td className="py-1 px-4 border-r border-neutral-800/30">
-                          <div className="font-bold text-neutral-300 group-hover:text-cyan-400 transition-colors text-sm">{s.name}</div>
-                          <div className="text-[10px] text-neutral-600 font-mono">{s.id}</div>
+                        <td className="py-1 px-4 border-r border-border-main/30">
+                          <div className="font-bold text-text-main group-hover:text-accent transition-colors text-sm">{s.name}</div>
+                          <div className="text-[10px] text-text-dim font-mono">{s.id}</div>
                         </td>
                         {questions.map(q => (
-                          <td key={q} className="py-1 px-2 text-center text-sm text-neutral-400 tabular-nums border-r border-neutral-800/30">{s.questions[`q${q}`]?.score || 0}</td>
+                          <td key={q} className="py-1 px-2 text-center text-sm text-text-dim tabular-nums border-r border-border-main/30">{s.questions[`q${q}`]?.score || 0}</td>
                         ))}
-                        <td className="py-1 px-2 text-center font-black text-white tabular-nums group-hover:text-cyan-400 transition-colors">{calculateTotal(s)}</td>
+                        <td className="py-1 px-2 text-center font-black text-text-bright tabular-nums group-hover:text-accent transition-colors">{calculateTotal(s)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1042,15 +1079,15 @@ const App = () => {
         title={t.questionStatement}
         icon={BookOpen}
       >
-        <p className="text-xs text-neutral-500 mb-4 italic">{t.statementInstruction}</p>
+        <p className="text-xs text-text-dim mb-4 italic">{t.statementInstruction}</p>
         <textarea
             autoFocus
             defaultValue={statements[`q${currentQ}`] || ''}
             onBlur={(e) => saveStatement(e.target.value)}
-            className="w-full bg-black border border-neutral-800 rounded-lg p-4 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 min-h-[300px]"
+            className="w-full bg-input border border-border-main rounded-lg p-4 text-text-main text-sm focus:outline-none focus:border-accent min-h-[300px] transition-colors"
             placeholder={t.enterStatement}
         />        <div className="mt-6 flex justify-end">
-            <button onClick={() => setShowStatementModal(false)} className="px-6 py-2 bg-cyan-500 text-black font-black uppercase tracking-widest text-xs rounded-lg active:scale-95 transition-all shadow-lg shadow-cyan-900/20">{t.closeSave}</button>
+            <button onClick={() => setShowStatementModal(false)} className="px-6 py-2 bg-accent text-black font-black uppercase tracking-widest text-xs rounded-lg active:scale-95 transition-all shadow-lg shadow-accent/20">{t.closeSave}</button>
         </div>
       </Modal>
 
@@ -1063,34 +1100,34 @@ const App = () => {
       >
         {analyzing ? (
             <div className="flex flex-col items-center justify-center py-12 gap-4">
-                <Loader2 size={48} className="text-cyan-500 animate-spin" />
+                <Loader2 size={48} className="text-accent animate-spin" />
                 <div className="text-center">
-                    <p className="text-white font-bold uppercase tracking-widest animate-pulse">{t.analyzingCode}</p>
-                    <p className="text-xs text-neutral-500 mt-2">Connecting to {aiSettings.provider.toUpperCase()} system</p>
+                    <p className="text-text-bright font-bold uppercase tracking-widest animate-pulse">{t.analyzingCode}</p>
+                    <p className="text-xs text-text-dim mt-2">Connecting to {aiSettings.provider.toUpperCase()} system</p>
                 </div>
             </div>
         ) : aiResult && (
             <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                <div className="flex items-center justify-between bg-black p-4 rounded-lg border border-neutral-800">
-                    <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest">{t.proposedScore}</span>
-                    <span className="text-4xl font-black text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.4)]">{aiResult.score}</span>
+                <div className="flex items-center justify-between bg-input p-4 rounded-lg border border-border-main">
+                    <span className="text-xs font-bold text-text-dim uppercase tracking-widest">{t.proposedScore}</span>
+                    <span className="text-4xl font-black text-accent drop-shadow-[0_0_8px_var(--accent-glow)]">{aiResult.score}</span>
                 </div>
                 <div className="space-y-2">
-                    <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">{t.aiFeedback}</label>
-                    <div className="bg-black border border-neutral-800 p-4 rounded-lg text-sm text-gray-300 leading-relaxed max-h-[200px] overflow-auto">
+                    <label className="text-xs font-bold text-text-dim uppercase tracking-widest">{t.aiFeedback}</label>
+                    <div className="bg-input border border-border-main p-4 rounded-lg text-sm text-text-main leading-relaxed max-h-[200px] overflow-auto transition-colors">
                         {aiResult.comment}
                     </div>
                 </div>
                 <div className="flex gap-4">
                      <button 
                         onClick={() => setShowAIPreviewModal(false)}
-                        className="flex-1 px-4 py-3 border border-neutral-800 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded-lg text-xs font-bold uppercase tracking-widest transition-all"
+                        className="flex-1 px-4 py-3 border border-border-main text-text-dim hover:text-text-bright hover:bg-button rounded-lg text-xs font-bold uppercase tracking-widest transition-all"
                     >
                         {t.discard}
                     </button>
                     <button 
                         onClick={applyAIResult}
-                        className="flex-2 px-8 py-3 bg-cyan-500 text-black font-black uppercase tracking-widest text-xs rounded-lg active:scale-95 transition-all shadow-lg shadow-cyan-900/40"
+                        className="flex-2 px-8 py-3 bg-accent text-black font-black uppercase tracking-widest text-xs rounded-lg active:scale-95 transition-all shadow-lg shadow-accent/40"
                     >
                         {t.applyAiFeedback}
                     </button>
@@ -1107,11 +1144,11 @@ const App = () => {
         icon={Info}
         maxWidth="max-w-lg"
       >
-        <p className="text-xs text-neutral-400 mb-4 italic">
+        <p className="text-xs text-text-dim mb-4 italic">
             {t.jsonHelpDesc}
         </p>
-        <div className="bg-black rounded-lg p-4 font-mono text-[11px] text-cyan-400 border border-neutral-800 shadow-inner">
-            <pre>{`[
+        <div className="bg-app rounded-lg p-4 font-mono text-[11px] text-accent border border-border-main shadow-inner transition-colors">
+            <pre className="!bg-transparent">{`[
   {
     "folder_name": "aluno_id_123",
     "questions": {
@@ -1122,15 +1159,15 @@ const App = () => {
   ...
 ]`}</pre>
         </div>
-        <div className="mt-4 p-3 bg-cyan-900/10 border border-cyan-900/30 rounded-lg">
-            <p className="text-[10px] text-cyan-500/80 leading-relaxed">
+        <div className="mt-4 p-3 bg-accent/5 border border-accent/20 rounded-lg">
+            <p className="text-[10px] text-accent leading-relaxed">
                 <span className="font-bold">{t.note}:</span> {t.jsonHelpNote}
             </p>
         </div>
         <div className="mt-6 flex justify-end">
             <button 
                 onClick={() => setShowJsonHelp(false)}
-                className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white font-bold uppercase tracking-widest text-[10px] rounded-lg transition-all active:scale-95"
+                className="px-6 py-2 bg-button hover:bg-panel border border-border-main text-text-main font-bold uppercase tracking-widest text-[10px] rounded-lg transition-all active:scale-95"
             >
                 {t.gotIt}
             </button>
@@ -1147,31 +1184,31 @@ const App = () => {
       >
         <div className="space-y-6">
             <div className="space-y-2">
-                <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
-                    <Monitor size={14} className="text-cyan-500" /> {t.installRun}
+                <div className="flex items-center gap-2 text-text-bright text-xs font-bold uppercase tracking-wider">
+                    <Monitor size={14} className="text-accent" /> {t.installRun}
                 </div>
-                <p className="text-xs text-neutral-400 leading-relaxed pl-6">
+                <p className="text-xs text-text-dim leading-relaxed pl-6">
                     {t.ollamaHelpStep1}
                 </p>
             </div>
 
             <div className="space-y-2">
-                <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
-                    <Cpu size={14} className="text-cyan-500" /> {t.downloadModel}
+                <div className="flex items-center gap-2 text-text-bright text-xs font-bold uppercase tracking-wider">
+                    <Cpu size={14} className="text-accent" /> {t.downloadModel}
                 </div>
-                <p className="text-xs text-neutral-400 leading-relaxed pl-6 mb-2">
+                <p className="text-xs text-text-dim leading-relaxed pl-6 mb-2">
                     {t.ollamaHelpStep2}
                 </p>
-                <div className="bg-black rounded border border-neutral-800 p-3 ml-6">
-                    <code className="text-[11px] text-cyan-400">ollama pull llama3.3</code>
+                <div className="bg-app rounded border border-border-main p-3 ml-6 transition-colors">
+                    <code className="text-[11px] text-accent">ollama pull llama3.3</code>
                 </div>
             </div>
 
             <div className="space-y-2">
-                <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
-                    <CheckCircle2 size={14} className="text-cyan-500" /> {t.verifyConnection}
+                <div className="flex items-center gap-2 text-text-bright text-xs font-bold uppercase tracking-wider">
+                    <CheckCircle2 size={14} className="text-accent" /> {t.verifyConnection}
                 </div>
-                <p className="text-xs text-neutral-400 leading-relaxed pl-6">
+                <p className="text-xs text-text-dim leading-relaxed pl-6">
                     {t.ollamaHelpStep3}
                 </p>
             </div>
@@ -1179,7 +1216,7 @@ const App = () => {
         <div className="mt-8 flex justify-end">
             <button 
                 onClick={() => setShowOllamaHelp(false)}
-                className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white font-bold uppercase tracking-widest text-[10px] rounded-lg transition-all active:scale-95"
+                className="px-6 py-2 bg-button hover:bg-panel border border-border-main text-text-bright font-bold uppercase tracking-widest text-[10px] rounded-lg transition-all active:scale-95"
             >
                 {t.readyToCode}
             </button>
@@ -1194,44 +1231,44 @@ const App = () => {
         icon={Folder}
         maxWidth="max-w-md"
       >
-        <p className="text-xs text-neutral-400 mb-6 leading-relaxed">
+        <p className="text-xs text-text-dim mb-6 leading-relaxed">
             {t.zipHierarchyDesc}
         </p>
         
-        <div className="bg-black/50 border border-neutral-800 rounded-lg p-6 font-mono text-[11px] space-y-3">
-            <div className="flex items-center gap-2 text-cyan-400">
-                <FileText size={14} className="text-neutral-500" /> submissions.zip
+        <div className="bg-input border border-border-main rounded-lg p-6 font-mono text-[11px] space-y-3 transition-colors">
+            <div className="flex items-center gap-2 text-accent">
+                <FileText size={14} className="text-text-dim" /> submissions.zip
             </div>
-            <div className="pl-6 space-y-3 border-l border-neutral-800 ml-1.5">
-                <div className="flex items-center gap-2 text-white">
-                    <Folder size={14} className="text-cyan-500" /> {t.zipHierarchyQuestion} 1/
+            <div className="pl-6 space-y-3 border-l border-border-main ml-1.5">
+                <div className="flex items-center gap-2 text-text-bright">
+                    <Folder size={14} className="text-accent" /> {t.zipHierarchyQuestion} 1/
                 </div>
-                <div className="pl-6 space-y-3 border-l border-neutral-800 ml-1.5">
+                <div className="pl-6 space-y-3 border-l border-border-main ml-1.5">
                     {/* Example 1: Simple */}
-                    <div className="flex items-center gap-2 text-neutral-300">
-                        <Folder size={14} className="text-neutral-500" /> {t.zipHierarchyStudent1}/
+                    <div className="flex items-center gap-2 text-text-main">
+                        <Folder size={14} className="text-text-dim" /> {t.zipHierarchyStudent1}/
                     </div>
-                    <div className="pl-6 flex items-center gap-2 text-cyan-500/80">
+                    <div className="pl-6 flex items-center gap-2 text-accent opacity-80">
                         <FileText size={12} /> {t.zipHierarchyFile}
                     </div>
                     
                     {/* Example 2: With subfolder */}
-                    <div className="flex items-center gap-2 text-neutral-300 mt-3">
-                        <Folder size={14} className="text-neutral-500" /> {t.zipHierarchyStudent2}/
+                    <div className="flex items-center gap-2 text-text-main mt-3">
+                        <Folder size={14} className="text-text-dim" /> {t.zipHierarchyStudent2}/
                     </div>
-                    <div className="pl-6 space-y-1 border-l border-neutral-800 ml-1.5">
-                        <div className="flex items-center gap-2 text-neutral-500">
+                    <div className="pl-6 space-y-1 border-l border-border-main ml-1.5">
+                        <div className="flex items-center gap-2 text-text-dim">
                             <Folder size={12} /> {t.zipHierarchyData}/
                         </div>
-                        <div className="pl-6 flex items-center gap-2 text-cyan-500/80">
+                        <div className="pl-6 flex items-center gap-2 text-accent opacity-80">
                             <FileText size={12} /> {t.zipHierarchyFile}
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 text-white pt-2">
-                    <Folder size={14} className="text-cyan-500" /> {t.zipHierarchyQuestion} 2/
+                <div className="flex items-center gap-2 text-text-bright pt-2">
+                    <Folder size={14} className="text-accent" /> {t.zipHierarchyQuestion} 2/
                 </div>
-                <div className="pl-6 text-neutral-500 italic text-[10px]">
+                <div className="pl-6 text-text-dim italic text-[10px]">
                     {t.zipHierarchyRepeated}
                 </div>
             </div>
@@ -1240,7 +1277,7 @@ const App = () => {
         <div className="mt-6 flex justify-end">
             <button 
                 onClick={() => setShowZipHelp(false)}
-                className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white font-bold uppercase tracking-widest text-[10px] rounded-lg transition-all active:scale-95"
+                className="px-6 py-2 bg-button hover:bg-panel border border-border-main text-text-bright font-bold uppercase tracking-widest text-[10px] rounded-lg transition-all active:scale-95"
             >
                 {t.gotIt}
             </button>
@@ -1253,6 +1290,7 @@ const App = () => {
           filePath={currentStudent.questions[`q${currentQ}`].path!} 
           onClose={() => setShowTerminal(false)} 
           t={t}
+          theme={theme}
         />
       )}
 
@@ -1261,23 +1299,23 @@ const App = () => {
         toastOptions={{
           className: '',
           style: {
-            background: '#000000',
-            color: '#22d3ee',
-            border: '#164e63 1px solid',
-            boxShadow: '0 0 15px rgba(6,182,212,0.2)',
+            background: 'var(--bg-panel)',
+            color: 'var(--text-main)',
+            border: 'var(--border-main) 1px solid',
+            boxShadow: '0 0 15px var(--accent-glow)',
             fontSize: '14px',
             fontWeight: 'bold'
           },
           success: {
             iconTheme: {
-              primary: '#22d3ee',
-              secondary: '#000000',
+              primary: 'var(--accent)',
+              secondary: 'var(--bg-panel)',
             },
           },
           error: {
             iconTheme: {
               primary: '#ef4444',
-              secondary: '#000000',
+              secondary: 'var(--bg-panel)',
             },
           },
         }}
@@ -1309,13 +1347,15 @@ const App = () => {
           to { opacity: 0; transform: scale(0.95) translateY(-10px); }
         }
         pre[class*="language-"] {
-          background: #000000 !important;
+          background: var(--bg-app) !important;
           margin: 0 !important;
+          transition: background 0.2s ease;
         }
         pre code {
           font-family: 'Fira Code', 'Consolas', monospace !important;
-          background: #000000 !important;
-          color: #22d3ee !important;
+          background: transparent !important;
+          color: var(--accent) !important;
+          transition: color 0.2s ease;
         }
         .namespace { opacity: .7; }
         .token.string { color: #22c55e !important; }
@@ -1327,12 +1367,13 @@ const App = () => {
 
         /* Prism Line Numbers Custom Styles */
         .line-numbers .line-numbers-rows {
-          border-right: 1px solid #262626 !important;
+          border-right: 1px solid var(--border-main) !important;
           padding-top: 1rem !important; /* Matches !py-4 on code tag */
-          background: rgba(0,0,0,0.3);
+          background: var(--bg-panel);
+          opacity: 0.5;
         }
         .line-numbers-rows > span:before {
-          color: #525252 !important;
+          color: var(--text-dim) !important;
           text-shadow: none !important;
         }
         pre[class*="language-"].line-numbers {
@@ -1344,15 +1385,15 @@ const App = () => {
           height: 6px;
         }
         ::-webkit-scrollbar-track {
-          background: #000000;
+          background: var(--bg-app);
         }
         ::-webkit-scrollbar-thumb {
-          background: #262626;
+          background: var(--bg-button);
           border-radius: 10px;
         }
         ::-webkit-scrollbar-thumb:hover {
-          background: #06b2d2;
-          box-shadow: 0 0 10px rgba(6,182,212,0.5);
+          background: var(--accent);
+          box-shadow: 0 0 10px var(--accent-glow);
         }
       `}</style>
     </div>

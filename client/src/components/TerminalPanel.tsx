@@ -10,9 +10,10 @@ interface TerminalPanelProps {
   filePath: string;
   onClose: () => void;
   t: any;
+  theme: 'light' | 'dark';
 }
 
-const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, onClose, t }) => {
+const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, onClose, t, theme }) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -29,13 +30,15 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, onClose
   useEffect(() => {
     if (!shouldRender || !terminalRef.current) return;
 
+    const isLight = theme === 'light';
+
     const term = new Terminal({
       cursorBlink: true,
       theme: {
-        background: '#000000',
-        foreground: '#22d3ee',
-        cursor: '#22d3ee',
-        selectionBackground: 'rgba(34,211,238,0.3)',
+        background: isLight ? '#ffffff' : '#000000',
+        foreground: isLight ? '#0891b2' : '#22d3ee',
+        cursor: isLight ? '#0891b2' : '#22d3ee',
+        selectionBackground: isLight ? 'rgba(8,145,178,0.2)' : 'rgba(34,211,238,0.3)',
       },
       fontSize: 14,
       fontFamily: 'Fira Code, Menlo, Monaco, "Courier New", monospace',
@@ -74,33 +77,33 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, onClose
       socket.disconnect();
       term.dispose();
     };
-  }, [shouldRender, filePath, t]);
+  }, [shouldRender, filePath, t, theme]);
 
   if (!shouldRender) return null;
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity duration-150 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
+    <div className={`fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md transition-opacity duration-150 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
       <div 
         onAnimationEnd={handleAnimationEnd}
-        className={`${isOpen ? 'animate-crt-open' : 'animate-crt-close'} bg-neutral-900 w-full max-w-4xl h-[600px] rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-neutral-800 flex flex-col overflow-hidden`}
+        className={`${isOpen ? 'animate-crt-open' : 'animate-crt-close'} bg-panel w-full max-w-4xl h-[600px] rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-border-main flex flex-col overflow-hidden transition-colors`}
       >
-        <div className="bg-black p-4 border-b border-neutral-800 flex justify-between items-center">
+        <div className="bg-header p-4 border-b border-border-main flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="flex gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-neutral-800 border border-neutral-700"></div>
-                <div className="w-3 h-3 rounded-full bg-neutral-800 border border-neutral-700"></div>
-                <div className="w-3 h-3 rounded-full bg-neutral-800 border border-neutral-700"></div>
+                <div className="w-3 h-3 rounded-full bg-button border border-border-main"></div>
+                <div className="w-3 h-3 rounded-full bg-button border border-border-main"></div>
+                <div className="w-3 h-3 rounded-full bg-button border border-border-main"></div>
             </div>
-            <span className="ml-2 text-xs font-black uppercase tracking-[0.2em] text-cyan-500 drop-shadow-[0_0_5px_rgba(6,182,212,0.5)]">{t.systemTerminal}</span>
+            <span className="ml-2 text-xs font-black uppercase tracking-[0.2em] text-accent drop-shadow-[0_0_5px_var(--accent-glow)]">{t.systemTerminal}</span>
           </div>
           <button 
             onClick={onClose}
-            className="text-neutral-500 hover:text-white transition-colors p-1 hover:bg-neutral-800 rounded-md"
+            className="text-text-dim hover:text-text-bright transition-colors p-1 hover:bg-button rounded-md"
           >
             <X size={20} />
           </button>
         </div>
-        <div ref={terminalRef} className="flex-1 p-4 bg-black" />
+        <div ref={terminalRef} className={`flex-1 p-4 ${theme === 'light' ? 'bg-white' : 'bg-black'} transition-colors`} />
       </div>
     </div>
   );
