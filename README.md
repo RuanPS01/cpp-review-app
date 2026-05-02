@@ -29,14 +29,7 @@ npm run install:all
 ### 3. Development and Execution
 The application consists of a Node.js server and an Electron client.
 
-#### Start the Server
-In a separate terminal:
-```bash
-cd server
-node index.js
-```
-
-#### Start the Application (Electron)
+#### Start the Application (Electron and Server)
 In the project root:
 ```bash
 npm run dev
