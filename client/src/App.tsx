@@ -488,8 +488,11 @@ const App = () => {
 
   const turmas = Array.from(new Set(students.map(s => s.turma)));
   const currentStudent = students[currentIndex];
-  const questions = currentStudent ? Object.keys(currentStudent.questions).map(k => parseInt(k.replace('q', ''))) : [];
-  questions.sort((a, b) => a - b);
+  const questions = Array.from(new Set(
+    students
+      .filter(s => s.turma === selectedTurma)
+      .flatMap(s => Object.keys(s.questions).map(k => parseInt(k.replace('q', ''))))
+  )).sort((a, b) => a - b);
 
   return (
     <div className="min-h-screen bg-black text-gray-300 font-sans">
