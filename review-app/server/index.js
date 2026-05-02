@@ -10,6 +10,10 @@ const { spawn } = require('child_process');
 const multer = require('multer');
 const AdmZip = require('adm-zip');
 const iconv = require('iconv-lite');
+const { Ollama } = require('ollama');
+const { OpenAI } = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Anthropic = require('@anthropic-ai/sdk');
 
 const app = express();
 const server = http.createServer(app);
@@ -27,6 +31,25 @@ app.use(bodyParser.json());
 const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR);
+}
+
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const DEFAULT_SETTINGS = {
+  provider: 'ollama',
+  ollamaModel: 'llama3',
+  cloudModel: 'gpt-4o',
+  cloudKey: '',
+  evaluationCriteria: 'Analyze the code for correctness, efficiency, and style. Provide a score from 0 to 10 and a constructive comment.'
+};
+
+if (!fs.existsSync(SETTINGS_FILE)) {
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(DEFAULT_SETTINGS, null, 2));
+}
+
+function getStatementsPath(turma) {
+  const turmaDir = path.join(DATA_DIR, `turma_${turma}`);
+  if (!fs.existsSync(turmaDir)) fs.mkdirSync(turmaDir, { recursive: true });
+  return path.join(turmaDir, 'statements.json');
 }
 
 const upload = multer({ dest: 'uploads/' });
@@ -266,21 +289,126 @@ app.post('/api/update-grade', (req, res) => {
 });
 
 app.delete('/api/turma/:name', (req, res) => {
-  const turma = req.params.name;
-  const gradesFile = path.join(DATA_DIR, `grades_turma_${turma}.json`);
-  const turmaDir = path.join(DATA_DIR, `turma_${turma}`);
+// ... existing delete logic
+});
+
+// AI Settings Endpoints
+app.get('/api/settings', (req, res) => {
+  if (fs.existsSync(SETTINGS_FILE)) {
+    res.json(JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')));
+  } else {
+    res.json(DEFAULT_SETTINGS);
+  }
+});
+
+app.post('/api/settings', (req, res) => {
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(req.body, null, 2));
+  res.json({ success: true });
+});
+
+// Question Statements Endpoints
+app.get('/api/statements', (req, res) => {
+  const { turma } = req.query;
+  const filePath = getStatementsPath(turma);
+  if (fs.existsSync(filePath)) {
+    res.json(JSON.parse(fs.readFileSync(filePath, 'utf8')));
+  } else {
+    res.json({});
+  }
+});
+
+app.post('/api/statements', (req, res) => {
+  const { turma, statements } = req.body;
+  const filePath = getStatementsPath(turma);
+  fs.writeFileSync(filePath, JSON.stringify(statements, null, 2));
+  res.json({ success: true });
+});
+
+// AI Analysis Endpoint
+app.post('/api/analyze', async (req, res) => {
+  const { turma, questionNum, code } = req.body;
+  const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+  const statementsPath = getStatementsPath(turma);
+  const statements = fs.existsSync(statementsPath) ? JSON.parse(fs.readFileSync(statementsPath, 'utf8')) : {};
+  const statement = statements[`q${questionNum}`];
+
+  if (!statement) {
+    return res.status(400).json({ error: 'Question statement is missing for this class.' });
+  }
+
+  const systemPrompt = `
+    You are an expert code reviewer. 
+    Evaluate the following student C++ code based on these criteria:
+    ${settings.evaluationCriteria}
+
+    The specific question statement is:
+    ${statement}
+
+    STRICT INSTRUCTION: Return ONLY a valid JSON object with this structure:
+    {
+      "score": <number between 0 and 10>,
+      "comment": "<constructive feedback string>"
+    }
+  `;
+
+  const userPrompt = `Student Code:\n\n${code}`;
 
   try {
-    if (fs.existsSync(gradesFile)) {
-      fs.unlinkSync(gradesFile);
+    let resultText = '';
+
+    if (settings.provider === 'ollama') {
+      const ollama = new Ollama();
+      const response = await ollama.chat({
+        model: settings.ollamaModel,
+        messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+        ],
+        format: 'json'
+      });
+      resultText = response.message.content;
+    } 
+    else if (settings.provider === 'openai') {
+      const openai = new OpenAI({ apiKey: settings.cloudKey });
+      const response = await openai.chat.completions.create({
+        model: settings.cloudModel || 'gpt-4o',
+        messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+        ],
+        response_format: { type: 'json_object' }
+      });
+      resultText = response.choices[0].message.content;
     }
-    if (fs.existsSync(turmaDir)) {
-      fs.rmSync(turmaDir, { recursive: true, force: true });
+    else if (settings.provider === 'gemini') {
+      const genAI = new GoogleGenerativeAI(settings.cloudKey);
+      const model = genAI.getGenerativeModel({ model: settings.cloudModel || "gemini-1.5-pro" });
+      const result = await model.generateContent(`${systemPrompt}\n\n${userPrompt}`);
+      resultText = result.response.text();
     }
-    res.json({ success: true, message: `Turma ${turma} cleared successfully.` });
+    else if (settings.provider === 'claude') {
+      const anthropic = new Anthropic({ apiKey: settings.cloudKey });
+      const msg = await anthropic.messages.create({
+        model: settings.cloudModel || "claude-3-5-sonnet-20240620",
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      });
+      resultText = msg.content[0].text;
+    }
+
+    // Clean resultText (some models might still include markdown blocks)
+    const jsonMatch = resultText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const json = JSON.parse(jsonMatch[0]);
+      res.json(json);
+    } else {
+      throw new Error('AI failed to return valid JSON');
+    }
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to clear turma data' });
+    console.error('AI Analysis Error:', err);
+    res.status(500).json({ error: 'AI analysis failed: ' + err.message });
   }
 });
 
