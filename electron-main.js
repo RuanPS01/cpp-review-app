@@ -33,7 +33,8 @@ function createWindow() {
         setTimeout(() => mainWindow.loadURL('http://localhost:5173'), 2000);
       });
     }, 1000);
-    // DevTools disabled as requested
+    // Open DevTools by default in dev mode
+    mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, 'client', 'dist', 'index.html'));
   }
