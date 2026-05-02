@@ -14,6 +14,7 @@ import 'prismjs/plugins/line-numbers/prism-line-numbers.css';
 import TerminalPanel from './components/TerminalPanel';
 import toast, { Toaster } from 'react-hot-toast';
 import translations from './translations';
+import * as XLSX from 'xlsx';
 
 // Recommended Models Constant
 const RECOMMENDED_MODELS: Record<string, string[]> = {
@@ -410,6 +411,33 @@ const App = () => {
     }
   };
 
+  const handleExportExcel = () => {
+    if (!selectedTurma) return;
+    
+    const classStudents = students.filter(s => s.turma === selectedTurma);
+    
+    const data = classStudents.map(s => ({
+        'ID (Matrícula)': s.id,
+        'Nome completo': s.name,
+        'Q1': s.questions.q1?.score || 0,
+        'Q2': s.questions.q2?.score || 0,
+        'Q3': s.questions.q3?.score || 0,
+        'Q4': s.questions.q4?.score || 0,
+        'Média': calculateTotal(s),
+        'Comentário': Object.values(s.questions)
+            .map((q, i) => `Q${i+1}: ${q.comment || ''}`)
+            .filter(c => !c.endsWith(': '))
+            .join(' | ')
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Grades");
+    
+    XLSX.writeFile(workbook, `grades_${selectedTurma}.xlsx`);
+    toast.success(t.exportExcel + '...');
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success(t.pathCopied);
@@ -472,7 +500,7 @@ const App = () => {
                             <button 
                                 onClick={() => handleClearTurma(turmaName)}
                                 className={`px-3 py-2 text-neutral-600 hover:text-red-500 transition-colors border-l border-neutral-700 h-full flex items-center ${
-                                    selectedTurma === turmaName ? 'bg-cyan-500/20' : ''
+                                    selectedTurma === turmaName ? 'bg-cyan-500/10' : ''
                                 }`}
                                 title={t.clearData}
                             >
@@ -882,6 +910,13 @@ const App = () => {
                     {t.activeClass}: <span className="text-cyan-500">{selectedTurma}</span> • <span className="text-white">{students.filter(s => s.turma === selectedTurma).length}</span> {t.studentsCount}
                 </div>
                 <div className="flex gap-2">
+                    <button 
+                        onClick={handleExportExcel}
+                        className="flex items-center gap-2 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] text-green-500 transition-all active:scale-95 shadow-lg group"
+                    >
+                        <FileText size={14} className="group-hover:translate-y-0.5 transition-transform" />
+                        {t.exportExcel}
+                    </button>
                     <button 
                         onClick={handleExportGrades}
                         className="flex items-center gap-2 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] text-cyan-500 transition-all active:scale-95 shadow-lg group"
