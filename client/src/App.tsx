@@ -450,47 +450,6 @@ const App = () => {
     toast.success(t.exportExcel + '...');
   };
 
-  const handleExportExcel = () => {
-    if (!selectedTurma) return;
-    
-    const classStudents = students.filter(s => s.turma === selectedTurma);
-    
-    const data = classStudents.map(s => {
-        // Try to extract only the number if s.id is a complex folder name
-        let cleanId = s.id;
-        const numbers = s.id.match(/\d+/g);
-        if (numbers && numbers.length > 0) {
-            // If the ID is a full string like "email Name 123 email", 
-            // pick the numeric part. We assume the enrollment is numeric.
-            // If there's only one numeric block, it's likely the ID.
-            if (s.id.includes('@') || s.id.split(' ').length > 1) {
-                cleanId = numbers[0];
-            }
-        }
-
-        return {
-            'ID (Matrícula)': cleanId,
-            'Nome completo': s.name,
-            'Q1': s.questions.q1?.score || 0,
-            'Q2': s.questions.q2?.score || 0,
-            'Q3': s.questions.q3?.score || 0,
-            'Q4': s.questions.q4?.score || 0,
-            'Média': calculateTotal(s),
-            'Comentário': Object.values(s.questions)
-                .map((q, i) => `Q${i+1}: ${q.comment || ''}`)
-                .filter(c => !c.endsWith(': '))
-                .join(' | ')
-        };
-    });
-
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Grades");
-    
-    XLSX.writeFile(workbook, `grades_${selectedTurma}.xlsx`);
-    toast.success(t.exportExcel + '...');
-  };
-
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success(t.pathCopied);
