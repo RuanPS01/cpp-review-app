@@ -1,52 +1,60 @@
-# CPP Review App 🚀
+# CPP Review App
 
-A modern, high-performance pedagogical tool for interactive code review and grading. Built for educators who need to analyze student submissions quickly and effectively.
+A professional pedagogical tool for interactive code review and grading. Designed for educators to analyze and evaluate student submissions with efficiency and precision.
 
-## ✨ Features
+## Key Features
 
-- **Neon Cyan UI**: Sleek, high-contrast dark theme with glowing accents and smooth CRT animations.
-- **Dynamic Imports**: Upload student submissions via ZIP. The app automatically detects question structures and student metadata.
-- **AI Analysis**: Integrate local (Ollama) or cloud (Gemini, Claude, GPT) models to get instant score proposals and feedback.
-- **Interactive Terminal**: Run and interact with C++ code in real-time directly from your browser.
-- **Data Portability**: Bulk import and export grading data via JSON.
-- **Pedagogical Alignment**: Fully configurable evaluation criteria based on professional grading standards.
+- **Theme Customization**: Support for Light and Dark modes with automatic system preference detection.
+- **Dynamic Imports**: Upload student submissions via ZIP. The system automatically identifies folder structures and student metadata.
+- **AI-Powered Analysis**: Integration with local models (Ollama) and cloud services (Gemini, Claude, GPT) for automated score proposals and detailed feedback.
+- **Integrated Terminal**: Execute and interact with C++ code in real-time within the application environment.
+- **Data Portability**: Comprehensive import and export functionality for grading data using JSON and Excel formats.
+- **Configurable Criteria**: Customizable evaluation standards to align with specific pedagogical requirements.
 
-## 🛠 Setup
+## Setup Instructions
 
 ### 1. Prerequisites
 - **Node.js** (v18 or higher)
-- **G++ Compiler** (added to PATH for local code execution)
+- **G++ Compiler** (must be available in the system PATH for local code execution)
 - **Ollama** (optional, for local AI analysis)
 
 ### 2. Installation
-Clone the repository and install dependencies:
+Clone the repository and install all dependencies:
 ```bash
-# Install server dependencies
-cd server
+# Install root, client, and server dependencies
 npm install
-
-# Install client dependencies
-cd ../client
-npm install
+npm run install:all
 ```
 
-### 3. Running the App
-Start the backend and frontend:
-```bash
-# In one terminal (server folder)
-node index.js
+### 3. Development and Execution
+The application consists of a Node.js server and an Electron client.
 
-# In another terminal (client folder)
+#### Start the Server
+In a separate terminal:
+```bash
+cd server
+node index.js
+```
+
+#### Start the Application (Electron)
+In the project root:
+```bash
 npm run dev
 ```
 
-## 📂 Structure
-- `/client`: React frontend with Vite, TailwindCSS, and xterm.js.
-- `/server`: Node.js/Express backend with Socket.io and AI SDKs.
-- `/server/data`: Self-contained storage for imported submissions and grade files.
+### 4. Building the Application
+To generate a distribution package:
+```bash
+npm run electron:build
+```
 
-## 🛡 Security
-Student data and API keys are stored locally in `server/data/`, which is excluded from version control by default.
+## Project Structure
+- `/client`: React frontend utilizing Vite and TailwindCSS.
+- `/server`: Node.js/Express backend with Socket.io and AI SDKs.
+- `/server/data`: Local storage for student submissions, settings, and grading records.
+
+## Security and Privacy
+Student data and API configurations are stored locally in the `server/data/` directory. This folder is excluded from version control to ensure data privacy and security.
 
 ---
-Created for excellence in technical education.
+Built for technical education excellence.
