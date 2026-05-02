@@ -456,11 +456,11 @@ const App = () => {
     toast.success(t.pathCopied);
   };
 
-  const calculateTotal = (student: Student) => {
-    const scores = Object.values(student.questions).map(q => q.score);
-    if (scores.length === 0) return '0.00';
-    const sum = scores.reduce((acc, s) => acc + s, 0);
-    return (sum / scores.length).toFixed(2);
+  const calculateClassAverage = () => {
+    const classStudents = students.filter(s => s.turma === selectedTurma);
+    if (classStudents.length === 0) return '0.00';
+    const sum = classStudents.reduce((acc, s) => acc + parseFloat(calculateTotal(s)), 0);
+    return (sum / classStudents.length).toFixed(2);
   };
 
   if (loading) return (
@@ -954,7 +954,7 @@ const App = () => {
           <div className="flex flex-col gap-4">
             <div className="flex justify-between items-center px-2">
                 <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                    {t.activeClass}: <span className="text-cyan-500">{selectedTurma}</span> • <span className="text-white">{students.filter(s => s.turma === selectedTurma).length}</span> {t.studentsCount}
+                    {t.activeClass}: <span className="text-cyan-500">{selectedTurma}</span> • <span className="text-white">{students.filter(s => s.turma === selectedTurma).length}</span> {t.studentsCount} • {t.classAverage}: <span className="text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.3)]">{calculateClassAverage()}</span>
                 </div>
                 <div className="flex gap-2">
                     <button 
