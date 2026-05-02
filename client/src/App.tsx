@@ -526,13 +526,15 @@ const App = () => {
         <div className="flex gap-4">
           <button 
             onClick={() => setView('review')}
-            className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 ${view === 'review' ? 'bg-cyan-500 !border-cyan-400 text-black font-bold shadow-[0_0_15px_rgba(6,182,212,0.6)]' : 'bg-neutral-800 text-gray-400 border-neutral-700 hover:border-cyan-500/50 hover:text-cyan-400'}`}
+            disabled={!selectedTurma}
+            className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:border-transparent disabled:hover:text-gray-400 ${view === 'review' ? 'bg-cyan-500 !border-cyan-400 text-black font-bold shadow-[0_0_15px_rgba(6,182,212,0.6)]' : 'bg-neutral-800 text-gray-400 border-neutral-700 hover:border-cyan-500/50 hover:text-cyan-400'}`}
           >
             <FileText size={18} /> {t.review}
           </button>
           <button 
             onClick={() => setView('table')}
-            className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 ${view === 'table' ? 'bg-cyan-500 !border-cyan-400 text-black font-bold shadow-[0_0_15px_rgba(6,182,212,0.6)]' : 'bg-neutral-800 text-gray-400 border-neutral-700 hover:border-cyan-500/50 hover:text-cyan-400'}`}
+            disabled={!selectedTurma}
+            className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:border-transparent disabled:hover:text-gray-400 ${view === 'table' ? 'bg-cyan-500 !border-cyan-400 text-black font-bold shadow-[0_0_15px_rgba(6,182,212,0.6)]' : 'bg-neutral-800 text-gray-400 border-neutral-700 hover:border-cyan-500/50 hover:text-cyan-400'}`}
           >
             <TableIcon size={18} /> {t.table}
           </button>
