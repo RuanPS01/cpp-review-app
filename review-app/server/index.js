@@ -320,6 +320,60 @@ app.post('/api/update-grade', (req, res) => {
   }
 });
 
+app.get('/api/export-grades/:turma', (req, res) => {
+  const { turma } = req.params;
+  const filePath = path.join(DATA_DIR, `grades_turma_${turma}.json`);
+
+  if (fs.existsSync(filePath)) {
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    res.json(data);
+  } else {
+    res.status(404).send('Class data not found');
+  }
+});
+
+app.post('/api/import-grades', (req, res) => {
+  const { turma, grades } = req.body;
+  const filePath = path.join(DATA_DIR, `grades_turma_${turma}.json`);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send('Class not found. Please import submissions ZIP first.');
+  }
+
+  try {
+    let existingData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    
+    // Create a map for quick lookup by folder_name (studentId in frontend)
+    const gradesMap = new Map();
+    grades.forEach(g => gradesMap.set(g.folder_name || g.id, g));
+
+    const updatedData = existingData.map(student => {
+      const importStudent = gradesMap.get(student.folder_name);
+      if (importStudent && importStudent.questions) {
+        // Merge only scores and comments, preserve existing paths
+        const mergedQuestions = { ...student.questions };
+        Object.keys(importStudent.questions).forEach(qKey => {
+          if (mergedQuestions[qKey]) {
+            mergedQuestions[qKey] = {
+              ...mergedQuestions[qKey],
+              score: importStudent.questions[qKey].score ?? mergedQuestions[qKey].score,
+              comment: importStudent.questions[qKey].comment ?? mergedQuestions[qKey].comment
+            };
+          }
+        });
+        return { ...student, questions: mergedQuestions };
+      }
+      return student;
+    });
+
+    fs.writeFileSync(filePath, JSON.stringify(updatedData, null, 2), 'utf8');
+    res.json({ success: true, message: `Successfully updated ${grades.length} student records.` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to process grades JSON' });
+  }
+});
+
 app.delete('/api/turma/:name', (req, res) => {
 // ... existing delete logic
 });

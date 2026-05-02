@@ -3,7 +3,7 @@ import axios from 'axios';
 import { 
   ChevronLeft, ChevronRight, Copy, Save, Table as TableIcon, 
   FileText, CheckCircle2, Play, Upload, Plus, Trash2, 
-  Settings, Bot, Sparkles, BookOpen, X, Loader2
+  Settings, Bot, Sparkles, BookOpen, X, Loader2, Download, Info, Terminal, Monitor, Cpu
 } from 'lucide-react';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism-tomorrow.css';
@@ -17,6 +17,7 @@ const RECOMMENDED_MODELS: Record<string, string[]> = {
   openai: ['gpt-5.4-mini', 'gpt-5.4', 'gpt-5.5', 'gpt-4o', 'gpt-4-turbo'],
   gemini: ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-3-flash-preview', 'gemini-3.1-pro-preview', 'gemini-1.5-pro', 'gemini-1.5-flash'],
   claude: ['claude-3-5-sonnet-20240620', 'claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7'],
+  ollama: ['llama3.3', 'qwen3.6', 'deepseek-v4-flash', 'qwen3-coder-next', 'mistral-medium-3.5', 'gemma4', 'kimi-k2.6'],
 };
 
 interface Question {
@@ -45,6 +46,39 @@ interface AISettings {
 
 const API_BASE = 'http://localhost:3001/api';
 
+const Modal = ({ isOpen, onClose, title, icon: Icon, children, maxWidth = "max-w-2xl" }: { isOpen: boolean, onClose: () => void, title: string, icon: any, children: React.ReactNode, maxWidth?: string }) => {
+  const [shouldRender, setShouldRender] = useState(isOpen);
+
+  useEffect(() => {
+    if (isOpen) setShouldRender(true);
+  }, [isOpen]);
+
+  const handleAnimationEnd = () => {
+    if (!isOpen) setShouldRender(false);
+  };
+
+  if (!shouldRender) return null;
+
+  return (
+    <div className={`fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity duration-150 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
+      <div 
+        onAnimationEnd={handleAnimationEnd}
+        className={`${isOpen ? 'animate-crt-open' : 'animate-crt-close'} bg-neutral-900 w-full ${maxWidth} rounded-xl border border-neutral-800 shadow-2xl flex flex-col overflow-hidden`}
+      >
+        <div className="p-4 border-b border-neutral-800 flex justify-between items-center bg-black">
+          <h3 className="text-sm font-black uppercase tracking-widest text-white flex items-center gap-2">
+              <Icon size={16} className="text-cyan-500" /> {title}
+          </h3>
+          <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors"><X size={20} /></button>
+        </div>
+        <div className="p-6">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const App = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -62,12 +96,15 @@ const App = () => {
   // AI State
   const [aiSettings, setAiSettings] = useState<AISettings>({
     provider: 'ollama',
-    ollamaModel: 'llama3',
+    ollamaModel: 'llama3.3',
     cloudModel: 'gemini-1.5-flash',
     cloudKey: '',
     evaluationCriteria: ''
   });
   const [isCustomModel, setIsCustomModel] = useState(false);
+  const [isCustomOllama, setIsCustomOllama] = useState(false);
+  const [showJsonHelp, setShowJsonHelp] = useState(false);
+  const [showOllamaHelp, setShowOllamaHelp] = useState(false);
   const [statements, setStatements] = useState<Record<string, string>>({});
   const [showStatementModal, setShowStatementModal] = useState(false);
   const [showAIPreviewModal, setShowAIPreviewModal] = useState(false);
@@ -120,14 +157,21 @@ const App = () => {
     }
   }, [currentIndex, currentQ, students, view]);
 
-  // Update isCustomModel when settings are loaded
+  // Update custom model flags when settings are loaded
   useEffect(() => {
+    // Cloud
     if (aiSettings.provider !== 'ollama') {
       const recommendations = RECOMMENDED_MODELS[aiSettings.provider] || [];
       const isPredefined = recommendations.includes(aiSettings.cloudModel);
       setIsCustomModel(!isPredefined && aiSettings.cloudModel !== '');
     }
-  }, [aiSettings.provider, aiSettings.cloudModel]);
+    // Ollama
+    if (aiSettings.provider === 'ollama') {
+      const recommendations = RECOMMENDED_MODELS.ollama;
+      const isPredefined = recommendations.includes(aiSettings.ollamaModel);
+      setIsCustomOllama(!isPredefined && aiSettings.ollamaModel !== '');
+    }
+  }, [aiSettings.provider, aiSettings.cloudModel, aiSettings.ollamaModel]);
 
   useEffect(() => {
     Prism.highlightAll();
@@ -178,7 +222,6 @@ const App = () => {
       await axios.post(`${API_BASE}/statements`, { turma: selectedTurma, statements: updatedStatements });
       setStatements(updatedStatements);
       toast.success('Question statement saved');
-      setShowStatementModal(false);
     } catch (err) {
       toast.error('Failed to save statement');
     }
@@ -223,13 +266,8 @@ const App = () => {
     toast.custom((t) => (
       <div
         className={`${
-          t.visible ? 'animate-in fade-in zoom-in duration-200' : 'animate-out fade-out zoom-out duration-150'
+          t.visible ? 'animate-crt-open' : 'animate-crt-close'
         } max-w-md w-full bg-black shadow-[0_0_50px_rgba(0,0,0,0.8)] rounded-xl pointer-events-auto flex flex-col p-6 border border-neutral-800 mx-auto`}
-        style={{
-            animation: t.visible 
-                ? 'toast-enter 0.3s ease-out forwards' 
-                : 'toast-leave 0.2s ease-in forwards'
-        }}
       >
         <div className="flex items-center gap-3 mb-4">
             <div className="bg-red-950/20 p-2 rounded-lg border border-red-900/30">
@@ -327,6 +365,45 @@ const App = () => {
     }
   };
 
+  const handleImportGrades = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedTurma) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const grades = JSON.parse(event.target?.result as string);
+        await axios.post(`${API_BASE}/import-grades`, {
+          turma: selectedTurma,
+          grades: grades
+        });
+        toast.success(`Grades for ${selectedTurma} imported successfully!`);
+        await fetchStudents();
+      } catch (err) {
+        toast.error('Failed to import grades. Ensure the JSON format is correct.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleExportGrades = async () => {
+    if (!selectedTurma) return;
+    try {
+      const res = await axios.get(`${API_BASE}/export-grades/${selectedTurma}`);
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res.data, null, 2));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href",     dataStr);
+      downloadAnchorNode.setAttribute("download", `grades_${selectedTurma}.json`);
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+      toast.success(`Exporting grades for ${selectedTurma}...`);
+    } catch (err) {
+      toast.error('Failed to export grades.');
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success('Path copied to clipboard');
@@ -418,13 +495,14 @@ const App = () => {
                                     key={p}
                                     onClick={() => {
                                         const newProvider = p as any;
-                                        const defaultModel = newProvider === 'ollama' ? 'llama3' : RECOMMENDED_MODELS[newProvider][0];
+                                        const defaultModel = newProvider === 'ollama' ? 'llama3.3' : RECOMMENDED_MODELS[newProvider][0];
                                         setAiSettings({ 
                                             ...aiSettings, 
                                             provider: newProvider,
-                                            cloudModel: newProvider === 'ollama' ? aiSettings.cloudModel : defaultModel
+                                            cloudModel: newProvider === 'ollama' ? aiSettings.ollamaModel : defaultModel
                                         });
                                         setIsCustomModel(false);
+                                        setIsCustomOllama(false);
                                     }}
                                     className={`py-2 rounded-lg border text-xs font-bold uppercase tracking-wider transition-all ${aiSettings.provider === p ? 'bg-cyan-500 text-black border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'bg-black text-neutral-500 border-neutral-800 hover:border-neutral-600'}`}
                                 >
@@ -435,15 +513,48 @@ const App = () => {
                     </div>
 
                     {aiSettings.provider === 'ollama' ? (
-                        <div>
-                            <label className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-2">Ollama Model</label>
-                            <input 
-                                type="text"
-                                value={aiSettings.ollamaModel}
-                                onChange={(e) => setAiSettings({ ...aiSettings, ollamaModel: e.target.value })}
-                                className="w-full bg-black border border-neutral-800 rounded-lg p-3 text-cyan-400 font-mono text-sm focus:outline-none focus:border-cyan-500"
-                                placeholder="e.g. llama3, mistral"
-                            />
+                        <div className="space-y-4">
+                            <div>
+                                <div className="flex justify-between items-end mb-2">
+                                    <label className="block text-xs font-bold uppercase tracking-widest text-neutral-500">Ollama Model</label>
+                                    <button 
+                                        onClick={() => setShowOllamaHelp(true)}
+                                        className="text-[10px] font-bold text-cyan-500 hover:text-cyan-400 underline flex items-center gap-1"
+                                    >
+                                        <Terminal size={10} /> Setup Guide
+                                    </button>
+                                </div>
+                                <select 
+                                    value={isCustomOllama ? 'custom' : aiSettings.ollamaModel}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === 'custom') {
+                                            setIsCustomOllama(true);
+                                        } else {
+                                            setIsCustomOllama(false);
+                                            setAiSettings({ ...aiSettings, ollamaModel: val });
+                                        }
+                                    }}
+                                    className="w-full bg-black border border-neutral-800 rounded-lg p-3 text-cyan-400 font-mono text-sm focus:outline-none focus:border-cyan-500 mb-2"
+                                >
+                                    <option value="" disabled>Select a local model...</option>
+                                    {RECOMMENDED_MODELS.ollama.map(m => (
+                                        <option key={m} value={m}>{m}</option>
+                                    ))}
+                                    <option value="custom">+ Custom Model Name</option>
+                                </select>
+                                
+                                {isCustomOllama && (
+                                    <input 
+                                        type="text"
+                                        value={aiSettings.ollamaModel}
+                                        onChange={(e) => setAiSettings({ ...aiSettings, ollamaModel: e.target.value })}
+                                        className="w-full bg-black border border-cyan-500/50 rounded-lg p-3 text-cyan-400 font-mono text-sm focus:outline-none focus:border-cyan-500 animate-in slide-in-from-top-1 duration-200"
+                                        placeholder="Enter model name (e.g. mistral:latest)"
+                                        autoFocus
+                                    />
+                                )}
+                            </div>
                         </div>
                     ) : (
                         <>
@@ -736,6 +847,39 @@ const App = () => {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
+            <div className="flex justify-between items-center px-2">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                    Active Class: <span className="text-cyan-500">{selectedTurma}</span> • <span className="text-white">{students.filter(s => s.turma === selectedTurma).length}</span> Students
+                </div>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={handleExportGrades}
+                        className="flex items-center gap-2 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] text-cyan-500 transition-all active:scale-95 shadow-lg group"
+                    >
+                        <Download size={14} className="group-hover:translate-y-0.5 transition-transform" />
+                        Export JSON
+                    </button>
+                    <div className="flex items-center bg-neutral-900 rounded-lg border border-neutral-700 overflow-hidden shadow-lg">
+                        <label className="flex items-center gap-2 hover:bg-neutral-800 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-500 cursor-pointer transition-all active:scale-95 group">
+                            <Upload size={14} className="group-hover:animate-bounce" />
+                            Import JSON
+                            <input 
+                                type="file" 
+                                accept=".json" 
+                                className="hidden" 
+                                onChange={handleImportGrades}
+                            />
+                        </label>
+                        <button 
+                            onClick={() => setShowJsonHelp(true)}
+                            className="px-3 py-2 border-l border-neutral-700 hover:bg-neutral-800 text-neutral-500 hover:text-cyan-400 transition-colors"
+                            title="Expected JSON Format"
+                        >
+                            <Info size={14} />
+                        </button>
+                    </div>
+                </div>
+            </div>
             <div className="bg-neutral-900 rounded-xl overflow-hidden border border-neutral-800 shadow-2xl">
               <div className="overflow-x-auto max-h-[calc(100vh-180px)]">
                 <table className="w-full text-left border-collapse">
@@ -780,86 +924,160 @@ const App = () => {
       </main>
 
       {/* Statement Modal */}
-      {showStatementModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-neutral-900 w-full max-w-2xl rounded-xl border border-neutral-800 shadow-2xl flex flex-col">
-             <div className="p-4 border-b border-neutral-800 flex justify-between items-center bg-black">
-                <h3 className="text-sm font-black uppercase tracking-widest text-white flex items-center gap-2">
-                    <BookOpen size={16} className="text-cyan-500" /> Question Q{currentQ} Statement
-                </h3>
-                <button onClick={() => setShowStatementModal(false)} className="text-neutral-500 hover:text-white"><X size={20} /></button>
-             </div>
-             <div className="p-6">
-                <p className="text-xs text-neutral-500 mb-4 italic">Paste the specific problem description for this question. This is required for AI Analysis.</p>
-                <textarea 
-                    autoFocus
-                    defaultValue={statements[`q${currentQ}`] || ''}
-                    onBlur={(e) => saveStatement(e.target.value)}
-                    className="w-full bg-black border border-neutral-800 rounded-lg p-4 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 min-h-[300px]"
-                    placeholder="Enter question prompt here..."
-                />
-             </div>
-             <div className="p-4 border-t border-neutral-800 flex justify-end">
-                <button onClick={() => setShowStatementModal(false)} className="px-6 py-2 bg-cyan-500 text-black font-black uppercase tracking-widest text-xs rounded-lg active:scale-95 transition-all shadow-lg shadow-cyan-900/20">Close & Save</button>
-             </div>
-          </div>
+      <Modal 
+        isOpen={showStatementModal} 
+        onClose={() => setShowStatementModal(false)}
+        title={`Question Q${currentQ} Statement`}
+        icon={BookOpen}
+      >
+        <p className="text-xs text-neutral-500 mb-4 italic">Paste the specific problem description for this question. This is required for AI Analysis.</p>
+        <textarea 
+            autoFocus
+            defaultValue={statements[`q${currentQ}`] || ''}
+            onBlur={(e) => saveStatement(e.target.value)}
+            className="w-full bg-black border border-neutral-800 rounded-lg p-4 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 min-h-[300px]"
+            placeholder="Enter question prompt here..."
+        />
+        <div className="mt-6 flex justify-end">
+            <button onClick={() => setShowStatementModal(false)} className="px-6 py-2 bg-cyan-500 text-black font-black uppercase tracking-widest text-xs rounded-lg active:scale-95 transition-all shadow-lg shadow-cyan-900/20">Close & Save</button>
         </div>
-      )}
+      </Modal>
 
       {/* AI Preview Modal */}
-      {showAIPreviewModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-neutral-900 w-full max-w-2xl rounded-xl border border-neutral-800 shadow-2xl flex flex-col overflow-hidden">
-             <div className="p-4 border-b border-neutral-800 flex justify-between items-center bg-black">
-                <h3 className="text-sm font-black uppercase tracking-widest text-white flex items-center gap-2">
-                    <Sparkles size={16} className="text-cyan-500" /> AI Review Proposal
-                </h3>
-                {!analyzing && <button onClick={() => setShowAIPreviewModal(false)} className="text-neutral-500 hover:text-white"><X size={20} /></button>}
-             </div>
-             <div className="p-8 flex flex-col">
-                {analyzing ? (
-                    <div className="flex flex-col items-center justify-center py-12 gap-4">
-                        <Loader2 size={48} className="text-cyan-500 animate-spin" />
-                        <div className="text-center">
-                            <p className="text-white font-bold uppercase tracking-widest animate-pulse">Analyzing Code...</p>
-                            <p className="text-xs text-neutral-500 mt-2">Connecting to {aiSettings.provider.toUpperCase()} system</p>
-                        </div>
+      <Modal
+        isOpen={showAIPreviewModal}
+        onClose={() => !analyzing && setShowAIPreviewModal(false)}
+        title="AI Review Proposal"
+        icon={Sparkles}
+      >
+        {analyzing ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+                <Loader2 size={48} className="text-cyan-500 animate-spin" />
+                <div className="text-center">
+                    <p className="text-white font-bold uppercase tracking-widest animate-pulse">Analyzing Code...</p>
+                    <p className="text-xs text-neutral-500 mt-2">Connecting to {aiSettings.provider.toUpperCase()} system</p>
+                </div>
+            </div>
+        ) : aiResult && (
+            <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                <div className="flex items-center justify-between bg-black p-4 rounded-lg border border-neutral-800">
+                    <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Proposed Score</span>
+                    <span className="text-4xl font-black text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.4)]">{aiResult.score}</span>
+                </div>
+                <div className="space-y-2">
+                    <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">AI Feedback</label>
+                    <div className="bg-black border border-neutral-800 p-4 rounded-lg text-sm text-gray-300 leading-relaxed max-h-[200px] overflow-auto">
+                        {aiResult.comment}
                     </div>
-                ) : aiResult && (
-                    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                        <div className="flex items-center justify-between bg-black p-4 rounded-lg border border-neutral-800">
-                            <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Proposed Score</span>
-                            <span className="text-4xl font-black text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.4)]">{aiResult.score}</span>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">AI Feedback</label>
-                            <div className="bg-black border border-neutral-800 p-4 rounded-lg text-sm text-gray-300 leading-relaxed max-h-[200px] overflow-auto">
-                                {aiResult.comment}
-                            </div>
-                        </div>
-                        <div className="flex gap-4">
-                             <button 
-                                onClick={() => setShowAIPreviewModal(false)}
-                                className="flex-1 px-4 py-3 border border-neutral-800 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded-lg text-xs font-bold uppercase tracking-widest transition-all"
-                            >
-                                Discard
-                            </button>
-                            <button 
-                                onClick={applyAIResult}
-                                className="flex-2 px-8 py-3 bg-cyan-500 text-black font-black uppercase tracking-widest text-xs rounded-lg active:scale-95 transition-all shadow-lg shadow-cyan-900/40"
-                            >
-                                Apply AI Feedback
-                            </button>
-                        </div>
-                    </div>
-                )}
-             </div>
-          </div>
-        </div>
-      )}
+                </div>
+                <div className="flex gap-4">
+                     <button 
+                        onClick={() => setShowAIPreviewModal(false)}
+                        className="flex-1 px-4 py-3 border border-neutral-800 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded-lg text-xs font-bold uppercase tracking-widest transition-all"
+                    >
+                        Discard
+                    </button>
+                    <button 
+                        onClick={applyAIResult}
+                        className="flex-2 px-8 py-3 bg-cyan-500 text-black font-black uppercase tracking-widest text-xs rounded-lg active:scale-95 transition-all shadow-lg shadow-cyan-900/40"
+                    >
+                        Apply AI Feedback
+                    </button>
+                </div>
+            </div>
+        )}
+      </Modal>
 
-      {showTerminal && currentStudent && currentStudent.questions[`q${currentQ}`]?.path && (
+      {/* JSON Help Modal */}
+      <Modal
+        isOpen={showJsonHelp}
+        onClose={() => setShowJsonHelp(false)}
+        title="Expected JSON Format"
+        icon={Info}
+        maxWidth="max-w-lg"
+      >
+        <p className="text-xs text-neutral-400 mb-4 italic">
+            The JSON should be an array of objects. The <span className="text-white font-bold">folder_name</span> must match the student's original folder.
+        </p>
+        <div className="bg-black rounded-lg p-4 font-mono text-[11px] text-cyan-400 border border-neutral-800 shadow-inner">
+            <pre>{`[
+  {
+    "folder_name": "aluno_id_123",
+    "questions": {
+      "q1": { "score": 85, "comment": "Great work" },
+      "q2": { "score": 90, "comment": "Excellent logic" }
+    }
+  },
+  ...
+]`}</pre>
+        </div>
+        <div className="mt-4 p-3 bg-cyan-900/10 border border-cyan-900/30 rounded-lg">
+            <p className="text-[10px] text-cyan-500/80 leading-relaxed">
+                <span className="font-bold">Note:</span> Import will only update existing student records. Question paths and labels are preserved.
+            </p>
+        </div>
+        <div className="mt-6 flex justify-end">
+            <button 
+                onClick={() => setShowJsonHelp(false)}
+                className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white font-bold uppercase tracking-widest text-[10px] rounded-lg transition-all active:scale-95"
+            >
+                Got it
+            </button>
+        </div>
+      </Modal>
+
+      {/* Ollama Help Modal */}
+      <Modal
+        isOpen={showOllamaHelp}
+        onClose={() => setShowOllamaHelp(false)}
+        title="Ollama Local Setup Guide"
+        icon={Terminal}
+        maxWidth="max-w-lg"
+      >
+        <div className="space-y-6">
+            <div className="space-y-2">
+                <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
+                    <Monitor size={14} className="text-cyan-500" /> 1. Install & Run
+                </div>
+                <p className="text-xs text-neutral-400 leading-relaxed pl-6">
+                    Download Ollama from <a href="https://ollama.com" target="_blank" className="text-cyan-500 underline">ollama.com</a>. Once installed, ensure the Ollama application is running in your taskbar.
+                </p>
+            </div>
+
+            <div className="space-y-2">
+                <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
+                    <Cpu size={14} className="text-cyan-500" /> 2. Download Model
+                </div>
+                <p className="text-xs text-neutral-400 leading-relaxed pl-6 mb-2">
+                    Open your terminal and pull the desired model (e.g., Llama 3.3):
+                </p>
+                <div className="bg-black rounded border border-neutral-800 p-3 ml-6">
+                    <code className="text-[11px] text-cyan-400">ollama pull llama3.3</code>
+                </div>
+            </div>
+
+            <div className="space-y-2">
+                <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
+                    <CheckCircle2 size={14} className="text-cyan-500" /> 3. Verify Connection
+                </div>
+                <p className="text-xs text-neutral-400 leading-relaxed pl-6">
+                    The Review App connects to <code className="text-cyan-500">http://localhost:11434</code>. If you see "Ollama is running" in your browser, you are ready!
+                </p>
+            </div>
+        </div>
+        <div className="mt-8 flex justify-end">
+            <button 
+                onClick={() => setShowOllamaHelp(false)}
+                className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white font-bold uppercase tracking-widest text-[10px] rounded-lg transition-all active:scale-95"
+            >
+                Ready to Code
+            </button>
+        </div>
+      </Modal>
+
+      {currentStudent && currentStudent.questions[`q${currentQ}`]?.path && (
         <TerminalPanel 
+          isOpen={showTerminal}
           filePath={currentStudent.questions[`q${currentQ}`].path!} 
           onClose={() => setShowTerminal(false)} 
         />
@@ -893,6 +1111,22 @@ const App = () => {
       />
       
       <style>{`
+        @keyframes crt-open {
+          0% { transform: scaleY(0.005) scaleX(0); opacity: 0; }
+          50% { transform: scaleY(0.005) scaleX(1); opacity: 1; }
+          100% { transform: scaleY(1) scaleX(1); opacity: 1; }
+        }
+        @keyframes crt-close {
+          0% { transform: scaleY(1) scaleX(1); opacity: 1; }
+          50% { transform: scaleY(0.005) scaleX(1); opacity: 1; }
+          100% { transform: scaleY(0.005) scaleX(0); opacity: 0; }
+        }
+        .animate-crt-open {
+          animation: crt-open 0.15s ease-out forwards;
+        }
+        .animate-crt-close {
+          animation: crt-close 0.1s ease-in forwards;
+        }
         @keyframes toast-enter {
           from { opacity: 0; transform: scale(0.9) translateY(-20px); }
           to { opacity: 1; transform: scale(1) translateY(0); }

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Terminal } from 'xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { io, Socket } from 'socket.io-client';
@@ -6,17 +6,27 @@ import 'xterm/css/xterm.css';
 import { X } from 'lucide-react';
 
 interface TerminalPanelProps {
+  isOpen: boolean;
   filePath: string;
   onClose: () => void;
 }
 
-const TerminalPanel: React.FC<TerminalPanelProps> = ({ filePath, onClose }) => {
+const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, onClose }) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const [shouldRender, setShouldRender] = useState(isOpen);
 
   useEffect(() => {
-    if (!terminalRef.current) return;
+    if (isOpen) setShouldRender(true);
+  }, [isOpen]);
+
+  const handleAnimationEnd = () => {
+    if (!isOpen) setShouldRender(false);
+  };
+
+  useEffect(() => {
+    if (!shouldRender || !terminalRef.current) return;
 
     const term = new Terminal({
       cursorBlink: true,
@@ -63,11 +73,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ filePath, onClose }) => {
       socket.disconnect();
       term.dispose();
     };
-  }, [filePath]);
+  }, [shouldRender, filePath]);
+
+  if (!shouldRender) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="bg-neutral-900 w-full max-w-4xl h-[600px] rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-neutral-800 flex flex-col overflow-hidden">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity duration-150 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
+      <div 
+        onAnimationEnd={handleAnimationEnd}
+        className={`${isOpen ? 'animate-crt-open' : 'animate-crt-close'} bg-neutral-900 w-full max-w-4xl h-[600px] rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-neutral-800 flex flex-col overflow-hidden`}
+      >
         <div className="bg-black p-4 border-b border-neutral-800 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="flex gap-1.5">
