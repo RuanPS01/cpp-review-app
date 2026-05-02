@@ -1217,11 +1217,11 @@ const App = () => {
                     <div className="flex items-center gap-2 text-neutral-300 mt-3">
                         <Folder size={14} className="text-neutral-500" /> {t.zipHierarchyStudent}_2/
                     </div>
-                    <div className="pl-6 space-y-1">
+                    <div className="pl-6 space-y-1 border-l border-neutral-800 ml-1.5">
                         <div className="flex items-center gap-2 text-neutral-500">
                             <Folder size={12} /> {t.zipHierarchyData}/
                         </div>
-                        <div className="flex items-center gap-2 text-cyan-500/80">
+                        <div className="pl-6 flex items-center gap-2 text-cyan-500/80">
                             <FileText size={12} /> {t.zipHierarchyFile}
                         </div>
                     </div>
