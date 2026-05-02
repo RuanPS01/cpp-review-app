@@ -37,9 +37,41 @@ const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const DEFAULT_SETTINGS = {
   provider: 'ollama',
   ollamaModel: 'llama3',
-  cloudModel: 'gpt-4o',
+  cloudModel: 'gemini-1.5-flash',
   cloudKey: '',
-  evaluationCriteria: 'Analyze the code for correctness, efficiency, and style. Provide a score from 0 to 10 and a constructive comment.'
+  evaluationCriteria: `Sistema de correção:
+
+Pontuações e exceções:
+- Cada questão deve ser pontuada de 0 a 100;
+- O resultado final é a média simples entre as notas das questões sem diferença de pesos;
+- Um código implementado pelo aluno não necessariamente deve rodar para receber pontuações, a proximidade com a resposta correta deve ser considerada;
+- Estruturas base obrigatórias para a criação de um código, rendem apenas 1 ponto na questão (1 de 100).
+- Uma questão terá pontuação 0 se:
+	* Se for uma implementação para tentativa de burlar o teste automatizado, simulando saídas específicas para entradas específicas, ou seja colocando apenas ifs e couts sem lógica de implementação;
+	* Se foi implementada utilizando estruturas de código que não fazem parte do conteúdo de prova;
+
+Regras de correção para desconto de pontuação. Considerando que cada questão vale de 0 a 100, uma questão não terá 100 quando os descontos dos erros abaixo acontecerem:
+- (-5 pontos) - Se uma estrutura de repetição está com a quantidade de repetições incorretas (apenas erro de quantidade), ou apenas com condição inversa;
+- (-10 pontos) - Se há pequenos erros de identação de código;
+- (-20 pontos) - Se todo o código está sem identação;
+- (-10 pontos) - Se foi utilizada tipagem de variável errada para o problema proposto;
+- (-10 pontos) - Se o código está praticamente correto perânte ao que a questão pede, porém com erro de sintaxe (Exemplos: acesso a uma variável que não existe por erro de digitação; "ponto-e-vírgula" faltante; chave ou parêntezes de abertura ou fechamento faltante; caractere de operador relacional faltante)
+- (-30 pontos) - Se a lógica do que foi implementado está inversa com o que foi pedido na questão (Exemplo: a questão pediu valor maior, e retornar o menor e vice versa)
+- (-30 pontos) - Se uma operação matemática que foi solicitada pela questão possui erros de lógica matemática implementada;
+- (-10 pontos) - Se a saída de resultado do código está diferente (visualmente) ou faltante para o resultado esperado (Ex: é esperado "X = " e o terminal mostrou "valor-> ")
+- (-80 pontos) - Se o código possui lógica inconsistente ou que não condiz com o que foi pedido mas possui demais implementações realizadas corretamente como a entrada e saída de informações e demais estruturas;
+
+Situações conhecidas:
+- Caso uma implementação de código não faça sentido diante da programação, a questão deverá ser pontuada até no máximo 20 pontos de acordo com as estruturas que foram implementadas corretamente diante ao que foi pedido pela questão.
+	Exemplo de erros: int 2.0; ou int (A < 2); {} ou 2 = X; ou cin >> 1.0;
+
+- Caso a implementação esteja incompleta, exemplo: somente os cin de entrada, ou somente as saídas, não contendo a lógica central do que foi pedido, a pontuação máxima diante do que foi feito deve ser até 10 pontos somente.
+
+- Caso hava mais erros de código que não foram citados aqui mas podem ser avaliados, pondere e desconte de 5 a 10 pontos da questão conforme a criticidade do erro de implementação.
+
+- Não há notas negativas.
+
+- Se uma questão teve bastantes erros mas teve alguma implementação que faça sentido, mesmo que minimamente, ou seja, ela não é completamente 0, mesmo que a subtração dos pontos citados acima chegue em 0. Ou seja, pondere o grau de assertividade geral caso as subtrações dos critérios não se aplique corretamente.`
 };
 
 if (!fs.existsSync(SETTINGS_FILE)) {
