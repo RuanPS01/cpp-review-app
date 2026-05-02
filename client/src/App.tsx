@@ -820,8 +820,8 @@ const App = () => {
                             )}
                         </div>
                         </div>
-                        <pre className="flex-1 overflow-auto p-6 m-0 text-sm leading-relaxed">
-                        <code className="language-cpp">
+                        <pre className="flex-1 overflow-auto m-0 text-sm leading-relaxed scrollbar-thin">
+                        <code className="language-cpp block p-4 min-h-full">
                             {code}
                         </code>
                         </pre>
