@@ -1205,11 +1205,25 @@ const App = () => {
                     <Folder size={14} className="text-cyan-500" /> {t.zipHierarchyQuestion} 1/
                 </div>
                 <div className="pl-6 space-y-2 border-l border-neutral-800 ml-1.5">
+                    {/* Example 1: Simple */}
                     <div className="flex items-center gap-2 text-neutral-300">
-                        <Folder size={14} className="text-neutral-500" /> {t.zipHierarchyStudent}/
+                        <Folder size={14} className="text-neutral-500" /> {t.zipHierarchyStudent}_1/
                     </div>
                     <div className="pl-6 flex items-center gap-2 text-cyan-500/80">
                         <FileText size={12} /> {t.zipHierarchyFile}
+                    </div>
+                    
+                    {/* Example 2: With subfolder */}
+                    <div className="flex items-center gap-2 text-neutral-300 mt-3">
+                        <Folder size={14} className="text-neutral-500" /> {t.zipHierarchyStudent}_2/
+                    </div>
+                    <div className="pl-6 space-y-1">
+                        <div className="flex items-center gap-2 text-neutral-500">
+                            <Folder size={12} /> {t.zipHierarchyData}/
+                        </div>
+                        <div className="flex items-center gap-2 text-cyan-500/80">
+                            <FileText size={12} /> {t.zipHierarchyFile}
+                        </div>
                     </div>
                 </div>
                 <div className="flex items-center gap-2 text-white pt-2">
