@@ -9,9 +9,10 @@ interface TerminalPanelProps {
   isOpen: boolean;
   filePath: string;
   onClose: () => void;
+  t: any;
 }
 
-const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, onClose }) => {
+const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, onClose, t }) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -51,7 +52,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, onClose
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      term.writeln('\x1b[32mConnected to execution server\x1b[0m');
+      term.writeln(`\x1b[32m${t.connectedToServer}\x1b[0m`);
       socket.emit('run-code', { filePath });
     });
 
@@ -73,7 +74,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, onClose
       socket.disconnect();
       term.dispose();
     };
-  }, [shouldRender, filePath]);
+  }, [shouldRender, filePath, t]);
 
   if (!shouldRender) return null;
 
@@ -90,7 +91,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, onClose
                 <div className="w-3 h-3 rounded-full bg-neutral-800 border border-neutral-700"></div>
                 <div className="w-3 h-3 rounded-full bg-neutral-800 border border-neutral-700"></div>
             </div>
-            <span className="ml-2 text-xs font-black uppercase tracking-[0.2em] text-cyan-500 drop-shadow-[0_0_5px_rgba(6,182,212,0.5)]">System Terminal</span>
+            <span className="ml-2 text-xs font-black uppercase tracking-[0.2em] text-cyan-500 drop-shadow-[0_0_5px_rgba(6,182,212,0.5)]">{t.systemTerminal}</span>
           </div>
           <button 
             onClick={onClose}

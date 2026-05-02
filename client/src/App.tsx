@@ -50,6 +50,13 @@ interface AISettings {
 
 const API_BASE = 'http://localhost:3001/api';
 
+const calculateTotal = (student: Student) => {
+  const scores = Object.values(student.questions).map(q => q.score);
+  if (scores.length === 0) return '0.00';
+  const sum = scores.reduce((acc, s) => acc + s, 0);
+  return (sum / scores.length).toFixed(2);
+};
+
 const Modal = ({ isOpen, onClose, title, icon: Icon, children, maxWidth = "max-w-2xl" }: { isOpen: boolean, onClose: () => void, title: string, icon: any, children: React.ReactNode, maxWidth?: string }) => {
   const [shouldRender, setShouldRender] = useState(isOpen);
 
@@ -456,13 +463,6 @@ const App = () => {
     toast.success(t.pathCopied);
   };
 
-  const calculateClassAverage = () => {
-    const classStudents = students.filter(s => s.turma === selectedTurma);
-    if (classStudents.length === 0) return '0.00';
-    const sum = classStudents.reduce((acc, s) => acc + parseFloat(calculateTotal(s)), 0);
-    return (sum / classStudents.length).toFixed(2);
-  };
-
   if (loading) return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6">
         <div className="relative">
@@ -619,7 +619,7 @@ const App = () => {
                                         onClick={() => setShowOllamaHelp(true)}
                                         className="text-[10px] font-bold text-cyan-500 hover:text-cyan-400 underline flex items-center gap-1"
                                     >
-                                        <Terminal size={10} /> {t.expectedJson}
+                                        <Terminal size={10} /> {t.howToConfigure}
                                     </button>
                                 </div>
                                 <select 
@@ -639,7 +639,7 @@ const App = () => {
                                     {RECOMMENDED_MODELS.ollama.map(m => (
                                         <option key={m} value={m}>{m}</option>
                                     ))}
-                                    <option value="custom">+ Custom Model Name</option>
+                                    <option value="custom">{t.customModelName}</option>
                                 </select>
                                 
                                 {isCustomOllama && (
@@ -675,7 +675,7 @@ const App = () => {
                                     {(RECOMMENDED_MODELS[aiSettings.provider] || []).map(m => (
                                         <option key={m} value={m}>{m}</option>
                                     ))}
-                                    <option value="custom">+ Custom Model Name</option>
+                                    <option value="custom">{t.customModelName}</option>
                                 </select>
                                 
                                 {isCustomModel && (
@@ -1036,21 +1036,20 @@ const App = () => {
       </main>
 
       {/* Statement Modal */}
-      <Modal 
-        isOpen={showStatementModal} 
+      <Modal
+        isOpen={showStatementModal}
         onClose={() => setShowStatementModal(false)}
         title={t.questionStatement}
         icon={BookOpen}
       >
-        <p className="text-xs text-neutral-500 mb-4 italic">Paste the specific problem description for this question. This is required for AI Analysis.</p>
-        <textarea 
+        <p className="text-xs text-neutral-500 mb-4 italic">{t.statementInstruction}</p>
+        <textarea
             autoFocus
             defaultValue={statements[`q${currentQ}`] || ''}
             onBlur={(e) => saveStatement(e.target.value)}
             className="w-full bg-black border border-neutral-800 rounded-lg p-4 text-gray-300 text-sm focus:outline-none focus:border-cyan-500 min-h-[300px]"
-            placeholder="Enter question prompt here..."
-        />
-        <div className="mt-6 flex justify-end">
+            placeholder={t.enterStatement}
+        />        <div className="mt-6 flex justify-end">
             <button onClick={() => setShowStatementModal(false)} className="px-6 py-2 bg-cyan-500 text-black font-black uppercase tracking-widest text-xs rounded-lg active:scale-95 transition-all shadow-lg shadow-cyan-900/20">{t.closeSave}</button>
         </div>
       </Modal>
@@ -1109,7 +1108,7 @@ const App = () => {
         maxWidth="max-w-lg"
       >
         <p className="text-xs text-neutral-400 mb-4 italic">
-            The JSON should be an array of objects. The <span className="text-white font-bold">folder_name</span> must match the student's original folder.
+            {t.jsonHelpDesc}
         </p>
         <div className="bg-black rounded-lg p-4 font-mono text-[11px] text-cyan-400 border border-neutral-800 shadow-inner">
             <pre>{`[
@@ -1125,7 +1124,7 @@ const App = () => {
         </div>
         <div className="mt-4 p-3 bg-cyan-900/10 border border-cyan-900/30 rounded-lg">
             <p className="text-[10px] text-cyan-500/80 leading-relaxed">
-                <span className="font-bold">Note:</span> Import will only update existing student records. Question paths and labels are preserved.
+                <span className="font-bold">{t.note}:</span> {t.jsonHelpNote}
             </p>
         </div>
         <div className="mt-6 flex justify-end">
@@ -1133,7 +1132,7 @@ const App = () => {
                 onClick={() => setShowJsonHelp(false)}
                 className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white font-bold uppercase tracking-widest text-[10px] rounded-lg transition-all active:scale-95"
             >
-                Got it
+                {t.gotIt}
             </button>
         </div>
       </Modal>
@@ -1152,7 +1151,7 @@ const App = () => {
                     <Monitor size={14} className="text-cyan-500" /> {t.installRun}
                 </div>
                 <p className="text-xs text-neutral-400 leading-relaxed pl-6">
-                    Download Ollama from <a href="https://ollama.com" target="_blank" className="text-cyan-500 underline">ollama.com</a>. Once installed, ensure the Ollama application is running in your taskbar.
+                    {t.ollamaHelpStep1}
                 </p>
             </div>
 
@@ -1161,7 +1160,7 @@ const App = () => {
                     <Cpu size={14} className="text-cyan-500" /> {t.downloadModel}
                 </div>
                 <p className="text-xs text-neutral-400 leading-relaxed pl-6 mb-2">
-                    Open your terminal and pull the desired model (e.g., Llama 3.3):
+                    {t.ollamaHelpStep2}
                 </p>
                 <div className="bg-black rounded border border-neutral-800 p-3 ml-6">
                     <code className="text-[11px] text-cyan-400">ollama pull llama3.3</code>
@@ -1173,7 +1172,7 @@ const App = () => {
                     <CheckCircle2 size={14} className="text-cyan-500" /> {t.verifyConnection}
                 </div>
                 <p className="text-xs text-neutral-400 leading-relaxed pl-6">
-                    The Review App connects to <code className="text-cyan-500">http://localhost:11434</code>. If you see "Ollama is running" in your browser, you are ready!
+                    {t.ollamaHelpStep3}
                 </p>
             </div>
         </div>
@@ -1243,7 +1242,7 @@ const App = () => {
                 onClick={() => setShowZipHelp(false)}
                 className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white font-bold uppercase tracking-widest text-[10px] rounded-lg transition-all active:scale-95"
             >
-                {t.cancel === 'Cancelar' ? 'Entendi' : 'Got it'}
+                {t.gotIt}
             </button>
         </div>
       </Modal>
@@ -1253,6 +1252,7 @@ const App = () => {
           isOpen={showTerminal}
           filePath={currentStudent.questions[`q${currentQ}`].path!} 
           onClose={() => setShowTerminal(false)} 
+          t={t}
         />
       )}
 
