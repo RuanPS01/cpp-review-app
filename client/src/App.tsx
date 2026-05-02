@@ -436,7 +436,7 @@ const App = () => {
                 <select 
                   value={lang} 
                   onChange={(e) => setLang(e.target.value as any)}
-                  className="bg-neutral-800 text-[10px] font-bold text-neutral-400 border border-neutral-700 rounded px-2 py-1 focus:outline-none focus:border-cyan-500"
+                  className="bg-neutral-800 text-xs font-bold text-gray-400 border border-neutral-700 rounded px-4 py-2 focus:outline-none focus:border-cyan-500 hover:border-cyan-500/50 hover:text-cyan-400 transition-all cursor-pointer appearance-none"
                 >
                   <option value="pt-BR">PT-BR</option>
                   <option value="en-US">EN-US</option>
@@ -444,24 +444,24 @@ const App = () => {
             </div>
             {turmas.length > 0 && (
                 <div className="flex gap-2 ml-4">
-                    {turmas.map(t => (
-                        <div key={t} className="flex items-center bg-neutral-800 rounded overflow-hidden border border-neutral-700 transition-all active:scale-95">
+                    {turmas.map(turmaName => (
+                        <div key={turmaName} className="flex items-center bg-neutral-800 rounded border border-neutral-700 hover:border-cyan-500/50 transition-all group">
                             <button
                                 onClick={() => {
-                                    setSelectedTurma(t);
-                                    const firstIdx = students.findIndex(s => s.turma === t);
+                                    setSelectedTurma(turmaName);
+                                    const firstIdx = students.findIndex(s => s.turma === turmaName);
                                     setCurrentIndex(firstIdx);
                                 }}
-                                className={`px-3 py-1 text-xs font-bold transition-all ${selectedTurma === t ? 'bg-cyan-500 text-black shadow-[0_0_10px_rgba(6,182,212,0.5)]' : 'text-gray-400 hover:bg-neutral-700'}`}
+                                className={`px-4 py-2 text-xs font-bold transition-all rounded-l-lg ${selectedTurma === turmaName ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.5)]' : 'text-gray-400 hover:text-cyan-400'}`}
                             >
-                                {t}
+                                {turmaName}
                             </button>
                             <button 
-                                onClick={() => handleClearTurma(t)}
-                                className="px-2 py-1 text-neutral-600 hover:text-red-500 hover:bg-neutral-700 transition-colors border-l border-neutral-700"
+                                onClick={() => handleClearTurma(turmaName)}
+                                className={`px-3 py-2 text-neutral-600 hover:text-red-500 transition-colors border-l border-neutral-700 h-full flex items-center ${selectedTurma === turmaName ? 'bg-cyan-500/10' : ''}`}
                                 title={t.clearData}
                             >
-                                <Trash2 size={12} />
+                                <Trash2 size={14} />
                             </button>
                         </div>
                     ))}
