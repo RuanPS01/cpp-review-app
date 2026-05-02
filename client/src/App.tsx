@@ -473,8 +473,7 @@ const App = () => {
     <div className="min-h-screen bg-black text-gray-300 font-sans">
       <header className="bg-neutral-900 p-4 border-b border-neutral-800 flex justify-between items-center sticky top-0 z-10 shadow-[0_0_15px_rgba(0,255,255,0.1)]">
         <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-cyan-600 bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(34,211,238,0.5)] cursor-pointer" onClick={() => setView('review')}>{t.appName}</h1>
-            <div className="flex gap-2 ml-4">
+            <div className="flex gap-2">
                 <select 
                   value={lang} 
                   onChange={(e) => setLang(e.target.value as any)}
