@@ -445,20 +445,33 @@ const App = () => {
             {turmas.length > 0 && (
                 <div className="flex gap-2 ml-4">
                     {turmas.map(turmaName => (
-                        <div key={turmaName} className="flex items-center bg-neutral-800 rounded border border-neutral-700 hover:border-cyan-500/50 transition-all group">
+                        <div 
+                            key={turmaName} 
+                            className={`flex items-center bg-neutral-800 rounded border transition-all group overflow-hidden ${
+                                selectedTurma === turmaName 
+                                ? 'border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.4)]' 
+                                : 'border-neutral-700 hover:border-cyan-500/50'
+                            }`}
+                        >
                             <button
                                 onClick={() => {
                                     setSelectedTurma(turmaName);
                                     const firstIdx = students.findIndex(s => s.turma === turmaName);
                                     setCurrentIndex(firstIdx);
                                 }}
-                                className={`px-4 py-2 text-xs font-bold transition-all rounded-l-lg ${selectedTurma === turmaName ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.5)]' : 'text-gray-400 hover:text-cyan-400'}`}
+                                className={`px-4 py-2 text-xs font-bold transition-all ${
+                                    selectedTurma === turmaName 
+                                    ? 'bg-cyan-500 text-black' 
+                                    : 'text-gray-400 hover:text-cyan-400'
+                                }`}
                             >
                                 {turmaName}
                             </button>
                             <button 
                                 onClick={() => handleClearTurma(turmaName)}
-                                className={`px-3 py-2 text-neutral-600 hover:text-red-500 transition-colors border-l border-neutral-700 h-full flex items-center ${selectedTurma === turmaName ? 'bg-cyan-500/10' : ''}`}
+                                className={`px-3 py-2 text-neutral-600 hover:text-red-500 transition-colors border-l border-neutral-700 h-full flex items-center ${
+                                    selectedTurma === turmaName ? 'bg-cyan-500/20' : ''
+                                }`}
                                 title={t.clearData}
                             >
                                 <Trash2 size={14} />
