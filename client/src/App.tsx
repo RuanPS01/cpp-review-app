@@ -1003,11 +1003,11 @@ const App = () => {
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-neutral-800/50 border-b border-neutral-800">
                     <tr>
-                      <th className="p-4 text-xs font-bold uppercase tracking-wider text-neutral-500">{t.studentName}</th>
+                      <th className="py-2 px-4 text-xs font-bold uppercase tracking-wider text-neutral-500">{t.studentName}</th>
                       {questions.map(q => (
-                        <th key={q} className="p-4 text-xs font-bold uppercase tracking-wider text-neutral-500 text-center border-l border-neutral-800/50">Q{q}</th>
+                        <th key={q} className="py-2 px-4 text-xs font-bold uppercase tracking-wider text-neutral-500 text-center border-l border-neutral-800/50">Q{q}</th>
                       ))}
-                      <th className="p-4 text-xs font-bold uppercase tracking-wider text-cyan-500 text-center border-l border-neutral-800">{t.total}</th>
+                      <th className="py-2 px-4 text-xs font-bold uppercase tracking-wider text-cyan-500 text-center border-l border-neutral-800">{t.total}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-800/50">
@@ -1023,14 +1023,14 @@ const App = () => {
                           setView('review'); 
                         }}
                       >
-                        <td className="p-4 border-r border-neutral-800/30">
+                        <td className="py-2 px-4 border-r border-neutral-800/30">
                           <div className="font-bold text-neutral-300 group-hover:text-cyan-400 transition-colors">{s.name}</div>
                           <div className="text-[10px] text-neutral-600 font-mono mt-0.5">{s.id}</div>
                         </td>
                         {questions.map(q => (
-                          <td key={q} className="p-4 text-center text-sm text-neutral-400 tabular-nums border-r border-neutral-800/30">{s.questions[`q${q}`]?.score || 0}</td>
+                          <td key={q} className="py-2 px-4 text-center text-sm text-neutral-400 tabular-nums border-r border-neutral-800/30">{s.questions[`q${q}`]?.score || 0}</td>
                         ))}
-                        <td className="p-4 text-center font-black text-white tabular-nums group-hover:text-cyan-400 transition-colors">{calculateTotal(s)}</td>
+                        <td className="py-2 px-4 text-center font-black text-white tabular-nums group-hover:text-cyan-400 transition-colors">{calculateTotal(s)}</td>
                       </tr>
                     ))}
                   </tbody>
