@@ -1166,11 +1166,11 @@ const App = () => {
         isOpen={showZipHelp}
         onClose={() => setShowZipHelp(false)}
         title={t.zipHierarchyTitle}
-        icon={Plus}
+        icon={Folder}
         maxWidth="max-w-md"
       >
         <p className="text-xs text-neutral-400 mb-6 leading-relaxed">
-            The ZIP file should contain folders for each question at the root level. Inside each question, there must be a folder for each student containing their code.
+            {t.zipHierarchyDesc}
         </p>
         
         <div className="bg-black/50 border border-neutral-800 rounded-lg p-6 font-mono text-[11px] space-y-3">
@@ -1179,27 +1179,21 @@ const App = () => {
             </div>
             <div className="pl-6 space-y-3 border-l border-neutral-800 ml-1.5">
                 <div className="flex items-center gap-2 text-white">
-                    <Folder size={14} className="text-cyan-500" /> QUESTION 1/
+                    <Folder size={14} className="text-cyan-500" /> {t.zipHierarchyQuestion} 1/
                 </div>
                 <div className="pl-6 space-y-2 border-l border-neutral-800 ml-1.5">
                     <div className="flex items-center gap-2 text-neutral-300">
-                        <Folder size={14} className="text-neutral-500" /> student_name_id/
+                        <Folder size={14} className="text-neutral-500" /> {t.zipHierarchyStudent}/
                     </div>
                     <div className="pl-6 flex items-center gap-2 text-cyan-500/80">
-                        <FileText size={12} /> solution.cpp
-                    </div>
-                    <div className="flex items-center gap-2 text-neutral-300">
-                        <Folder size={14} className="text-neutral-500" /> other_student_id/
-                    </div>
-                    <div className="pl-6 flex items-center gap-2 text-cyan-500/80">
-                        <FileText size={12} /> main.cpp
+                        <FileText size={12} /> {t.zipHierarchyFile}
                     </div>
                 </div>
                 <div className="flex items-center gap-2 text-white pt-2">
-                    <Folder size={14} className="text-cyan-500" /> QUESTION 2/
+                    <Folder size={14} className="text-cyan-500" /> {t.zipHierarchyQuestion} 2/
                 </div>
                 <div className="pl-6 text-neutral-500 italic text-[10px]">
-                    (repeated structure...)
+                    {t.zipHierarchyRepeated}
                 </div>
             </div>
         </div>
@@ -1209,7 +1203,7 @@ const App = () => {
                 onClick={() => setShowZipHelp(false)}
                 className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white font-bold uppercase tracking-widest text-[10px] rounded-lg transition-all active:scale-95"
             >
-                Got it
+                {t.cancel === 'Cancelar' ? 'Entendi' : 'Got it'}
             </button>
         </div>
       </Modal>
