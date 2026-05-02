@@ -283,7 +283,7 @@ app.get('/api/students', (req, res) => {
       // Let's keep them absolute for now as determined during import.
       
       const student = {
-        id: studentData.folder_name,
+        id: studentData.id || studentData.folder_name,
         name: studentData.name,
         turma: turma,
         questions: studentData.questions
