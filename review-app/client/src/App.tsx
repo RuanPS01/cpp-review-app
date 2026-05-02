@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { ChevronLeft, ChevronRight, Copy, Save, Table as TableIcon, FileText, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Save, Table as TableIcon, FileText, CheckCircle2, Play } from 'lucide-react';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism-tomorrow.css';
 import 'prismjs/components/prism-c';
 import 'prismjs/components/prism-cpp';
+import TerminalPanel from './components/TerminalPanel';
 
 interface Question {
   score: number;
@@ -32,6 +33,7 @@ const App = () => {
   const [view, setView] = useState<'review' | 'table'>('review');
   const [saving, setSaving] = useState(false);
   const [selectedTurma, setSelectedTurma] = useState<string>('A');
+  const [showTerminal, setShowTerminal] = useState(false);
 
   const [editScore, setEditScore] = useState(0);
   const [editComment, setEditComment] = useState('');
@@ -175,15 +177,26 @@ const App = () => {
             </div>
 
             <div className="flex gap-4 flex-1 overflow-hidden">
-              <div className="flex-1 bg-gray-800 rounded-lg overflow-hidden flex flex-col border border-gray-700">
+              <div className="flex-1 bg-gray-800 rounded-lg overflow-hidden flex flex-col border border-gray-700 shadow-lg">
                 <div className="bg-gray-700 p-2 text-xs flex justify-between items-center">
-                  <span className="truncate">{currentStudent.questions[`q${currentQ}`].path || 'No file path'}</span>
+                  <div className="flex items-center gap-4">
+                    <span className="truncate max-w-md font-mono">{currentStudent.questions[`q${currentQ}`].path || 'No file path'}</span>
+                    {currentStudent.questions[`q${currentQ}`].path && (
+                      <button 
+                        onClick={() => copyToClipboard(currentStudent.questions[`q${currentQ}`].path!)}
+                        className="flex items-center gap-1 hover:text-blue-400 text-gray-400 transition-colors"
+                        title="Copy Path"
+                      >
+                        <Copy size={14} />
+                      </button>
+                    )}
+                  </div>
                   {currentStudent.questions[`q${currentQ}`].path && (
                     <button 
-                      onClick={() => copyToClipboard(currentStudent.questions[`q${currentQ}`].path!)}
-                      className="flex items-center gap-1 hover:text-blue-400"
+                      onClick={() => setShowTerminal(true)}
+                      className="flex items-center gap-2 bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-white font-bold transition-colors"
                     >
-                      <Copy size={14} /> Copy Path
+                      <Play size={14} /> Run Code
                     </button>
                   )}
                 </div>
@@ -294,6 +307,13 @@ const App = () => {
           </div>
         )}
       </main>
+
+      {showTerminal && currentStudent.questions[`q${currentQ}`].path && (
+        <TerminalPanel 
+          filePath={currentStudent.questions[`q${currentQ}`].path} 
+          onClose={() => setShowTerminal(false)} 
+        />
+      )}
       
       <style>{`
         pre code {

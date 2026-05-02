@@ -13,6 +13,8 @@
     "body-parser": "^2.2.2",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "review-app": "file:.."
+    "node-pty": "^1.1.0",
+    "review-app": "file:..",
+    "socket.io": "^4.8.3"
   }
 }

@@ -3,8 +3,19 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
+const { Server } = require('socket.io');
+const pty = require('node-pty');
+const { spawn } = require('child_process');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 const port = 3001;
 
 app.use(cors());
@@ -177,6 +188,93 @@ app.post('/api/update-grade', (req, res) => {
   }
 });
 
-app.listen(port, () => {
+io.on('connection', (socket) => {
+  console.log('Client connected to terminal');
+  let ptyProcess = null;
+
+  socket.on('run-code', ({ filePath }) => {
+    if (!filePath || !fs.existsSync(filePath)) {
+      socket.emit('terminal-data', '\r\n\x1b[31mError: Invalid file path\x1b[0m\r\n');
+      return;
+    }
+
+    const dir = path.dirname(filePath);
+    const fileName = path.basename(filePath);
+    const exeName = fileName.replace('.cpp', '.exe');
+    const exePath = path.join(dir, exeName);
+
+    socket.emit('terminal-data', `\r\n\x1b[33mCompiling ${fileName}...\x1b[0m\r\n`);
+
+    const compile = spawn('g++', [fileName, '-o', exeName], { cwd: dir, shell: true });
+
+    let compileError = '';
+    compile.stderr.on('data', (data) => {
+      compileError += data.toString();
+    });
+
+    compile.on('close', (code) => {
+      if (code !== 0) {
+        console.error(`Compilation failed with code ${code}`);
+        socket.emit('terminal-data', `\r\n\x1b[31mCompilation failed:\x1b[0m\r\n${compileError.replace(/\n/g, '\r\n')}`);
+        return;
+      }
+
+      console.log(`Compilation successful: ${exePath}`);
+      socket.emit('terminal-data', `\x1b[32mCompilation successful. Running...\x1b[0m\r\n\r\n`);
+
+      const shell = process.platform === 'win32' ? 'cmd.exe' : 'bash';
+      
+      try {
+        ptyProcess = pty.spawn(shell, [], {
+          name: 'xterm-color',
+          cols: 80,
+          rows: 24,
+          cwd: dir,
+          env: process.env
+        });
+
+        console.log('PTY Process spawned');
+
+        ptyProcess.onData((data) => {
+          socket.emit('terminal-data', data);
+        });
+
+        // Send the command to run the EXE
+        const runCmd = process.platform === 'win32' ? `${exeName}\r\n` : `./${exeName}\n`;
+        setTimeout(() => {
+            if (ptyProcess) {
+                console.log(`Sending run command: ${runCmd}`);
+                ptyProcess.write(runCmd);
+            }
+        }, 500);
+
+        ptyProcess.onExit(({ exitCode }) => {
+          console.log(`PTY Process exited with code ${exitCode}`);
+          socket.emit('terminal-data', `\r\n\r\n\x1b[33mProcess exited with code ${exitCode}\x1b[0m\r\n`);
+          ptyProcess = null;
+        });
+      } catch (err) {
+        console.error('Failed to spawn PTY:', err);
+        socket.emit('terminal-data', `\r\n\x1b[31mError spawning terminal: ${err.message}\x1b[0m\r\n`);
+      }
+    });
+  });
+
+  socket.on('terminal-input', (data) => {
+    if (ptyProcess) {
+      ptyProcess.write(data);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    if (ptyProcess) {
+      try {
+        ptyProcess.kill();
+      } catch (e) {}
+    }
+  });
+});
+
+server.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
