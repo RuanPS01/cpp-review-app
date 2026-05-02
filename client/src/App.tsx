@@ -51,13 +51,6 @@ interface AISettings {
 
 const API_BASE = 'http://localhost:3001/api';
 
-const calculateTotal = (student: Student) => {
-  const scores = Object.values(student.questions).map(q => q.score);
-  if (scores.length === 0) return '0.00';
-  const sum = scores.reduce((acc, s) => acc + s, 0);
-  return (sum / scores.length).toFixed(2);
-};
-
 const Modal = ({ isOpen, onClose, title, icon: Icon, children, maxWidth = "max-w-2xl" }: { isOpen: boolean, onClose: () => void, title: string, icon: any, children: React.ReactNode, maxWidth?: string }) => {
   const [shouldRender, setShouldRender] = useState(isOpen);
 
