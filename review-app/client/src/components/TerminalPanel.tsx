@@ -21,8 +21,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ filePath, onClose }) => {
     const term = new Terminal({
       cursorBlink: true,
       theme: {
-        background: '#1a202c',
-        foreground: '#f7fafc',
+        background: '#000000',
+        foreground: '#22d3ee',
+        cursor: '#22d3ee',
+        selectionBackground: 'rgba(34,211,238,0.3)',
       },
       fontSize: 14,
       fontFamily: 'Fira Code, Menlo, Monaco, "Courier New", monospace',
@@ -64,23 +66,25 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ filePath, onClose }) => {
   }, [filePath]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-gray-900 w-full max-w-4xl h-[600px] rounded-lg shadow-2xl border border-gray-700 flex flex-col overflow-hidden">
-        <div className="bg-gray-800 p-3 border-b border-gray-700 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            <span className="ml-2 text-sm font-medium text-gray-400">Terminal - Student Execution</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="bg-neutral-900 w-full max-w-4xl h-[600px] rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-neutral-800 flex flex-col overflow-hidden">
+        <div className="bg-black p-4 border-b border-neutral-800 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-neutral-800 border border-neutral-700"></div>
+                <div className="w-3 h-3 rounded-full bg-neutral-800 border border-neutral-700"></div>
+                <div className="w-3 h-3 rounded-full bg-neutral-800 border border-neutral-700"></div>
+            </div>
+            <span className="ml-2 text-xs font-black uppercase tracking-[0.2em] text-cyan-500 drop-shadow-[0_0_5px_rgba(6,182,212,0.5)]">System Terminal</span>
           </div>
           <button 
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-neutral-500 hover:text-white transition-colors p-1 hover:bg-neutral-800 rounded-md"
           >
             <X size={20} />
           </button>
         </div>
-        <div ref={terminalRef} className="flex-1 p-2 overflow-hidden" />
+        <div ref={terminalRef} className="flex-1 p-4 bg-black" />
       </div>
     </div>
   );

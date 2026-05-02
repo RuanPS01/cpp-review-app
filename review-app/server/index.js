@@ -7,6 +7,9 @@ const http = require('http');
 const { Server } = require('socket.io');
 const pty = require('node-pty');
 const { spawn } = require('child_process');
+const multer = require('multer');
+const AdmZip = require('adm-zip');
+const iconv = require('iconv-lite');
 
 const app = express();
 const server = http.createServer(app);
@@ -21,53 +24,68 @@ const port = 3001;
 app.use(cors());
 app.use(bodyParser.json());
 
-const ROOT_DIR = path.join(__dirname, '..', '..');
-const GRADES_FILES = {
-  'A': path.join(ROOT_DIR, 'grades_turma_a.json'),
-  'G': path.join(ROOT_DIR, 'grades_turma_g.json'),
-  'I': path.join(ROOT_DIR, 'grades_turma_i.json')
-};
+const DATA_DIR = path.join(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR);
+}
 
-function findStudentFolder(questaoPath, studentFolder) {
-  if (fs.existsSync(path.join(questaoPath, studentFolder))) {
-    return studentFolder;
-  }
+const upload = multer({ dest: 'uploads/' });
 
-  // If exact match fails, try fuzzy matching due to encoding issues
-  if (!fs.existsSync(questaoPath)) return null;
-  const folders = fs.readdirSync(questaoPath);
+// Utility to convert template tags to Regex
+function parseFolderWithTemplate(folderName, template) {
+  let nameCaptured = false;
+  let idCaptured = false;
+  let emailCaptured = false;
+
+  // Escaping special regex characters in the template except for our tags
+  let regexStr = template.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   
-  // Try matching by email/login if present in the folder name
-  const emailMatch = studentFolder.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-  if (emailMatch) {
-    const email = emailMatch[0];
-    const match = folders.find(f => f.includes(email));
-    if (match) return match;
+  // Replace tags one by one to handle duplicates
+  regexStr = regexStr.replace(/\\\[EMAIL\\\]/g, () => {
+    if (!emailCaptured) { emailCaptured = true; return '(?<email>\\S+@\\S+)'; }
+    return '(?:\\S+@\\S+)';
+  });
+  
+  regexStr = regexStr.replace(/\\\[NAME\\\]/g, () => {
+    if (!nameCaptured) { nameCaptured = true; return '(?<name>.+?)'; }
+    return '(?:.+?)';
+  });
+  
+  regexStr = regexStr.replace(/\\\[ID\\\]/g, () => {
+    if (!idCaptured) { idCaptured = true; return '(?<id>\\d+)'; }
+    return '(?:\\d+)';
+  });
+  
+  regexStr = regexStr.replace(/\\\[IGNORE\\\]/g, '(?:\\S+)');
+
+  // Replace multiple spaces in template with space matcher in regex
+  regexStr = regexStr.replace(/\s+/g, '\\s+');
+
+  regexStr = `^${regexStr}$`;
+
+  try {
+    const regex = new RegExp(regexStr);
+    const match = folderName.match(regex);
+    
+    if (match && match.groups) {
+      let name = match.groups.name ? match.groups.name.trim() : folderName;
+      let id = match.groups.id || null;
+      return { name, id };
+    }
+  } catch (err) {
+    console.error('Regex error:', err);
   }
 
-  // Fallback: match by the first word that doesn't look like an email
-  const parts = studentFolder.split(' ').filter(p => !p.includes('@') && p.length > 3);
-  if (parts.length > 0) {
-    const match = folders.find(f => parts.every(p => {
-        // Remove special characters from both to compare
-        const cleanP = p.replace(/[^a-zA-Z0-9]/g, '');
-        return f.replace(/[^a-zA-Z0-9]/g, '').includes(cleanP);
-    }));
-    if (match) return match;
-  }
-
-  return null;
+  // Fallback to basic cleanup if template fails
+  return { name: folderName, id: null };
 }
 
 function findCppInDir(dirPath) {
   if (!fs.existsSync(dirPath)) return null;
   const items = fs.readdirSync(dirPath);
-  
-  // First look for any .cpp file in the current directory
   const cppFile = items.find(f => f.toLowerCase().endsWith('.cpp'));
   if (cppFile) return path.join(dirPath, cppFile);
 
-  // Then look in subdirectories
   for (const item of items) {
     const itemPath = path.join(dirPath, item);
     if (fs.statSync(itemPath).isDirectory()) {
@@ -79,66 +97,131 @@ function findCppInDir(dirPath) {
   return null;
 }
 
-function findCppFile(turma, questionNum, studentFolder) {
-  const questaoPath = path.join(ROOT_DIR, 'Provas_Alunos', `Prova2_Turma_${turma}`, `QUESTÃO ${questionNum}`);
-  const actualFolder = findStudentFolder(questaoPath, studentFolder);
-  
-  if (!actualFolder) return null;
-  
-  const qFolder = path.join(questaoPath, actualFolder);
-  return findCppInDir(qFolder);
-}
+app.post('/api/import', upload.single('file'), (req, res) => {
+  const { turma, folderTemplate } = req.body;
+  const zipPath = req.file.path;
+
+  try {
+    const zip = new AdmZip(zipPath);
+    const extractPath = path.join(DATA_DIR, `turma_${turma}`);
+    
+    if (!fs.existsSync(extractPath)) {
+      fs.mkdirSync(extractPath, { recursive: true });
+    }
+
+    // Manual extraction to fix encoding issues
+    zip.getEntries().forEach(entry => {
+      let entryName = entry.entryName;
+      
+      try {
+        const rawName = entry.rawEntryName;
+        // ZIP filenames on Windows often use CP850. 
+        // We attempt to decode with CP850 if it doesn't look like valid UTF-8
+        // or contains known replacement characters.
+        const utf8Name = rawName.toString('utf8');
+        if (utf8Name.includes('\ufffd') || /[^\x00-\x7F]/.test(utf8Name)) {
+           // If it has special chars, CP850 is a safer bet for Windows ZIPs
+           entryName = iconv.decode(rawName, 'cp850');
+        } else {
+           entryName = utf8Name;
+        }
+      } catch (err) {
+        console.warn('Encoding fix failed for entry:', entry.entryName);
+      }
+
+      const fullPath = path.join(extractPath, entryName);
+      if (entry.isDirectory) {
+        if (!fs.existsSync(fullPath)) fs.mkdirSync(fullPath, { recursive: true });
+      } else {
+        const dir = path.dirname(fullPath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(fullPath, entry.getData());
+      }
+    });
+
+    fs.unlinkSync(zipPath); // Delete temp file
+
+    // Analyze questions - Any folder at root is a question
+    const items = fs.readdirSync(extractPath);
+    const questionFolders = items.filter(i => {
+        const fullPath = path.join(extractPath, i);
+        return fs.statSync(fullPath).isDirectory() && !i.startsWith('.') && i !== '__MACOSX';
+    });
+    
+    // Sort question folders naturally/alphabetically to define order (Q1, Q2, etc)
+    questionFolders.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+    const gradesFilePath = path.join(DATA_DIR, `grades_turma_${turma}.json`);
+    const studentsMap = new Map();
+
+    // Mapping of folder name to dynamic question label (optional, but good for UI)
+    const questionLabels = questionFolders.reduce((acc, folder, idx) => {
+        acc[`q${idx + 1}`] = folder;
+        return acc;
+    }, {});
+
+    questionFolders.forEach((qFolder, idx) => {
+      const qNum = idx + 1;
+      const qPath = path.join(extractPath, qFolder);
+      const studentFolders = fs.readdirSync(qPath).filter(i => {
+          const fullPath = path.join(qPath, i);
+          return fs.statSync(fullPath).isDirectory() && !i.startsWith('.');
+      });
+
+      studentFolders.forEach(folder => {
+        if (!studentsMap.has(folder)) {
+          const { name, id } = parseFolderWithTemplate(folder, folderTemplate || '[EMAIL] [NAME] [ID] [EMAIL]');
+          studentsMap.set(folder, {
+            folder_name: folder,
+            name: name,
+            id: id,
+            questions: {}
+          });
+        }
+        
+        const student = studentsMap.get(folder);
+        student.questions[`q${qNum}`] = {
+          score: 0,
+          comment: '',
+          path: findCppInDir(path.join(qPath, folder)),
+          label: qFolder // Store the original folder name as a label
+        };
+      });
+    });
+
+    const gradesData = Array.from(studentsMap.values());
+    fs.writeFileSync(gradesFilePath, JSON.stringify(gradesData, null, 2));
+
+    res.json({ success: true, message: `Turma ${turma} imported with ${questionFolders.length} questions detected alphabetically.` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to extract ZIP' });
+  }
+});
 
 app.get('/api/students', (req, res) => {
   const allStudents = [];
-  
-  Object.entries(GRADES_FILES).forEach(([turma, filePath]) => {
-    if (fs.existsSync(filePath)) {
-      const rawData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  const files = fs.readdirSync(DATA_DIR);
+  const gradeFiles = files.filter(f => f.startsWith('grades_turma_') && f.endsWith('.json'));
+
+  gradeFiles.forEach(file => {
+    const turma = file.replace('grades_turma_', '').replace('.json', '');
+    const filePath = path.join(DATA_DIR, file);
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+    data.forEach(studentData => {
+      // The paths in questions might need to be verified or adjusted if we moved files
+      // But they are absolute from the findCppInDir during import, or relative to DATA_DIR?
+      // Let's keep them absolute for now as determined during import.
       
-      // Normalize data to an array of [id, studentData]
-      let studentEntries = [];
-      if (Array.isArray(rawData)) {
-        studentEntries = rawData.map(item => [item.folder_name, item]);
-      } else {
-        studentEntries = Object.entries(rawData);
-      }
-
-      studentEntries.forEach(([folderName, studentData]) => {
-        // Try to extract name if not present
-        let name = studentData.name;
-        if (!name && folderName) {
-          // Attempt to extract name from folderName: "login Name Code login" or "Name Code login"
-          // Pattern: usually name is between email/login and code (number)
-          const parts = folderName.split(' ');
-          const numberIndex = parts.findIndex(p => /^\d{2,5}$/.test(p));
-          if (numberIndex !== -1) {
-            // If the first part looks like an email/login, start from second
-            const start = parts[0].includes('@') ? 1 : 0;
-            name = parts.slice(start, numberIndex).join(' ');
-          } else {
-            name = folderName;
-          }
-        }
-
-        const student = {
-          id: folderName,
-          name: name || folderName,
-          turma: turma,
-          questions: {}
-        };
-
-        for (let i = 1; i <= 4; i++) {
-          const qKey = `q${i}`;
-          student.questions[qKey] = {
-            score: studentData[qKey]?.score || 0,
-            comment: studentData[qKey]?.comment || '',
-            path: findCppFile(turma, i, folderName)
-          };
-        }
-        allStudents.push(student);
-      });
-    }
+      const student = {
+        id: studentData.folder_name,
+        name: studentData.name,
+        turma: turma,
+        questions: studentData.questions
+      };
+      allStudents.push(student);
+    });
   });
 
   res.json(allStudents);
@@ -146,7 +229,7 @@ app.get('/api/students', (req, res) => {
 
 app.get('/api/code', (req, res) => {
   const filePath = req.query.path;
-  if (!filePath || !filePath.startsWith(ROOT_DIR)) {
+  if (!filePath || !filePath.includes(DATA_DIR)) {
     return res.status(400).send('Invalid path');
   }
 
@@ -160,31 +243,44 @@ app.get('/api/code', (req, res) => {
 
 app.post('/api/update-grade', (req, res) => {
   const { turma, studentId, questionNum, score, comment } = req.body;
-  const filePath = GRADES_FILES[turma];
+  const filePath = path.join(DATA_DIR, `grades_turma_${turma}.json`);
 
-  if (!filePath || !fs.existsSync(filePath)) {
+  if (!fs.existsSync(filePath)) {
     return res.status(404).send('Grades file not found');
   }
 
   let data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  const index = data.findIndex(item => item.folder_name === studentId);
   
-  if (Array.isArray(data)) {
-    const index = data.findIndex(item => item.folder_name === studentId);
-    if (index !== -1) {
-      data[index][`q${questionNum}`] = { score, comment };
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-      res.json({ success: true });
-    } else {
-      res.status(404).send('Student not found');
-    }
+  if (index !== -1) {
+    data[index].questions[`q${questionNum}`] = { 
+      ...data[index].questions[`q${questionNum}`], 
+      score, 
+      comment 
+    };
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    res.json({ success: true });
   } else {
-    if (data[studentId]) {
-      data[studentId][`q${questionNum}`] = { score, comment };
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-      res.json({ success: true });
-    } else {
-      res.status(404).send('Student not found');
+    res.status(404).send('Student not found');
+  }
+});
+
+app.delete('/api/turma/:name', (req, res) => {
+  const turma = req.params.name;
+  const gradesFile = path.join(DATA_DIR, `grades_turma_${turma}.json`);
+  const turmaDir = path.join(DATA_DIR, `turma_${turma}`);
+
+  try {
+    if (fs.existsSync(gradesFile)) {
+      fs.unlinkSync(gradesFile);
     }
+    if (fs.existsSync(turmaDir)) {
+      fs.rmSync(turmaDir, { recursive: true, force: true });
+    }
+    res.json({ success: true, message: `Turma ${turma} cleared successfully.` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to clear turma data' });
   }
 });
 
@@ -214,12 +310,10 @@ io.on('connection', (socket) => {
 
     compile.on('close', (code) => {
       if (code !== 0) {
-        console.error(`Compilation failed with code ${code}`);
         socket.emit('terminal-data', `\r\n\x1b[31mCompilation failed:\x1b[0m\r\n${compileError.replace(/\n/g, '\r\n')}`);
         return;
       }
 
-      console.log(`Compilation successful: ${exePath}`);
       socket.emit('terminal-data', `\x1b[32mCompilation successful. Running...\x1b[0m\r\n\r\n`);
 
       const shell = process.platform === 'win32' ? 'cmd.exe' : 'bash';
@@ -233,28 +327,22 @@ io.on('connection', (socket) => {
           env: process.env
         });
 
-        console.log('PTY Process spawned');
-
         ptyProcess.onData((data) => {
           socket.emit('terminal-data', data);
         });
 
-        // Send the command to run the EXE
         const runCmd = process.platform === 'win32' ? `${exeName}\r\n` : `./${exeName}\n`;
         setTimeout(() => {
             if (ptyProcess) {
-                console.log(`Sending run command: ${runCmd}`);
                 ptyProcess.write(runCmd);
             }
         }, 500);
 
         ptyProcess.onExit(({ exitCode }) => {
-          console.log(`PTY Process exited with code ${exitCode}`);
           socket.emit('terminal-data', `\r\n\r\n\x1b[33mProcess exited with code ${exitCode}\x1b[0m\r\n`);
           ptyProcess = null;
         });
       } catch (err) {
-        console.error('Failed to spawn PTY:', err);
         socket.emit('terminal-data', `\r\n\x1b[31mError spawning terminal: ${err.message}\x1b[0m\r\n`);
       }
     });
