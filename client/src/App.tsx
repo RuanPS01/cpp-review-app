@@ -9,6 +9,8 @@ import Prism from 'prismjs';
 import 'prismjs/themes/prism-tomorrow.css';
 import 'prismjs/components/prism-c';
 import 'prismjs/components/prism-cpp';
+import 'prismjs/plugins/line-numbers/prism-line-numbers.js';
+import 'prismjs/plugins/line-numbers/prism-line-numbers.css';
 import TerminalPanel from './components/TerminalPanel';
 import toast, { Toaster } from 'react-hot-toast';
 import translations from './translations';
@@ -820,8 +822,8 @@ const App = () => {
                             )}
                         </div>
                         </div>
-                        <pre className="flex-1 overflow-auto m-0 text-sm leading-relaxed scrollbar-thin">
-                        <code className="language-cpp block p-4 min-h-full">
+                        <pre className="flex-1 overflow-auto m-0 text-sm leading-relaxed scrollbar-thin line-numbers">
+                        <code className="language-cpp block p-4 min-h-full !py-4">
                             {code}
                         </code>
                         </pre>
@@ -1175,6 +1177,20 @@ const App = () => {
         .token.operator { color: #a3a3a3 !important; }
         .token.function { color: #38bdf8 !important; }
         .token.number { color: #fbbf24 !important; }
+
+        /* Prism Line Numbers Custom Styles */
+        .line-numbers .line-numbers-rows {
+          border-right: 1px solid #262626 !important;
+          padding-top: 1rem !important; /* Matches !py-4 on code tag */
+          background: rgba(0,0,0,0.3);
+        }
+        .line-numbers-rows > span:before {
+          color: #525252 !important;
+          text-shadow: none !important;
+        }
+        pre[class*="language-"].line-numbers {
+          padding-left: 3.5rem !important;
+        }
 
         ::-webkit-scrollbar {
           width: 6px;
