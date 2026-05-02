@@ -1,4 +1,0 @@
-atividade.cpp: In function 'int main()':
-atividade.cpp:11:9: error: 'vet' was not declared in this scope
-   11 |         vet[-1]=n{
-      |         ^~~

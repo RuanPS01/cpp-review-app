@@ -1,4 +1,0 @@
-questao2.cpp: In function 'int main()':
-questao2.cpp:12:12: error: 'N' was not declared in this scope
-   12 |     cin >> N;
-      |            ^

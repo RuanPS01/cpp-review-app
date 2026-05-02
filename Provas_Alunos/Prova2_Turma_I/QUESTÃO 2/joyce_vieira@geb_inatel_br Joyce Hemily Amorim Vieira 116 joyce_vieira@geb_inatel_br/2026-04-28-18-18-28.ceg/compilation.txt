@@ -1,4 +1,0 @@
-questão2.cpp: In function 'int main()':
-questão2.cpp:23:22: error: 'setprecision' was not declared in this scope
-   23 |     cout << fixed << setprecision(2);
-      |                      ^~~~~~~~~~~~

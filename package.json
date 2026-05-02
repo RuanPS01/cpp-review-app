@@ -1,0 +1,56 @@
+{
+  "name": "review-app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "electron-main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "install:all": "npm install --prefix client && npm install --prefix server",
+    "postinstall": "electron-builder install-app-deps",
+    "dev": "npx concurrently \"npm run dev --prefix client\" \"electron .\"",
+    "build:client": "npm run build --prefix client",
+    "patch:node-pty": "node scripts/patch-node-pty.js",
+    "electron:build": "npm run patch:node-pty && npm run build:client && electron-builder"
+  },
+  "build": {
+    "appId": "com.review.app",
+    "productName": "Review App",
+    "files": [
+      "electron-main.js",
+      "preload.js",
+      "server/**/*",
+      "client/dist/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "output": "dist-electron"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "asar": true
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "electron": "^41.5.0",
+    "electron-builder": "^26.8.1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
+    "@google/generative-ai": "^0.24.1",
+    "adm-zip": "^0.5.17",
+    "body-parser": "^2.2.2",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "iconv-lite": "^0.7.2",
+    "multer": "^2.1.1",
+    "node-pty": "^1.1.0",
+    "ollama": "^0.6.3",
+    "openai": "^6.35.0",
+    "socket.io": "^4.8.3"
+  }
+}

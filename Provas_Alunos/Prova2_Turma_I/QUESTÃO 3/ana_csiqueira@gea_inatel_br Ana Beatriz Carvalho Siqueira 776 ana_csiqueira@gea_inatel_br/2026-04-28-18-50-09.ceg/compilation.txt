@@ -1,7 +1,0 @@
-atividade.cpp: In function 'int main()':
-atividade.cpp:11:11: error: 'i' was not declared in this scope
-   11 |     while(i==6){
-      |           ^
-atividade.cpp:12:26: error: expected primary-expression before '<=' token
-   12 |         if(codigo >=1 && <=5){
-      |                          ^~

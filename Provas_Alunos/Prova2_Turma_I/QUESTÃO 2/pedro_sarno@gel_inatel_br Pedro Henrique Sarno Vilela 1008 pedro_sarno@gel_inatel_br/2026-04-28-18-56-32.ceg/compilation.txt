@@ -1,7 +1,0 @@
-questao2.cpp: In function 'int main()':
-questao2.cpp:24:1: error: expected '}' at end of input
-   24 | }
-      | ^
-questao2.cpp:4:12: note: to match this '{'
-    4 | int main (){
-      |            ^

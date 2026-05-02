@@ -1,4 +1,0 @@
-Q02.cpp: In function 'int main()':
-Q02.cpp:17:18: error: expected primary-expression before ',' token
-   17 |      cout << Ip <, endl;
-      |                  ^
