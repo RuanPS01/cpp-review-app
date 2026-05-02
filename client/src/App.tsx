@@ -1165,9 +1165,13 @@ const App = () => {
           from { opacity: 1; transform: scale(1) translateY(0); }
           to { opacity: 0; transform: scale(0.95) translateY(-10px); }
         }
+        pre[class*="language-"] {
+          background: #000000 !important;
+          margin: 0 !important;
+        }
         pre code {
           font-family: 'Fira Code', 'Consolas', monospace !important;
-          background: transparent !important;
+          background: #000000 !important;
           color: #22d3ee !important;
         }
         .namespace { opacity: .7; }
