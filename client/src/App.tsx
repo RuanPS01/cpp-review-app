@@ -999,9 +999,9 @@ const App = () => {
                     <tr>
                       <th className="py-1 px-4 text-xs font-bold uppercase tracking-wider text-neutral-500">{t.studentName}</th>
                       {questions.map(q => (
-                        <th key={q} className="py-1 px-4 text-xs font-bold uppercase tracking-wider text-neutral-500 text-center border-l border-neutral-800/50">Q{q}</th>
+                        <th key={q} className="py-1 px-2 text-xs font-bold uppercase tracking-wider text-neutral-500 text-center border-l border-neutral-800/50">Q{q}</th>
                       ))}
-                      <th className="py-1 px-4 text-xs font-bold uppercase tracking-wider text-cyan-500 text-center border-l border-neutral-800">{t.total}</th>
+                      <th className="py-1 px-2 text-xs font-bold uppercase tracking-wider text-cyan-500 text-center border-l border-neutral-800">{t.total}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-800/50">
@@ -1022,9 +1022,9 @@ const App = () => {
                           <div className="text-[10px] text-neutral-600 font-mono">{s.id}</div>
                         </td>
                         {questions.map(q => (
-                          <td key={q} className="py-1 px-4 text-center text-sm text-neutral-400 tabular-nums border-r border-neutral-800/30">{s.questions[`q${q}`]?.score || 0}</td>
+                          <td key={q} className="py-1 px-2 text-center text-sm text-neutral-400 tabular-nums border-r border-neutral-800/30">{s.questions[`q${q}`]?.score || 0}</td>
                         ))}
-                        <td className="py-1 px-4 text-center font-black text-white tabular-nums group-hover:text-cyan-400 transition-colors">{calculateTotal(s)}</td>
+                        <td className="py-1 px-2 text-center font-black text-white tabular-nums group-hover:text-cyan-400 transition-colors">{calculateTotal(s)}</td>
                       </tr>
                     ))}
                   </tbody>
