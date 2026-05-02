@@ -131,7 +131,7 @@ const App = () => {
 
   useEffect(() => {
     Prism.highlightAll();
-  }, [code]);
+  }, [code, view]);
 
   const fetchStudents = async () => {
     try {
