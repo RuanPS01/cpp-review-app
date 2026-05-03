@@ -699,15 +699,15 @@ const App = () => {
   };
 
   const handleEditorDidMount = (editor: any) => {
-    // Initial layout fix
-    setTimeout(() => editor.layout(), 100);
-    setTimeout(() => editor.layout(), 800); // Second attempt after transitions
+    // Force immediate and delayed layout to fix measurement issues
+    editor.layout();
+    setTimeout(() => editor.layout(), 500);
   };
 
   const isCodeEdited = code !== tempCode;
 
   return (
-    <div className="min-h-screen bg-app text-text-main font-sans">
+    <div className="min-h-screen bg-app text-text-main font-sans monaco-reset">
       <header className="bg-header p-4 border-b border-border-main flex justify-between items-center sticky top-0 z-10 shadow-[0_0_15px_rgba(0,255,255,0.1)]">
         <div className="flex items-center gap-4">
             <div className="flex gap-2">
@@ -1185,7 +1185,7 @@ const App = () => {
                             )}
                         </div>
                         </div>
-                        <div className="flex-1 flex flex-col overflow-hidden relative">
+                        <div className="flex-1 flex flex-col overflow-hidden relative monaco-wrapper">
                             {/* Professional Editor Layer */}
                             <div className="flex-1 bg-app overflow-hidden">
                                 <Editor
@@ -1194,9 +1194,10 @@ const App = () => {
                                     theme={theme === 'dark' ? 'vs-dark' : 'light'}
                                     value={tempCode}
                                     onChange={handleEditorChange}
+                                    onMount={handleEditorDidMount}
                                     options={{
                                         fontSize: 14,
-                                        fontFamily: "'Fira Code', 'Consolas', monospace",
+                                        fontFamily: "monospace",
                                         minimap: { enabled: false },
                                         scrollBeyondLastLine: false,
                                         lineNumbers: 'on',
@@ -1204,6 +1205,8 @@ const App = () => {
                                         tabSize: 4,
                                         padding: { top: 16, bottom: 16 },
                                         automaticLayout: true,
+                                        letterSpacing: 0,
+                                        fontLigatures: false,
                                     }}
                                 />
                             </div>
@@ -1729,16 +1732,13 @@ const App = () => {
         .markdown-content th, .markdown-content td { border: 1px solid var(--border-main); padding: 0.5rem; text-align: left; }
         .markdown-content th { background: var(--bg-button); font-weight: bold; }
 
-        /* Monaco Editor Fixes */
-        .monaco-editor-container {
+        /* Monaco Editor Precision Fixes */
+        .monaco-wrapper .monaco-editor, 
+        .monaco-wrapper .monaco-editor .view-lines, 
+        .monaco-wrapper .monaco-editor .view-line {
+          letter-spacing: 0px !important;
+          word-spacing: 0px !important;
           text-align: left !important;
-        }
-        .monaco-editor, .monaco-editor .view-lines, .monaco-editor .margin {
-          text-align: left !important;
-          letter-spacing: normal !important;
-        }
-        .monaco-editor .margin {
-          background-color: var(--bg-panel) !important;
         }
       `}</style>
     </div>
