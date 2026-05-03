@@ -940,7 +940,19 @@ const App = () => {
                     <div className="flex-1 bg-app rounded-lg overflow-hidden flex flex-col border border-border-main shadow-inner">
                         <div className="bg-panel p-2 text-[10px] flex justify-between items-center border-b border-border-main">
                         <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-1.5 px-2 py-1 bg-app rounded border border-border-main mr-2">
+                            <button 
+                                onClick={() => setShowSideBySide(!showSideBySide)}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded border transition-all active:scale-95 font-bold uppercase tracking-widest ${
+                                    showSideBySide 
+                                    ? 'bg-accent text-black border-accent shadow-[0_0_10px_var(--accent-glow)]' 
+                                    : 'bg-button text-accent border-accent/30 hover:border-accent hover:bg-accent/10'
+                                }`}
+                                title="Ver enunciado ao lado"
+                            >
+                                <Eye size={14} />
+                                <span>{t.questionStatement.split(' ')[0]}</span>
+                            </button>
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-app rounded border border-border-main">
                                 <BookOpen size={10} className="text-accent" />
                                 <span className="truncate max-w-[200px] font-mono text-text-dim">
                                     {statements[`q${currentQ}`] ? t.statementLoaded : t.noStatement}
@@ -950,13 +962,6 @@ const App = () => {
                                     className="ml-1 text-accent hover:text-accent/80 underline"
                                 >
                                     {t.edit}
-                                </button>
-                                <button 
-                                    onClick={() => setShowSideBySide(!showSideBySide)}
-                                    className={`ml-1 text-accent hover:text-accent/80 flex items-center gap-1 p-0.5 rounded transition-colors ${showSideBySide ? 'bg-accent/10' : ''}`}
-                                    title="Ver ao lado"
-                                >
-                                    <Eye size={12} />
                                 </button>
                             </div>
                             <span className="truncate max-w-md font-mono text-text-dim opacity-60">{currentStudent.questions[`q${currentQ}`]?.path || 'No file path'}</span>
