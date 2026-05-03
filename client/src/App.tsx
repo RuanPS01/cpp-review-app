@@ -34,6 +34,7 @@ interface Question {
 
 interface Student {
   id: string;
+  folder_name: string;
   name: string;
   turma: string;
   questions: {
@@ -361,7 +362,7 @@ const App = () => {
     try {
       await axios.post(`${API_BASE}/update-grade`, {
         turma: student.turma,
-        studentId: student.id,
+        studentId: student.folder_name,
         questionNum: currentQ,
         score: editScore,
         comment: editComment

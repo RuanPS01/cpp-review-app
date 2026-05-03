@@ -284,6 +284,7 @@ app.get('/api/students', (req, res) => {
       
       const student = {
         id: studentData.id || studentData.folder_name,
+        folder_name: studentData.folder_name,
         name: studentData.name,
         turma: turma,
         questions: studentData.questions
@@ -356,12 +357,15 @@ app.post('/api/import-grades', (req, res) => {
   try {
     let existingData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     
-    // Create a map for quick lookup by folder_name (studentId in frontend)
+    // Create a map for quick lookup by folder_name or id
     const gradesMap = new Map();
-    grades.forEach(g => gradesMap.set(g.folder_name || g.id, g));
+    grades.forEach(g => {
+      if (g.folder_name) gradesMap.set(`folder:${g.folder_name}`, g);
+      if (g.id) gradesMap.set(`id:${g.id}`, g);
+    });
 
     const updatedData = existingData.map(student => {
-      const importStudent = gradesMap.get(student.folder_name);
+      const importStudent = gradesMap.get(`folder:${student.folder_name}`) || gradesMap.get(`id:${student.id}`);
       if (importStudent && importStudent.questions) {
         // Merge only scores and comments, preserve existing paths
         const mergedQuestions = { ...student.questions };
