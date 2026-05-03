@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { 
   ChevronLeft, ChevronRight, Copy, Save, Table as TableIcon, 
@@ -53,12 +53,15 @@ interface AISettings {
 
 const API_BASE = 'http://localhost:3001/api';
 
-const Modal = ({ isOpen, onClose, title, icon: Icon, children, maxWidth = "max-w-2xl" }: { isOpen: boolean, onClose: () => void, title: string, icon: any, children: React.ReactNode, maxWidth?: string }) => {
+const Modal = ({ isOpen, onClose, title, icon: Icon, children, maxWidth = "max-w-2xl" }: { isOpen: boolean, onClose: () => void, title: string, icon: React.ElementType, children: React.ReactNode, maxWidth?: string }) => {
   const [shouldRender, setShouldRender] = useState(isOpen);
 
   useEffect(() => {
-    if (isOpen) setShouldRender(true);
-  }, [isOpen]);
+    if (isOpen && !shouldRender) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShouldRender(true);
+    }
+  }, [isOpen, shouldRender]);
 
   const handleAnimationEnd = () => {
     if (!isOpen) setShouldRender(false);
@@ -164,7 +167,7 @@ const App = () => {
     return (sum / classStudents.length).toFixed(2);
   };
 
-  const fetchStudents = async () => {
+  const fetchStudents = useCallback(async () => {
     try {
       const res = await axios.get(`${API_BASE}/students`);
       setStudents(res.data);
@@ -173,43 +176,43 @@ const App = () => {
       console.error('Error fetching students', err);
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchAISettings = async () => {
+  const fetchAISettings = useCallback(async () => {
     try {
       const res = await axios.get(`${API_BASE}/settings`);
       setAiSettings(res.data);
     } catch (err) {
       console.error('Error fetching AI settings', err);
     }
-  };
+  }, []);
 
-  const fetchStatements = async (turma: string) => {
+  const fetchStatements = useCallback(async (turma: string) => {
     try {
       const res = await axios.get(`${API_BASE}/statements`, { params: { turma } });
       setStatements(res.data);
     } catch (err) {
       console.error('Error fetching statements', err);
     }
-  };
+  }, []);
 
-  const fetchCode = async (path: string) => {
+  const fetchCode = useCallback(async (path: string) => {
     try {
       const res = await axios.get(`${API_BASE}/code`, { params: { path } });
       setCode(res.data);
     } catch {
       setCode('// Error loading file: ' + path);
     }
-  };
+  }, []);
 
-  const resize = (e: MouseEvent) => {
+  const resize = useCallback((e: MouseEvent) => {
     if (isResizing) {
       const newWidth = e.clientX - 16; // 16 is some padding offset
       if (newWidth > 200 && newWidth < 800) {
         setStatementWidth(newWidth);
       }
     }
-  };
+  }, [isResizing]);
 
   useEffect(() => {
     if (isResizing) {
@@ -228,7 +231,7 @@ const App = () => {
   useEffect(() => {
     fetchStudents();
     fetchAISettings();
-  }, []);
+  }, [fetchStudents, fetchAISettings]);
 
   useEffect(() => {
     if (students.length > 0) {
@@ -245,7 +248,7 @@ const App = () => {
     if (selectedTurma) {
       fetchStatements(selectedTurma);
     }
-  }, [selectedTurma]);
+  }, [selectedTurma, fetchStatements]);
 
   useEffect(() => {
     if (students.length > 0 && view === 'review') {
@@ -263,7 +266,7 @@ const App = () => {
         }
       }
     }
-  }, [currentIndex, currentQ, students, view]);
+  }, [currentIndex, currentQ, students, view, fetchCode]);
 
   // Update custom model flags when settings are loaded
   useEffect(() => {
@@ -324,8 +327,12 @@ const App = () => {
         code: code
       });
       setAiResult(res.data);
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'AI analysis failed');
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        toast.error(err.response?.data?.error || 'AI analysis failed');
+      } else {
+        toast.error('AI analysis failed');
+      }
       setShowAIPreviewModal(false);
     } finally {
       setAnalyzing(false);
@@ -374,7 +381,7 @@ const App = () => {
                   setSelectedTurma('');
                 }
                 await fetchStudents();
-              } catch (err) {
+              } catch {
                 toast.error(t.failedToClear);
               }
             }}
@@ -404,7 +411,7 @@ const App = () => {
       updatedStudents[currentIndex].questions[`q${currentQ}`].comment = editComment;
       setStudents(updatedStudents);
       toast.success(t.gradeSaved);
-    } catch (err) {
+    } catch {
       toast.error('Error saving grade');
     } finally {
       setSaving(false);
@@ -428,7 +435,7 @@ const App = () => {
       setImportFile(null);
       await fetchStudents();
       setView('table');
-    } catch (err) {
+    } catch {
       toast.error('Import failed');
     } finally {
       setImporting(false);
@@ -449,7 +456,7 @@ const App = () => {
         });
         toast.success(`Grades for ${selectedTurma} imported successfully!`);
         await fetchStudents();
-      } catch (err) {
+      } catch {
         toast.error('Failed to import grades. Ensure the JSON format is correct.');
       }
     };
@@ -469,7 +476,7 @@ const App = () => {
       downloadAnchorNode.click();
       downloadAnchorNode.remove();
       toast.success(`Exporting grades for ${selectedTurma}...`);
-    } catch (err) {
+    } catch {
       toast.error('Failed to export grades.');
     }
   };
@@ -517,6 +524,11 @@ const App = () => {
     navigator.clipboard.writeText(text);
     toast.success(t.pathCopied);
   };
+
+  const [importTurma, setImportTurma] = useState('');
+  const [folderTemplate, setFolderTemplate] = useState('[EMAIL] [NAME] [ID] [EMAIL]');
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
 
   if (loading) return (
     <div className="min-h-screen bg-app flex flex-col items-center justify-center gap-6">

@@ -20,8 +20,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, onClose
   const [shouldRender, setShouldRender] = useState(isOpen);
 
   useEffect(() => {
-    if (isOpen) setShouldRender(true);
-  }, [isOpen]);
+    if (isOpen && !shouldRender) {
+      setShouldRender(true);
+    }
+  }, [isOpen, shouldRender]);
 
   const handleAnimationEnd = () => {
     if (!isOpen) setShouldRender(false);
