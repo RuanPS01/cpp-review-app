@@ -13,6 +13,7 @@
     "@xterm/addon-fit": "^0.11.0",
     "axios": "^1.15.2",
     "lucide-react": "^1.14.0",
+    "marked": "^18.0.3",
     "prismjs": "^1.30.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
@@ -25,6 +26,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tailwindcss/postcss": "^4.2.4",
+    "@types/marked": "^5.0.2",
     "@types/node": "^24.12.2",
     "@types/prismjs": "^1.26.6",
     "@types/react": "^19.2.14",

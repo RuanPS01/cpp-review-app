@@ -4,8 +4,9 @@ import {
   ChevronLeft, ChevronRight, Copy, Save, Table as TableIcon, 
   FileText, CheckCircle2, Play, Upload, Plus, Trash2, 
   Settings, Sparkles, BookOpen, X, Loader2, Download, Info, Terminal, Monitor, Cpu, Folder,
-  Sun, Moon
+  Sun, Moon, Split
 } from 'lucide-react';
+import { marked } from 'marked';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism-tomorrow.css';
 import 'prismjs/components/prism-c';
@@ -134,12 +135,19 @@ const App = () => {
   const [showAIPreviewModal, setShowAIPreviewModal] = useState(false);
   const [aiResult, setAiResult] = useState<{ score: number, comment: string } | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [showSideBySide, setShowSideBySide] = useState(false);
+  const [statementWidth, setStatementWidth] = useState(400);
+  const [isResizing, setIsResizing] = useState(false);
 
-  // Import State
-  const [importTurma, setImportTurma] = useState('');
-  const [folderTemplate, setFolderTemplate] = useState('[EMAIL] [NAME] [ID] [EMAIL]');
-  const [importFile, setImportFile] = useState<File | null>(null);
-  const [importing, setImporting] = useState(false);
+  // Resize handling for side-by-side view
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  const stopResizing = () => {
+    setIsResizing(false);
+  };
 
   // Utility Functions
   const calculateTotal = (student: Student) => {
@@ -156,6 +164,67 @@ const App = () => {
     return (sum / classStudents.length).toFixed(2);
   };
 
+  const fetchStudents = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/students`);
+      setStudents(res.data);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching students', err);
+      setLoading(false);
+    }
+  };
+
+  const fetchAISettings = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/settings`);
+      setAiSettings(res.data);
+    } catch (err) {
+      console.error('Error fetching AI settings', err);
+    }
+  };
+
+  const fetchStatements = async (turma: string) => {
+    try {
+      const res = await axios.get(`${API_BASE}/statements`, { params: { turma } });
+      setStatements(res.data);
+    } catch (err) {
+      console.error('Error fetching statements', err);
+    }
+  };
+
+  const fetchCode = async (path: string) => {
+    try {
+      const res = await axios.get(`${API_BASE}/code`, { params: { path } });
+      setCode(res.data);
+    } catch {
+      setCode('// Error loading file: ' + path);
+    }
+  };
+
+  const resize = (e: MouseEvent) => {
+    if (isResizing) {
+      const newWidth = e.clientX - 16; // 16 is some padding offset
+      if (newWidth > 200 && newWidth < 800) {
+        setStatementWidth(newWidth);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', resize);
+      window.addEventListener('mouseup', stopResizing);
+    } else {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    }
+    return () => {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    };
+  }, [isResizing, resize]);
+
   useEffect(() => {
     fetchStudents();
     fetchAISettings();
@@ -170,7 +239,7 @@ const App = () => {
     } else if (!loading) {
       setView('import');
     }
-  }, [students, loading]);
+  }, [students, loading, selectedTurma]);
 
   useEffect(() => {
     if (selectedTurma) {
@@ -216,42 +285,13 @@ const App = () => {
     Prism.highlightAll();
   }, [code, view]);
 
-  const fetchStudents = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/students`);
-      setStudents(res.data);
-      setLoading(false);
-    } catch (err) {
-      console.error('Error fetching students', err);
-      setLoading(false);
-    }
-  };
-
-  const fetchAISettings = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/settings`);
-      setAiSettings(res.data);
-    } catch (err) {
-      console.error('Error fetching AI settings', err);
-    }
-  };
-
   const saveAISettings = async (settings: AISettings) => {
     try {
       await axios.post(`${API_BASE}/settings`, settings);
       setAiSettings(settings);
       toast.success(t.settingsSaved);
-    } catch (err) {
+    } catch {
       toast.error('Failed to save settings');
-    }
-  };
-
-  const fetchStatements = async (turma: string) => {
-    try {
-      const res = await axios.get(`${API_BASE}/statements`, { params: { turma } });
-      setStatements(res.data);
-    } catch (err) {
-      console.error('Error fetching statements', err);
     }
   };
 
@@ -261,7 +301,7 @@ const App = () => {
       await axios.post(`${API_BASE}/statements`, { turma: selectedTurma, statements: updatedStatements });
       setStatements(updatedStatements);
       toast.success('Enunciado salvo com sucesso');
-    } catch (err) {
+    } catch {
       toast.error('Falha ao salvar enunciado');
     }
   };
@@ -883,6 +923,29 @@ const App = () => {
                 </div>
 
                 <div className="flex gap-4 flex-1 overflow-hidden">
+                    {showSideBySide && (
+                        <>
+                        <div 
+                            style={{ width: statementWidth }}
+                            className="bg-panel rounded-lg overflow-hidden flex flex-col border border-border-main shadow-inner"
+                        >
+                            <div className="bg-panel p-2 text-[10px] flex justify-between items-center border-b border-border-main font-bold uppercase tracking-widest text-text-dim">
+                                <span className="flex items-center gap-2"><BookOpen size={12} className="text-accent" /> {t.questionStatement}</span>
+                                <button onClick={() => setShowSideBySide(false)} className="hover:text-accent transition-colors">
+                                    <X size={14} />
+                                </button>
+                            </div>
+                            <div 
+                                className="flex-1 overflow-auto p-4 text-sm text-text-main leading-relaxed markdown-content"
+                                dangerouslySetInnerHTML={{ __html: marked.parse(statements[`q${currentQ}`] || '') }}
+                            />
+                        </div>
+                        <div 
+                            className="w-1.5 cursor-col-resize hover:bg-accent/50 active:bg-accent transition-colors rounded-full self-stretch my-2"
+                            onMouseDown={startResizing}
+                        />
+                        </>
+                    )}
                     <div className="flex-1 bg-app rounded-lg overflow-hidden flex flex-col border border-border-main shadow-inner">
                         <div className="bg-panel p-2 text-[10px] flex justify-between items-center border-b border-border-main">
                         <div className="flex items-center gap-4">
@@ -896,6 +959,13 @@ const App = () => {
                                     className="ml-1 text-accent hover:text-accent/80 underline"
                                 >
                                     {t.edit}
+                                </button>
+                                <button 
+                                    onClick={() => setShowSideBySide(!showSideBySide)}
+                                    className={`ml-1 text-accent hover:text-accent/80 flex items-center gap-1 p-0.5 rounded transition-colors ${showSideBySide ? 'bg-accent/10' : ''}`}
+                                    title="Ver ao lado"
+                                >
+                                    <Split size={12} />
                                 </button>
                             </div>
                             <span className="truncate max-w-md font-mono text-text-dim opacity-60">{currentStudent.questions[`q${currentQ}`]?.path || 'No file path'}</span>
@@ -1389,6 +1459,23 @@ const App = () => {
           background: var(--accent);
           box-shadow: 0 0 10px var(--accent-glow);
         }
+
+        /* Markdown Content Styling */
+        .markdown-content h1 { font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem; color: var(--text-bright); }
+        .markdown-content h2 { font-size: 1.25rem; font-weight: bold; margin-bottom: 0.75rem; color: var(--text-bright); }
+        .markdown-content h3 { font-size: 1.1rem; font-weight: bold; margin-bottom: 0.5rem; color: var(--text-bright); }
+        .markdown-content p { margin-bottom: 1rem; color: var(--text-main); line-height: 1.6; }
+        .markdown-content ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; }
+        .markdown-content ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1rem; }
+        .markdown-content li { margin-bottom: 0.25rem; }
+        .markdown-content code { background: var(--bg-button); padding: 0.1rem 0.3rem; border-radius: 0.25rem; font-family: monospace; color: var(--accent); }
+        .markdown-content pre { background: var(--bg-app); padding: 1rem; border-radius: 0.5rem; overflow: auto; margin-bottom: 1rem; border: 1px solid var(--border-main); }
+        .markdown-content blockquote { border-left: 4px solid var(--accent); padding-left: 1rem; font-italic: italic; color: var(--text-dim); margin-bottom: 1rem; }
+        .markdown-content img { max-width: 100%; height: auto; border-radius: 0.5rem; }
+        .markdown-content a { color: var(--accent); text-decoration: underline; }
+        .markdown-content table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+        .markdown-content th, .markdown-content td { border: 1px solid var(--border-main); padding: 0.5rem; text-align: left; }
+        .markdown-content th { background: var(--bg-button); font-weight: bold; }
       `}</style>
     </div>
   );
