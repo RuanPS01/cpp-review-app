@@ -4,7 +4,7 @@ import {
   ChevronLeft, ChevronRight, Copy, Save, Table as TableIcon, 
   FileText, CheckCircle2, Play, Upload, Plus, Trash2, 
   Settings, Sparkles, BookOpen, X, Loader2, Download, Info, Terminal, Monitor, Cpu, Folder,
-  Sun, Moon, Split
+  Sun, Moon, Eye
 } from 'lucide-react';
 import { marked } from 'marked';
 import Prism from 'prismjs';
@@ -956,7 +956,7 @@ const App = () => {
                                     className={`ml-1 text-accent hover:text-accent/80 flex items-center gap-1 p-0.5 rounded transition-colors ${showSideBySide ? 'bg-accent/10' : ''}`}
                                     title="Ver ao lado"
                                 >
-                                    <Split size={12} />
+                                    <Eye size={12} />
                                 </button>
                             </div>
                             <span className="truncate max-w-md font-mono text-text-dim opacity-60">{currentStudent.questions[`q${currentQ}`]?.path || 'No file path'}</span>
