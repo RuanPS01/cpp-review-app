@@ -387,15 +387,6 @@ const App = () => {
     ), { duration: 6000, position: 'top-center' });
   };
 
-  const fetchCode = async (path: string) => {
-    try {
-      const res = await axios.get(`${API_BASE}/code`, { params: { path } });
-      setCode(res.data);
-    } catch (err) {
-      setCode('// Error loading file: ' + path);
-    }
-  };
-
   const handleSave = async () => {
     setSaving(true);
     const student = students[currentIndex];
