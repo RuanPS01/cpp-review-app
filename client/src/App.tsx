@@ -7,6 +7,7 @@ import {
   Sun, Moon, Eye
 } from 'lucide-react';
 import { marked } from 'marked';
+import Editor from '@monaco-editor/react';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism-tomorrow.css';
 import 'prismjs/components/prism-c';
@@ -693,22 +694,8 @@ const App = () => {
       .flatMap(s => Object.keys(s.questions).map(k => parseInt(k.replace('q', ''))))
   )).sort((a, b) => a - b);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const start = e.currentTarget.selectionStart;
-      const end = e.currentTarget.selectionEnd;
-      const value = e.currentTarget.value;
-      
-      const newValue = value.substring(0, start) + '    ' + value.substring(end);
-      setTempCode(newValue);
-      
-      // Need to defer setting selection to next tick
-      setTimeout(() => {
-        const textarea = e.target as HTMLTextAreaElement;
-        textarea.selectionStart = textarea.selectionEnd = start + 4;
-      }, 0);
-    }
+  const handleEditorChange = (value: string | undefined) => {
+    setTempCode(value || '');
   };
 
   const isCodeEdited = code !== tempCode;
@@ -1193,20 +1180,25 @@ const App = () => {
                         </div>
                         </div>
                         <div className="flex-1 flex flex-col overflow-hidden relative">
-                            {/* Syntax Highlighting Editor Layer */}
-                            <div className="relative flex-1 bg-app overflow-hidden">
-                                <pre className="absolute inset-0 m-0 p-4 font-mono text-sm leading-relaxed pointer-events-none scrollbar-hide selection:bg-transparent !bg-transparent line-numbers">
-                                    <code className="language-cpp !bg-transparent">
-                                        {tempCode + (tempCode.endsWith('\n') ? ' ' : '')}
-                                    </code>
-                                </pre>
-                                <textarea
-                                    spellCheck="false"
+                            {/* Professional Editor Layer */}
+                            <div className="flex-1 bg-app overflow-hidden">
+                                <Editor
+                                    height="100%"
+                                    defaultLanguage="cpp"
+                                    theme={theme === 'dark' ? 'vs-dark' : 'light'}
                                     value={tempCode}
-                                    onChange={(e) => setTempCode(e.target.value)}
-                                    onKeyDown={handleKeyDown}
-                                    className="absolute inset-0 w-full h-full bg-transparent p-4 font-mono text-sm leading-relaxed text-transparent caret-accent focus:outline-none resize-none scrollbar-thin overflow-auto selection:bg-accent/30"
-                                    placeholder={t.codeEditor}
+                                    onChange={handleEditorChange}
+                                    options={{
+                                        fontSize: 14,
+                                        fontFamily: "'Fira Code', 'Consolas', monospace",
+                                        minimap: { enabled: false },
+                                        scrollBeyondLastLine: false,
+                                        lineNumbers: 'on',
+                                        renderLineHighlight: 'all',
+                                        tabSize: 4,
+                                        padding: { top: 16, bottom: 16 },
+                                        automaticLayout: true,
+                                    }}
                                 />
                             </div>
 
