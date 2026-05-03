@@ -1722,6 +1722,14 @@ const App = () => {
         .markdown-content table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
         .markdown-content th, .markdown-content td { border: 1px solid var(--border-main); padding: 0.5rem; text-align: left; }
         .markdown-content th { background: var(--bg-button); font-weight: bold; }
+
+        /* Monaco Editor Fixes */
+        .monaco-editor-container {
+          text-align: left !important;
+        }
+        .monaco-editor .margin {
+          background-color: var(--bg-panel) !important;
+        }
       `}</style>
     </div>
   );
