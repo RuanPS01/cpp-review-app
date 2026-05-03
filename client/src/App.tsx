@@ -926,10 +926,27 @@ const App = () => {
                                     <X size={14} />
                                 </button>
                             </div>
-                            <div 
-                                className="flex-1 overflow-auto p-4 text-sm text-text-main leading-relaxed markdown-content"
-                                dangerouslySetInnerHTML={{ __html: marked.parse(statements[`q${currentQ}`] || '') }}
-                            />
+                            <div className="flex-1 overflow-auto p-4 text-sm text-text-main leading-relaxed markdown-content">
+                                {statements[`q${currentQ}`] ? (
+                                    <div dangerouslySetInnerHTML={{ __html: marked.parse(statements[`q${currentQ}`]) }} />
+                                ) : (
+                                    <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-4">
+                                        <div className="bg-panel p-4 rounded-full border border-border-main text-text-dim">
+                                            <BookOpen size={32} />
+                                        </div>
+                                        <div>
+                                            <p className="text-text-bright font-bold mb-1">{t.noStatementProvided}</p>
+                                            <p className="text-xs text-text-dim max-w-[250px] mx-auto">{t.statementHelp}</p>
+                                        </div>
+                                        <button 
+                                            onClick={() => setShowStatementModal(true)}
+                                            className="px-6 py-2 bg-button border border-accent/30 text-accent hover:border-accent hover:bg-accent/10 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
+                                        >
+                                            {t.editStatement}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         <div 
                             className="w-1.5 cursor-col-resize hover:bg-accent/50 active:bg-accent transition-colors rounded-full self-stretch my-2"
