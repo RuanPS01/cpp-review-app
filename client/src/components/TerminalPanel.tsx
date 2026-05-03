@@ -8,12 +8,13 @@ import { X, Maximize2, Minimize2, Move } from 'lucide-react';
 interface TerminalPanelProps {
   isOpen: boolean;
   filePath: string;
+  codeOverride?: string;
   onClose: () => void;
   t: Record<string, string>;
   theme: 'light' | 'dark';
 }
 
-const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, onClose, t, theme }) => {
+const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, codeOverride, onClose, t, theme }) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -141,7 +142,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, onClose
 
     socket.on('connect', () => {
       term.writeln(`\x1b[32m${t.connectedToServer}\x1b[0m`);
-      socket.emit('run-code', { filePath });
+      socket.emit('run-code', { filePath, codeOverride });
     });
 
     socket.on('terminal-data', (data: string) => {
@@ -162,7 +163,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, onClose
       socket.disconnect();
       term.dispose();
     };
-  }, [shouldRender, filePath, t, theme]);
+  }, [shouldRender, filePath, codeOverride, t, theme]);
 
   // Re-fit when size changes
   useEffect(() => {

@@ -94,6 +94,7 @@ const App = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentQ, setCurrentQ] = useState(1);
   const [code, setCode] = useState('');
+  const [tempCode, setTempCode] = useState('');
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'review' | 'table' | 'import' | 'settings'>('review');
   const [saving, setSaving] = useState(false);
@@ -204,8 +205,11 @@ const App = () => {
     try {
       const res = await axios.get(`${API_BASE}/code`, { params: { path } });
       setCode(res.data);
+      setTempCode(res.data);
     } catch {
-      setCode('// Error loading file: ' + path);
+      const errorMsg = '// Error loading file: ' + path;
+      setCode(errorMsg);
+      setTempCode(errorMsg);
     }
   }, []);
 
@@ -270,6 +274,7 @@ const App = () => {
               fetchCode(q.path);
             } else {
               setCode('// No file found for this question');
+              setTempCode('// No file found for this question');
             }
         }
       }
@@ -326,7 +331,7 @@ const App = () => {
 
   useEffect(() => {
     Prism.highlightAll();
-  }, [code, view]);
+  }, [code, tempCode, view]);
 
   const saveAISettings = async (settings: AISettings) => {
     try {
@@ -687,6 +692,8 @@ const App = () => {
       .filter(s => s.turma === selectedTurma)
       .flatMap(s => Object.keys(s.questions).map(k => parseInt(k.replace('q', ''))))
   )).sort((a, b) => a - b);
+
+  const isCodeEdited = code !== tempCode;
 
   return (
     <div className="min-h-screen bg-app text-text-main font-sans">
@@ -1167,11 +1174,29 @@ const App = () => {
                             )}
                         </div>
                         </div>
-                        <pre className="flex-1 overflow-auto m-0 text-sm leading-relaxed scrollbar-thin line-numbers !bg-app">
-                        <code className="language-cpp block p-4 min-h-full !py-4 !bg-app">
-                            {code}
-                        </code>
-                        </pre>
+                        <div className="flex-1 flex flex-col overflow-hidden relative">
+                            <textarea
+                                spellCheck="false"
+                                value={tempCode}
+                                onChange={(e) => setTempCode(e.target.value)}
+                                className="flex-1 bg-app p-4 font-mono text-sm leading-relaxed text-accent focus:outline-none resize-none scrollbar-thin overflow-auto selection:bg-accent/30"
+                                placeholder={t.codeEditor}
+                            />
+                            {isCodeEdited && (
+                                <div className="bg-red-950/40 border-t border-red-900/50 p-2 flex justify-between items-center animate-in slide-in-from-bottom-2 duration-300">
+                                    <div className="flex items-center gap-2 text-[10px] font-bold text-red-500 uppercase tracking-widest">
+                                        <Info size={14} />
+                                        {t.tempCodeNotice}
+                                    </div>
+                                    <button 
+                                        onClick={() => setTempCode(code)}
+                                        className="px-3 py-1 bg-red-900/30 hover:bg-red-900/50 text-red-500 border border-red-900/50 rounded text-[9px] font-black uppercase tracking-widest transition-all active:scale-95"
+                                    >
+                                        {t.discardTempCode}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="w-80 bg-panel p-5 rounded-lg flex flex-col gap-5 border border-border-main shadow-2xl">
@@ -1552,6 +1577,7 @@ const App = () => {
         <TerminalPanel 
           isOpen={showTerminal}
           filePath={currentStudent.questions[`q${currentQ}`].path!} 
+          codeOverride={isCodeEdited ? tempCode : undefined}
           onClose={() => setShowTerminal(false)} 
           t={t}
           theme={theme}

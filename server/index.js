@@ -534,20 +534,33 @@ io.on('connection', (socket) => {
   console.log('Client connected to terminal');
   let ptyProcess = null;
 
-  socket.on('run-code', ({ filePath }) => {
-    if (!filePath || !fs.existsSync(filePath)) {
-      socket.emit('terminal-data', '\r\n\x1b[31mError: Invalid file path\x1b[0m\r\n');
+  socket.on('run-code', ({ filePath, codeOverride }) => {
+    if (!filePath || (!codeOverride && !fs.existsSync(filePath))) {
+      socket.emit('terminal-data', '\r\n\x1b[31mError: Invalid file path or code\x1b[0m\r\n');
       return;
     }
 
     const dir = path.dirname(filePath);
-    const fileName = path.basename(filePath);
-    const exeName = fileName.replace('.cpp', '.exe');
+    const originalFileName = path.basename(filePath);
+    
+    // If we have a code override, create a temporary file
+    let fileNameToCompile = originalFileName;
+    let isTemporary = false;
+
+    if (codeOverride) {
+      const ext = path.extname(originalFileName);
+      const base = path.basename(originalFileName, ext);
+      fileNameToCompile = `${base}_test${ext}`;
+      fs.writeFileSync(path.join(dir, fileNameToCompile), codeOverride, 'utf8');
+      isTemporary = true;
+    }
+
+    const exeName = fileNameToCompile.replace('.cpp', '.exe');
     const exePath = path.join(dir, exeName);
 
-    socket.emit('terminal-data', `\r\n\x1b[33mCompiling ${fileName}...\x1b[0m\r\n`);
+    socket.emit('terminal-data', `\r\n\x1b[33mCompiling ${isTemporary ? 'MODIFIED ' : ''}${fileNameToCompile}...\x1b[0m\r\n`);
 
-    const compile = spawn('g++', [fileName, '-o', exeName], { cwd: dir, shell: true });
+    const compile = spawn('g++', [fileNameToCompile, '-o', exeName], { cwd: dir, shell: true });
 
     let compileError = '';
     compile.stderr.on('data', (data) => {
@@ -557,6 +570,10 @@ io.on('connection', (socket) => {
     compile.on('close', (code) => {
       if (code !== 0) {
         socket.emit('terminal-data', `\r\n\x1b[31mCompilation failed:\x1b[0m\r\n${compileError.replace(/\n/g, '\r\n')}`);
+        // Cleanup temp cpp if failed
+        if (isTemporary) {
+            try { fs.unlinkSync(path.join(dir, fileNameToCompile)); } catch(e) {}
+        }
         return;
       }
 
@@ -587,9 +604,21 @@ io.on('connection', (socket) => {
         ptyProcess.onExit(({ exitCode }) => {
           socket.emit('terminal-data', `\r\n\r\n\x1b[33mProcess exited with code ${exitCode}\x1b[0m\r\n`);
           ptyProcess = null;
+
+          // Cleanup temp files
+          if (isTemporary) {
+            setTimeout(() => {
+                try { fs.unlinkSync(path.join(dir, fileNameToCompile)); } catch(e) {}
+                try { fs.unlinkSync(exePath); } catch(e) {}
+            }, 1000);
+          }
         });
       } catch (err) {
         socket.emit('terminal-data', `\r\n\x1b[31mError spawning terminal: ${err.message}\x1b[0m\r\n`);
+        if (isTemporary) {
+            try { fs.unlinkSync(path.join(dir, fileNameToCompile)); } catch(e) {}
+            try { fs.unlinkSync(exePath); } catch(e) {}
+        }
       }
     });
   });
