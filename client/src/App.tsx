@@ -693,6 +693,24 @@ const App = () => {
       .flatMap(s => Object.keys(s.questions).map(k => parseInt(k.replace('q', ''))))
   )).sort((a, b) => a - b);
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = e.currentTarget.selectionStart;
+      const end = e.currentTarget.selectionEnd;
+      const value = e.currentTarget.value;
+      
+      const newValue = value.substring(0, start) + '    ' + value.substring(end);
+      setTempCode(newValue);
+      
+      // Need to defer setting selection to next tick
+      setTimeout(() => {
+        const textarea = e.target as HTMLTextAreaElement;
+        textarea.selectionStart = textarea.selectionEnd = start + 4;
+      }, 0);
+    }
+  };
+
   const isCodeEdited = code !== tempCode;
 
   return (
@@ -1175,13 +1193,23 @@ const App = () => {
                         </div>
                         </div>
                         <div className="flex-1 flex flex-col overflow-hidden relative">
-                            <textarea
-                                spellCheck="false"
-                                value={tempCode}
-                                onChange={(e) => setTempCode(e.target.value)}
-                                className="flex-1 bg-app p-4 font-mono text-sm leading-relaxed text-accent focus:outline-none resize-none scrollbar-thin overflow-auto selection:bg-accent/30"
-                                placeholder={t.codeEditor}
-                            />
+                            {/* Syntax Highlighting Editor Layer */}
+                            <div className="relative flex-1 bg-app overflow-hidden">
+                                <pre className="absolute inset-0 m-0 p-4 font-mono text-sm leading-relaxed pointer-events-none scrollbar-hide selection:bg-transparent !bg-transparent line-numbers">
+                                    <code className="language-cpp !bg-transparent">
+                                        {tempCode + (tempCode.endsWith('\n') ? ' ' : '')}
+                                    </code>
+                                </pre>
+                                <textarea
+                                    spellCheck="false"
+                                    value={tempCode}
+                                    onChange={(e) => setTempCode(e.target.value)}
+                                    onKeyDown={handleKeyDown}
+                                    className="absolute inset-0 w-full h-full bg-transparent p-4 font-mono text-sm leading-relaxed text-transparent caret-accent focus:outline-none resize-none scrollbar-thin overflow-auto selection:bg-accent/30"
+                                    placeholder={t.codeEditor}
+                                />
+                            </div>
+
                             {isCodeEdited && (
                                 <div className="bg-red-950/40 border-t border-red-900/50 p-2 flex justify-between items-center animate-in slide-in-from-bottom-2 duration-300">
                                     <div className="flex items-center gap-2 text-[10px] font-bold text-red-500 uppercase tracking-widest">
