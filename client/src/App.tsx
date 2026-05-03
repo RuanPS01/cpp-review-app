@@ -1209,7 +1209,7 @@ const App = () => {
                                 disabled={saving}
                                 className={`w-full py-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg ${
                                     pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`]
-                                    ? 'bg-accent text-black border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
+                                    ? 'bg-button text-accent border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)] hover:bg-accent hover:text-black'
                                     : 'bg-button border border-border-main hover:bg-accent hover:text-black hover:border-accent'
                                 }`}
                             >
