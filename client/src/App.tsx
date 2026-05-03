@@ -141,6 +141,7 @@ const App = () => {
   const [showSideBySide, setShowSideBySide] = useState(false);
   const [statementWidth, setStatementWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState<Record<string, Record<string, { score: number, comment: string }>>>({});
 
   // Resize handling for side-by-side view
   const startResizing = (e: React.MouseEvent) => {
@@ -154,7 +155,10 @@ const App = () => {
 
   // Utility Functions
   const calculateTotal = (student: Student) => {
-    const scores = Object.values(student.questions).map(q => q.score);
+    const studentPending = pendingChanges[student.folder_name] || {};
+    const scores = Object.keys(student.questions).map(qKey => {
+        return studentPending[qKey] ? studentPending[qKey].score : student.questions[qKey].score;
+    });
     if (scores.length === 0) return '0.00';
     const sum = scores.reduce((acc, s) => acc + s, 0);
     return (sum / scores.length).toFixed(2);
@@ -254,10 +258,14 @@ const App = () => {
     if (students.length > 0 && view === 'review') {
       const student = students[currentIndex];
       if (student) {
-        const q = student.questions[`q${currentQ}`];
+        const qKey = `q${currentQ}`;
+        const pending = pendingChanges[student.folder_name]?.[qKey];
+        const q = student.questions[qKey];
         if (q) {
-            setEditScore(q.score);
-            setEditComment(q.comment);
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setEditScore(pending ? pending.score : q.score);
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setEditComment(pending ? pending.comment : q.comment);
             if (q.path) {
               fetchCode(q.path);
             } else {
@@ -266,7 +274,39 @@ const App = () => {
         }
       }
     }
-  }, [currentIndex, currentQ, students, view, fetchCode]);
+  }, [currentIndex, currentQ, students, view, fetchCode, pendingChanges]);
+
+  // Update pending changes when edit values change
+  const handleEditChange = (score: number, comment: string) => {
+    setEditScore(score);
+    setEditComment(comment);
+    
+    const student = students[currentIndex];
+    if (!student) return;
+    const qKey = `q${currentQ}`;
+    const original = student.questions[qKey];
+    if (!original) return;
+
+    const isDirty = original.score !== score || original.comment !== comment;
+    
+    setPendingChanges(prev => {
+        const newPending = { ...prev };
+        if (isDirty) {
+            newPending[student.folder_name] = {
+                ...(newPending[student.folder_name] || {}),
+                [qKey]: { score, comment }
+            };
+        } else {
+            if (newPending[student.folder_name]) {
+                delete newPending[student.folder_name][qKey];
+                if (Object.keys(newPending[student.folder_name]).length === 0) {
+                    delete newPending[student.folder_name];
+                }
+            }
+        }
+        return newPending;
+    });
+  };
 
   // Update custom model flags when settings are loaded
   useEffect(() => {
@@ -341,8 +381,7 @@ const App = () => {
 
   const applyAIResult = () => {
     if (aiResult) {
-      setEditScore(aiResult.score);
-      setEditComment(aiResult.comment);
+      handleEditChange(aiResult.score, aiResult.comment);
       setShowAIPreviewModal(false);
       toast.success(t.aiApplied);
     }
@@ -394,28 +433,116 @@ const App = () => {
     ), { duration: 6000, position: 'top-center' });
   };
 
-  const handleSave = async () => {
+  const handleSave = async (studentIdx = currentIndex, questionNum = currentQ) => {
     setSaving(true);
-    const student = students[currentIndex];
+    const student = students[studentIdx];
+    const qKey = `q${questionNum}`;
+    const pending = pendingChanges[student.folder_name]?.[qKey];
+    
+    const scoreToSave = pending ? pending.score : editScore;
+    const commentToSave = pending ? pending.comment : editComment;
+
     try {
       await axios.post(`${API_BASE}/update-grade`, {
         turma: student.turma,
         studentId: student.folder_name,
-        questionNum: currentQ,
-        score: editScore,
-        comment: editComment
+        questionNum: questionNum,
+        score: scoreToSave,
+        comment: commentToSave
       });
       
-      const updatedStudents = [...students];
-      updatedStudents[currentIndex].questions[`q${currentQ}`].score = editScore;
-      updatedStudents[currentIndex].questions[`q${currentQ}`].comment = editComment;
-      setStudents(updatedStudents);
+      setStudents(prev => {
+        const updated = [...prev];
+        updated[studentIdx].questions[qKey].score = scoreToSave;
+        updated[studentIdx].questions[qKey].comment = commentToSave;
+        return updated;
+      });
+
+      setPendingChanges(prev => {
+        const newPending = { ...prev };
+        if (newPending[student.folder_name]) {
+            delete newPending[student.folder_name][qKey];
+            if (Object.keys(newPending[student.folder_name]).length === 0) {
+                delete newPending[student.folder_name];
+            }
+        }
+        return newPending;
+      });
+
       toast.success(t.gradeSaved);
     } catch {
       toast.error('Error saving grade');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSaveAll = async () => {
+    const student = students[currentIndex];
+    if (!student) return;
+    const studentPending = pendingChanges[student.folder_name];
+    if (!studentPending) return;
+
+    setSaving(true);
+    try {
+        const promises = Object.keys(studentPending).map(async (qKey) => {
+            const qNum = parseInt(qKey.replace('q', ''));
+            const data = studentPending[qKey];
+            return axios.post(`${API_BASE}/update-grade`, {
+                turma: student.turma,
+                studentId: student.folder_name,
+                questionNum: qNum,
+                score: data.score,
+                comment: data.comment
+            });
+        });
+
+        await Promise.all(promises);
+
+        setStudents(prev => {
+            const updated = [...prev];
+            const sIdx = updated.findIndex(s => s.folder_name === student.folder_name);
+            Object.keys(studentPending).forEach(qKey => {
+                updated[sIdx].questions[qKey].score = studentPending[qKey].score;
+                updated[sIdx].questions[qKey].comment = studentPending[qKey].comment;
+            });
+            return updated;
+        });
+
+        setPendingChanges(prev => {
+            const newPending = { ...prev };
+            delete newPending[student.folder_name];
+            return newPending;
+        });
+
+        toast.success(t.allGradesSaved);
+    } catch {
+        toast.error('Error saving all grades');
+    } finally {
+        setSaving(false);
+    }
+  };
+
+  const handleDiscardChanges = () => {
+    const student = students[currentIndex];
+    if (!student) return;
+    const qKey = `q${currentQ}`;
+    
+    setPendingChanges(prev => {
+        const newPending = { ...prev };
+        if (newPending[student.folder_name]) {
+            delete newPending[student.folder_name][qKey];
+            if (Object.keys(newPending[student.folder_name]).length === 0) {
+                delete newPending[student.folder_name];
+            }
+        }
+        return newPending;
+    });
+
+    const original = student.questions[qKey];
+    setEditScore(original.score);
+    setEditComment(original.comment);
+    toast.success(t.changesDiscarded);
   };
 
   const handleImport = async (e: React.FormEvent) => {
@@ -912,16 +1039,33 @@ const App = () => {
                         </div>
                     </div>
 
-                    <div className="flex gap-2">
-                        {questions.map(q => (
-                        <button
-                            key={q}
-                            onClick={() => setCurrentQ(q)}
-                            className={`px-4 py-2 rounded border border-transparent font-bold transition-all duration-200 active:scale-90 ${currentQ === q ? 'bg-accent !border-accent text-black shadow-[0_0_15px_var(--accent-glow)]' : 'bg-button text-text-dim border-border-main hover:border-accent/30 hover:text-accent'}`}
-                        >
-                            Q{q}
-                        </button>
-                        ))}
+                    <div className="flex gap-4 items-center">
+                        <div className="flex gap-2">
+                            {questions.map(q => {
+                                const isDirty = !!pendingChanges[currentStudent.folder_name]?.[`q${q}`];
+                                return (
+                                <button
+                                    key={q}
+                                    onClick={() => setCurrentQ(q)}
+                                    className={`px-4 py-2 rounded border font-bold transition-all duration-200 active:scale-90 ${
+                                        currentQ === q 
+                                        ? 'bg-accent border-accent text-black shadow-[0_0_15px_var(--accent-glow)]' 
+                                        : `bg-button text-text-dim ${isDirty ? 'border-red-500/50 hover:border-red-500' : 'border-border-main hover:border-accent/30'} hover:text-accent`
+                                    }`}
+                                >
+                                    Q{q}
+                                </button>
+                                );
+                            })}
+                        </div>
+                        {pendingChanges[currentStudent.folder_name] && (
+                            <button 
+                                onClick={handleSaveAll}
+                                className="px-4 py-2 bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-black rounded font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2"
+                            >
+                                <Save size={14} /> {t.saveAll}
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -1037,7 +1181,7 @@ const App = () => {
                             type="number" 
                             step="0.1"
                             value={editScore}
-                            onChange={(e) => setEditScore(Number(e.target.value))}
+                            onChange={(e) => handleEditChange(Number(e.target.value), editComment)}
                             className="w-full bg-input border border-border-main rounded p-3 text-accent font-bold focus:outline-none focus:border-accent transition-all"
                         />
                         </div>
@@ -1045,18 +1189,33 @@ const App = () => {
                         <label className="block text-xs font-bold uppercase tracking-wider text-text-dim mb-2">{t.feedbackComment}</label>
                         <textarea 
                             value={editComment}
-                            onChange={(e) => setEditComment(e.target.value)}
+                            onChange={(e) => handleEditChange(editScore, e.target.value)}
                             className="flex-1 w-full bg-input border border-border-main rounded p-3 text-text-main focus:outline-none focus:border-accent resize-none text-sm transition-all"
                             placeholder={t.enterFeedback}
                         />
                         </div>
-                        <button 
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="w-full bg-button border border-border-main hover:bg-accent hover:text-black hover:border-accent py-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg hover:shadow-[0_0_20px_var(--accent-glow)]"
-                        >
-                        <Save size={18} /> {saving ? t.saving : t.saveGrade}
-                        </button>
+                        
+                        <div className="flex flex-col gap-2">
+                            {pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`] && (
+                                <button 
+                                    onClick={handleDiscardChanges}
+                                    className="w-full py-2 text-[10px] font-bold uppercase tracking-widest text-text-dim hover:text-red-500 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Trash2 size={12} /> {t.discardChanges}
+                                </button>
+                            )}
+                            <button 
+                                onClick={() => handleSave()}
+                                disabled={saving}
+                                className={`w-full py-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg ${
+                                    pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`]
+                                    ? 'bg-accent text-black border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
+                                    : 'bg-button border border-border-main hover:bg-accent hover:text-black hover:border-accent'
+                                }`}
+                            >
+                                <Save size={18} /> {saving ? t.saving : t.saveGrade}
+                            </button>
+                        </div>
                         
                         <div className="mt-2 pt-4 border-t border-border-main">
                         <div className="flex justify-between items-baseline mb-3">
@@ -1064,11 +1223,27 @@ const App = () => {
                             <span className="text-xl font-black text-text-bright drop-shadow-[0_0_5px_rgba(255,255,255,0.2)]">{calculateTotal(currentStudent)}</span>
                         </div>
                         <div className="grid grid-cols-4 gap-1.5">
-                            {questions.map(q => (
-                                <div key={q} className={`text-center text-[9px] font-bold p-1.5 rounded border ${currentQ === q ? 'bg-accent/10 border-accent/50 text-accent' : 'bg-input border-border-main text-text-dim'}`}>
-                                Q{q}: {currentStudent.questions[`q${q}`]?.score || 0}
-                                </div>
-                            ))}
+                            {questions.map(q => {
+                                const isDirty = !!pendingChanges[currentStudent.folder_name]?.[`q${q}`];
+                                const currentQScore = isDirty 
+                                    ? pendingChanges[currentStudent.folder_name][`q${q}`].score 
+                                    : currentStudent.questions[`q${q}`]?.score || 0;
+                                return (
+                                <button 
+                                    key={q} 
+                                    onClick={() => setCurrentQ(q)}
+                                    className={`text-center text-[9px] font-bold p-1.5 rounded border transition-all active:scale-95 ${
+                                        currentQ === q 
+                                        ? 'bg-accent text-black border-accent' 
+                                        : isDirty
+                                          ? 'bg-red-500/10 border-red-500 text-red-500'
+                                          : 'bg-input border-border-main text-text-dim hover:border-accent/50'
+                                    }`}
+                                >
+                                    Q{q}: {currentQScore}
+                                </button>
+                                );
+                            })}
                         </div>
                         </div>
                     </div>
