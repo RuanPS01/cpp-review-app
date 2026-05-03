@@ -938,11 +938,11 @@ const App = () => {
                         </>
                     )}
                     <div className="flex-1 bg-app rounded-lg overflow-hidden flex flex-col border border-border-main shadow-inner">
-                        <div className="bg-panel p-2 text-[10px] flex justify-between items-center border-b border-border-main">
-                        <div className="flex items-center gap-4">
+                        <div className="bg-panel p-2 text-[10px] flex justify-between items-center border-b border-border-main overflow-hidden">
+                        <div className="flex items-center gap-4 flex-1 min-w-0 mr-4">
                             <button 
                                 onClick={() => setShowSideBySide(!showSideBySide)}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded border transition-all active:scale-95 font-bold uppercase tracking-widest ${
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded border transition-all active:scale-95 font-bold uppercase tracking-widest flex-shrink-0 ${
                                     showSideBySide 
                                     ? 'bg-accent text-black border-accent shadow-[0_0_10px_var(--accent-glow)]' 
                                     : 'bg-button text-accent border-accent/30 hover:border-accent hover:bg-accent/10'
@@ -952,9 +952,9 @@ const App = () => {
                                 <Eye size={14} />
                                 <span>{t.questionStatement.split(' ')[0]}</span>
                             </button>
-                            <div className="flex items-center gap-1.5 px-2 py-1 bg-app rounded border border-border-main">
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-app rounded border border-border-main flex-shrink-0">
                                 <BookOpen size={10} className="text-accent" />
-                                <span className="truncate max-w-[200px] font-mono text-text-dim">
+                                <span className="truncate max-w-[120px] font-mono text-text-dim">
                                     {statements[`q${currentQ}`] ? t.statementLoaded : t.noStatement}
                                 </span>
                                 <button 
@@ -964,18 +964,18 @@ const App = () => {
                                     {t.edit}
                                 </button>
                             </div>
-                            <span className="truncate max-w-md font-mono text-text-dim opacity-60">{currentStudent.questions[`q${currentQ}`]?.path || 'No file path'}</span>
+                            <span className="truncate font-mono text-text-dim opacity-60 min-w-0 flex-1">{currentStudent.questions[`q${currentQ}`]?.path || 'No file path'}</span>
                             {currentStudent.questions[`q${currentQ}`]?.path && (
                             <button 
                                 onClick={() => copyToClipboard(currentStudent.questions[`q${currentQ}`].path!)}
-                                className="hover:text-accent text-text-dim transition-colors"
+                                className="hover:text-accent text-text-dim transition-colors flex-shrink-0"
                                 title={t.copyPath}
                             >
                                 <Copy size={12} />
                             </button>
                             )}
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-shrink-0">
                             {currentStudent.questions[`q${currentQ}`]?.path && (
                                 <>
                                 <button 
