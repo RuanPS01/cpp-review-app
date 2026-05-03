@@ -698,6 +698,12 @@ const App = () => {
     setTempCode(value || '');
   };
 
+  const handleEditorDidMount = (editor: any) => {
+    // Initial layout fix
+    setTimeout(() => editor.layout(), 100);
+    setTimeout(() => editor.layout(), 800); // Second attempt after transitions
+  };
+
   const isCodeEdited = code !== tempCode;
 
   return (
@@ -1726,6 +1732,10 @@ const App = () => {
         /* Monaco Editor Fixes */
         .monaco-editor-container {
           text-align: left !important;
+        }
+        .monaco-editor, .monaco-editor .view-lines, .monaco-editor .margin {
+          text-align: left !important;
+          letter-spacing: normal !important;
         }
         .monaco-editor .margin {
           background-color: var(--bg-panel) !important;
