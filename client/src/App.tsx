@@ -283,9 +283,21 @@ const App = () => {
             if (q.path) {
               fetchCode(q.path);
             } else {
-              setCode('// No file found for this question');
-              setTempCode('// No file found for this question');
+              // eslint-disable-next-line react-hooks/set-state-in-effect
+              setCode('// No implementation found for this question');
+              // eslint-disable-next-line react-hooks/set-state-in-effect
+              setTempCode('// No implementation found for this question');
             }
+        } else {
+            // Case where question doesn't exist in student data
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setEditScore(0);
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setEditComment('');
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setCode('// No implementation found for this question');
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setTempCode('// No implementation found for this question');
         }
       }
     }
