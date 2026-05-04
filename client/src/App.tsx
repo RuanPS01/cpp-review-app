@@ -1467,12 +1467,13 @@ const App = () => {
                     <button 
                         onClick={() => {
                             if (aiResult) {
-                                copyToClipboard(aiResult.comment);
+                                navigator.clipboard.writeText(aiResult.comment);
+                                toast.success(t.feedbackCopied);
                             }
                         }}
                         className="flex-1 px-4 py-3 border border-border-main text-text-dim hover:text-accent hover:bg-button rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                     >
-                        <Copy size={14} /> {t.copyPath.split(' ')[0]}
+                        <Copy size={14} /> {t.gotIt.split(' ')[0] === 'Entendi' ? 'Copiar' : 'Copy'}
                     </button>
                     <button 
                         onClick={applyAIResult}
