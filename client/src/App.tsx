@@ -1465,6 +1465,16 @@ const App = () => {
                         {t.discard}
                     </button>
                     <button 
+                        onClick={() => {
+                            if (aiResult) {
+                                copyToClipboard(aiResult.comment);
+                            }
+                        }}
+                        className="flex-1 px-4 py-3 border border-border-main text-text-dim hover:text-accent hover:bg-button rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                    >
+                        <Copy size={14} /> {t.copyPath.split(' ')[0]}
+                    </button>
+                    <button 
                         onClick={applyAIResult}
                         className="flex-2 px-8 py-3 bg-accent text-black font-black uppercase tracking-widest text-xs rounded-lg active:scale-95 transition-all shadow-lg shadow-accent/40"
                     >
