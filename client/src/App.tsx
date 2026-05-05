@@ -1,104 +1,28 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import { useState, useEffect, useCallback } from 'react';
 import { 
-  ChevronLeft, ChevronRight, Copy, Save, Table as TableIcon, 
-  FileText, CheckCircle2, Play, Upload, Plus, Trash2, 
-  Settings, Sparkles, BookOpen, X, Loader2, Download, Info, Terminal, Monitor, Cpu, Folder,
-  Sun, Moon, Eye
+  Sun, Moon, FileText, Table as TableIcon, Plus, Settings, Trash2, 
+  Loader2, CheckCircle2, Sparkles, BookOpen, Info, Copy,
+  Terminal, Monitor, Cpu, Folder
 } from 'lucide-react';
-import { marked } from 'marked';
-import Editor from '@monaco-editor/react';
-import Prism from 'prismjs';
-import 'prismjs/themes/prism-tomorrow.css';
-import 'prismjs/components/prism-c';
-import 'prismjs/components/prism-cpp';
-import 'prismjs/plugins/line-numbers/prism-line-numbers.js';
-import 'prismjs/plugins/line-numbers/prism-line-numbers.css';
 import TerminalPanel from './components/TerminalPanel';
+import Modal from './components/Modal';
 import toast, { Toaster } from 'react-hot-toast';
 import translations from './translations';
-import * as XLSX from 'xlsx';
+import type { Student, AISettings, View, PendingChanges, AIResult } from './types';
+import { api } from './services/api';
 
-// Recommended Models Constant
-const RECOMMENDED_MODELS: Record<string, string[]> = {
-  openai: ['gpt-5.4-mini', 'gpt-5.4', 'gpt-5.5', 'gpt-4o', 'gpt-4-turbo'],
-  gemini: ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-3-flash-preview', 'gemini-3.1-pro-preview', 'gemini-1.5-pro', 'gemini-1.5-flash'],
-  claude: ['claude-3-5-sonnet-20240620', 'claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7'],
-  ollama: ['llama3.3', 'qwen3.6', 'deepseek-v4-flash', 'qwen3-coder-next', 'mistral-medium-3.5', 'gemma4', 'kimi-k2.6'],
-};
-
-interface Question {
-  score: number;
-  comment: string;
-  path: string | null;
-  label?: string;
-}
-
-interface Student {
-  id: string;
-  folder_name: string;
-  name: string;
-  turma: string;
-  questions: {
-    [key: string]: Question;
-  };
-}
-
-interface AISettings {
-  provider: 'ollama' | 'openai' | 'gemini' | 'claude';
-  ollamaModel: string;
-  cloudModel: string;
-  cloudKey: string;
-  evaluationCriteria: string;
-}
-
-const API_BASE = 'http://localhost:3001/api';
-
-const Modal = ({ isOpen, onClose, title, icon: Icon, children, maxWidth = "max-w-2xl" }: { isOpen: boolean, onClose: () => void, title: string, icon: React.ElementType, children: React.ReactNode, maxWidth?: string }) => {
-  const [shouldRender, setShouldRender] = useState(isOpen);
-
-  useEffect(() => {
-    if (isOpen && !shouldRender) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setShouldRender(true);
-    }
-  }, [isOpen, shouldRender]);
-
-  const handleAnimationEnd = () => {
-    if (!isOpen) setShouldRender(false);
-  };
-
-  if (!shouldRender) return null;
-
-  return (
-    <div className={`fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md transition-opacity duration-150 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
-      <div 
-        onAnimationEnd={handleAnimationEnd}
-        className={`${isOpen ? 'animate-crt-open' : 'animate-crt-close'} bg-panel w-full ${maxWidth} rounded-xl border border-border-main shadow-2xl flex flex-col overflow-hidden transition-colors`}
-      >
-        <div className="p-4 border-b border-border-main flex justify-between items-center bg-header">
-          <h3 className="text-sm font-black uppercase tracking-widest text-text-bright flex items-center gap-2">
-              <Icon size={16} className="text-accent" /> {title}
-          </h3>
-          <button onClick={onClose} className="text-text-dim hover:text-text-bright transition-colors"><X size={20} /></button>
-        </div>
-        <div className="p-6">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-};
+// Pages
+import SettingsPage from './pages/SettingsPage';
+import ImportPage from './pages/ImportPage';
+import TablePage from './pages/TablePage';
+import ReviewPage from './pages/ReviewPage';
 
 const App = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentQ, setCurrentQ] = useState(1);
-  const [code, setCode] = useState('');
-  const [tempCode, setTempCode] = useState('');
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'review' | 'table' | 'import' | 'settings'>('review');
-  const [saving, setSaving] = useState(false);
+  const [view, setView] = useState<View>('review');
   const [selectedTurma, setSelectedTurma] = useState<string>('');
   const [showTerminal, setShowTerminal] = useState(false);
   const [lang, setLang] = useState<'pt-BR' | 'en-US'>('pt-BR');
@@ -119,9 +43,6 @@ const App = () => {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  const [editScore, setEditScore] = useState(0);
-  const [editComment, setEditComment] = useState('');
-
   // AI State
   const [aiSettings, setAiSettings] = useState<AISettings>({
     provider: 'ollama',
@@ -130,32 +51,19 @@ const App = () => {
     cloudKey: '',
     evaluationCriteria: ''
   });
-  const [isCustomModel, setIsCustomModel] = useState(false);
-  const [isCustomOllama, setIsCustomOllama] = useState(false);
-  const [showJsonHelp, setShowJsonHelp] = useState(false);
-  const [showOllamaHelp, setShowOllamaHelp] = useState(false);
-  const [showZipHelp, setShowZipHelp] = useState(false);
+  
   const [statements, setStatements] = useState<Record<string, string>>({});
   const [showStatementModal, setShowStatementModal] = useState(false);
   const [showAIPreviewModal, setShowAIPreviewModal] = useState(false);
-  const [aiResult, setAiResult] = useState<{ score: number, comment: string } | null>(null);
+  const [aiResult, setAiResult] = useState<AIResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const [showSideBySide, setShowSideBySide] = useState(false);
-  const [statementWidth, setStatementWidth] = useState(400);
-  const [isResizing, setIsResizing] = useState(false);
-  const [pendingChanges, setPendingChanges] = useState<Record<string, Record<string, { score: number, comment: string }>>>({});
+  const [pendingChanges, setPendingChanges] = useState<PendingChanges>({});
 
-  // Resize handling for side-by-side view
-  const startResizing = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-  };
+  // Help Modals
+  const [showJsonHelp, setShowJsonHelp] = useState(false);
+  const [showOllamaHelp, setShowOllamaHelp] = useState(false);
+  const [showZipHelp, setShowZipHelp] = useState(false);
 
-  const stopResizing = () => {
-    setIsResizing(false);
-  };
-
-  // Utility Functions
   const calculateTotal = (student: Student) => {
     const studentPending = pendingChanges[student.folder_name] || {};
     const scores = Object.keys(student.questions).map(qKey => {
@@ -175,22 +83,18 @@ const App = () => {
 
   const fetchStudents = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/students`);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      const res = await api.getStudents();
       setStudents(res.data);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
     } catch (err) {
       console.error('Error fetching students', err);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
     }
   }, []);
 
   const fetchAISettings = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/settings`);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      const res = await api.getSettings();
       setAiSettings(res.data);
     } catch (err) {
       console.error('Error fetching AI settings', err);
@@ -199,52 +103,12 @@ const App = () => {
 
   const fetchStatements = useCallback(async (turma: string) => {
     try {
-      const res = await axios.get(`${API_BASE}/statements`, { params: { turma } });
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      const res = await api.getStatements(turma);
       setStatements(res.data);
     } catch (err) {
       console.error('Error fetching statements', err);
     }
   }, []);
-
-  const fetchCode = useCallback(async (path: string) => {
-    try {
-      const res = await axios.get(`${API_BASE}/code`, { params: { path } });
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCode(res.data);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTempCode(res.data);
-    } catch {
-      const errorMsg = '// Error loading file: ' + path;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCode(errorMsg);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTempCode(errorMsg);
-    }
-  }, []);
-
-  const resize = useCallback((e: MouseEvent) => {
-    if (isResizing) {
-      const newWidth = e.clientX - 16; // 16 is some padding offset
-      if (newWidth > 200 && newWidth < 800) {
-        setStatementWidth(newWidth);
-      }
-    }
-  }, [isResizing]);
-
-  useEffect(() => {
-    if (isResizing) {
-      window.addEventListener('mousemove', resize);
-      window.addEventListener('mouseup', stopResizing);
-    } else {
-      window.removeEventListener('mousemove', resize);
-      window.removeEventListener('mouseup', stopResizing);
-    }
-    return () => {
-      window.removeEventListener('mousemove', resize);
-      window.removeEventListener('mouseup', stopResizing);
-    };
-  }, [isResizing, resize]);
 
   useEffect(() => {
     fetchStudents();
@@ -268,107 +132,10 @@ const App = () => {
     }
   }, [selectedTurma, fetchStatements]);
 
-  useEffect(() => {
-    if (students.length > 0 && view === 'review') {
-      const student = students[currentIndex];
-      if (student) {
-        const qKey = `q${currentQ}`;
-        const pending = pendingChanges[student.folder_name]?.[qKey];
-        const q = student.questions[qKey];
-        if (q) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setEditScore(pending ? pending.score : q.score);
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setEditComment(pending ? pending.comment : q.comment);
-            if (q.path) {
-              fetchCode(q.path);
-            } else {
-              // eslint-disable-next-line react-hooks/set-state-in-effect
-              setCode('// No implementation found for this question');
-              // eslint-disable-next-line react-hooks/set-state-in-effect
-              setTempCode('// No implementation found for this question');
-            }
-        } else {
-            // Case where question doesn't exist in student data
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setEditScore(0);
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setEditComment('');
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setCode('// No implementation found for this question');
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setTempCode('// No implementation found for this question');
-        }
-      }
-    }
-  }, [currentIndex, currentQ, students, view, fetchCode, pendingChanges]);
-
-  // Update pending changes when edit values change
-  const handleEditChange = (score: number, comment: string) => {
-    setEditScore(score);
-    setEditComment(comment);
-    
-    const student = students[currentIndex];
-    if (!student) return;
-    const qKey = `q${currentQ}`;
-    const original = student.questions[qKey];
-    if (!original) return;
-
-    const isDirty = original.score !== score || original.comment !== comment;
-    
-    setPendingChanges(prev => {
-        const newPending = { ...prev };
-        if (isDirty) {
-            newPending[student.folder_name] = {
-                ...(newPending[student.folder_name] || {}),
-                [qKey]: { score, comment }
-            };
-        } else {
-            if (newPending[student.folder_name]) {
-                delete newPending[student.folder_name][qKey];
-                if (Object.keys(newPending[student.folder_name]).length === 0) {
-                    delete newPending[student.folder_name];
-                }
-            }
-        }
-        return newPending;
-    });
-  };
-
-  // Update custom model flags when settings are loaded
-  useEffect(() => {
-    // Cloud
-    if (aiSettings.provider !== 'ollama') {
-      const recommendations = RECOMMENDED_MODELS[aiSettings.provider] || [];
-      const isPredefined = recommendations.includes(aiSettings.cloudModel);
-      setIsCustomModel(!isPredefined && aiSettings.cloudModel !== '');
-    }
-    // Ollama
-    if (aiSettings.provider === 'ollama') {
-      const recommendations = RECOMMENDED_MODELS.ollama;
-      const isPredefined = recommendations.includes(aiSettings.ollamaModel);
-      setIsCustomOllama(!isPredefined && aiSettings.ollamaModel !== '');
-    }
-  }, [aiSettings.provider, aiSettings.cloudModel, aiSettings.ollamaModel]);
-
-  useEffect(() => {
-    Prism.highlightAll();
-  }, [code, tempCode, view]);
-
-  const saveAISettings = async (settings: AISettings) => {
-    try {
-      await axios.post(`${API_BASE}/settings`, settings);
-      setAiSettings(settings);
-      toast.success(t.settingsSaved);
-    } catch {
-      toast.error('Failed to save settings');
-    }
-  };
-
   const saveStatement = async (text: string) => {
     const updatedStatements = { ...statements, [`q${currentQ}`]: text };
     try {
-      await axios.post(`${API_BASE}/statements`, { turma: selectedTurma, statements: updatedStatements });
+      await api.saveStatements(selectedTurma, updatedStatements);
       setStatements(updatedStatements);
       toast.success('Enunciado salvo com sucesso');
     } catch {
@@ -376,39 +143,19 @@ const App = () => {
     }
   };
 
-  const handleAIAnalyze = async () => {
-    const statement = statements[`q${currentQ}`];
-    if (!statement) {
-      setShowStatementModal(true);
-      return;
-    }
-
-    setAnalyzing(true);
-    setAiResult(null);
-    setShowAIPreviewModal(true);
-
-    try {
-      const res = await axios.post(`${API_BASE}/analyze`, {
-        turma: selectedTurma,
-        questionNum: currentQ,
-        code: code
-      });
-      setAiResult(res.data);
-    } catch (err: unknown) {
-      if (axios.isAxiosError(err)) {
-        toast.error(err.response?.data?.error || 'AI analysis failed');
-      } else {
-        toast.error('AI analysis failed');
-      }
-      setShowAIPreviewModal(false);
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-
   const applyAIResult = () => {
     if (aiResult) {
-      handleEditChange(aiResult.score, aiResult.comment);
+      const student = students[currentIndex];
+      const qKey = `q${currentQ}`;
+      
+      setPendingChanges(prev => ({
+        ...prev,
+        [student.folder_name]: {
+          ...(prev[student.folder_name] || {}),
+          [qKey]: { score: aiResult.score, comment: aiResult.comment }
+        }
+      }));
+      
       setShowAIPreviewModal(false);
       toast.success(t.aiApplied);
     }
@@ -441,7 +188,7 @@ const App = () => {
             onClick={async () => {
               toast.dismiss(toastObj.id);
               try {
-                await axios.delete(`${API_BASE}/turma/${turmaName}`);
+                await api.deleteTurma(turmaName);
                 toast.success(t.dataCleared);
                 if (selectedTurma === turmaName) {
                   setSelectedTurma('');
@@ -459,230 +206,6 @@ const App = () => {
       </div>
     ), { duration: 6000, position: 'top-center' });
   };
-
-  const handleSave = async (studentIdx = currentIndex, questionNum = currentQ) => {
-    setSaving(true);
-    const student = students[studentIdx];
-    const qKey = `q${questionNum}`;
-    const pending = pendingChanges[student.folder_name]?.[qKey];
-    
-    const scoreToSave = pending ? pending.score : editScore;
-    const commentToSave = pending ? pending.comment : editComment;
-
-    try {
-      await axios.post(`${API_BASE}/update-grade`, {
-        turma: student.turma,
-        studentId: student.folder_name,
-        questionNum: questionNum,
-        score: scoreToSave,
-        comment: commentToSave
-      });
-      
-      setStudents(prev => {
-        const updated = [...prev];
-        updated[studentIdx].questions[qKey].score = scoreToSave;
-        updated[studentIdx].questions[qKey].comment = commentToSave;
-        return updated;
-      });
-
-      setPendingChanges(prev => {
-        const newPending = { ...prev };
-        if (newPending[student.folder_name]) {
-            delete newPending[student.folder_name][qKey];
-            if (Object.keys(newPending[student.folder_name]).length === 0) {
-                delete newPending[student.folder_name];
-            }
-        }
-        return newPending;
-      });
-
-      toast.success(t.gradeSaved);
-    } catch {
-      toast.error('Error saving grade');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveAll = async () => {
-    const student = students[currentIndex];
-    if (!student) return;
-    const studentPending = pendingChanges[student.folder_name];
-    if (!studentPending) return;
-
-    setSaving(true);
-    try {
-        const promises = Object.keys(studentPending).map(async (qKey) => {
-            const qNum = parseInt(qKey.replace('q', ''));
-            const data = studentPending[qKey];
-            return axios.post(`${API_BASE}/update-grade`, {
-                turma: student.turma,
-                studentId: student.folder_name,
-                questionNum: qNum,
-                score: data.score,
-                comment: data.comment
-            });
-        });
-
-        await Promise.all(promises);
-
-        setStudents(prev => {
-            const updated = [...prev];
-            const sIdx = updated.findIndex(s => s.folder_name === student.folder_name);
-            Object.keys(studentPending).forEach(qKey => {
-                updated[sIdx].questions[qKey].score = studentPending[qKey].score;
-                updated[sIdx].questions[qKey].comment = studentPending[qKey].comment;
-            });
-            return updated;
-        });
-
-        setPendingChanges(prev => {
-            const newPending = { ...prev };
-            delete newPending[student.folder_name];
-            return newPending;
-        });
-
-        toast.success(t.allGradesSaved);
-    } catch {
-        toast.error('Error saving all grades');
-    } finally {
-        setSaving(false);
-    }
-  };
-
-  const handleDiscardChanges = () => {
-    const student = students[currentIndex];
-    if (!student) return;
-    const qKey = `q${currentQ}`;
-    
-    setPendingChanges(prev => {
-        const newPending = { ...prev };
-        if (newPending[student.folder_name]) {
-            delete newPending[student.folder_name][qKey];
-            if (Object.keys(newPending[student.folder_name]).length === 0) {
-                delete newPending[student.folder_name];
-            }
-        }
-        return newPending;
-    });
-
-    const original = student.questions[qKey];
-    setEditScore(original.score);
-    setEditComment(original.comment);
-    toast.success(t.changesDiscarded);
-  };
-
-  const handleImport = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!importTurma || !importFile) return;
-
-    setImporting(true);
-    const formData = new FormData();
-    formData.append('turma', importTurma);
-    formData.append('folderTemplate', folderTemplate);
-    formData.append('file', importFile);
-
-    try {
-      await axios.post(`${API_BASE}/import`, formData);
-      toast.success(t.importSuccess);
-      setImportTurma('');
-      setImportFile(null);
-      await fetchStudents();
-      setView('table');
-    } catch {
-      toast.error('Import failed');
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  const handleImportGrades = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedTurma) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const grades = JSON.parse(event.target?.result as string);
-        await axios.post(`${API_BASE}/import-grades`, {
-          turma: selectedTurma,
-          grades: grades
-        });
-        toast.success(`Grades for ${selectedTurma} imported successfully!`);
-        await fetchStudents();
-      } catch {
-        toast.error('Failed to import grades. Ensure the JSON format is correct.');
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
-  const handleExportGrades = async () => {
-    if (!selectedTurma) return;
-    try {
-      const res = await axios.get(`${API_BASE}/export-grades/${selectedTurma}`);
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res.data, null, 2));
-      const downloadAnchorNode = document.createElement('a');
-      downloadAnchorNode.setAttribute("href",     dataStr);
-      downloadAnchorNode.setAttribute("download", `grades_${selectedTurma}.json`);
-      document.body.appendChild(downloadAnchorNode);
-      downloadAnchorNode.click();
-      downloadAnchorNode.remove();
-      toast.success(`Exporting grades for ${selectedTurma}...`);
-    } catch {
-      toast.error('Failed to export grades.');
-    }
-  };
-
-  const handleExportExcel = () => {
-    if (!selectedTurma) return;
-    
-    const classStudents = students.filter(s => s.turma === selectedTurma);
-    
-    const data = classStudents.map(s => {
-        // Try to extract only the number if s.id is a complex folder name
-        let cleanId = s.id;
-        const numbers = s.id.match(/\d+/g);
-        if (numbers && numbers.length > 0) {
-            // If the ID looks like a full folder name string, pick the numeric part
-            if (s.id.includes('@') || s.id.split(' ').length > 1) {
-                cleanId = numbers[0];
-            }
-        }
-
-        return {
-            'ID (Matrícula)': cleanId,
-            'Nome completo': s.name,
-            'Q1': s.questions.q1?.score || 0,
-            'Q2': s.questions.q2?.score || 0,
-            'Q3': s.questions.q3?.score || 0,
-            'Q4': s.questions.q4?.score || 0,
-            'Média': calculateTotal(s),
-            'Comentário': Object.values(s.questions)
-                .map((q, i) => `Q${i+1}: ${q.comment || ''}`)
-                .filter(c => !c.endsWith(': '))
-                .join(' | ')
-        };
-    });
-
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Grades");
-    
-    XLSX.writeFile(workbook, `grades_${selectedTurma}.xlsx`);
-    toast.success(t.exportExcel + '...');
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(t.pathCopied);
-  };
-
-  const [importTurma, setImportTurma] = useState('');
-  const [folderTemplate, setFolderTemplate] = useState('[EMAIL] [NAME] [ID] [EMAIL]');
-  const [importFile, setImportFile] = useState<File | null>(null);
-  const [importing, setImporting] = useState(false);
 
   if (loading) return (
     <div className="min-h-screen bg-app flex flex-col items-center justify-center gap-6">
@@ -709,23 +232,6 @@ const App = () => {
 
   const turmas = Array.from(new Set(students.map(s => s.turma)));
   const currentStudent = students[currentIndex];
-  const questions = Array.from(new Set(
-    students
-      .filter(s => s.turma === selectedTurma)
-      .flatMap(s => Object.keys(s.questions).map(k => parseInt(k.replace('q', ''))))
-  )).sort((a, b) => a - b);
-
-  const handleEditorChange = (value: string | undefined) => {
-    setTempCode(value || '');
-  };
-
-  const handleEditorDidMount = (editor: any) => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    editor.layout();
-    setTimeout(() => editor.layout(), 500);
-  };
-
-  const isCodeEdited = code !== tempCode;
 
   return (
     <div className="min-h-screen bg-app text-text-main font-sans monaco-reset">
@@ -819,595 +325,53 @@ const App = () => {
 
       <main className="p-4">
         {view === 'settings' ? (
-          <div className="max-w-3xl mx-auto mt-10 bg-panel p-8 rounded-xl shadow-2xl border border-border-main">
-            <h2 className="text-2xl font-bold mb-8 flex items-center gap-3 text-text-bright">
-                <Settings className="text-accent drop-shadow-[0_0_5px_var(--accent-glow)]" /> {t.aiConfig}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-6">
-                    <div>
-                        <label className="block text-xs font-bold uppercase tracking-widest text-text-dim mb-3">{t.aiProvider}</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            {['ollama', 'openai', 'gemini', 'claude'].map(p => (
-                                <button
-                                    key={p}
-                                    onClick={() => {
-                                        const newProvider = p as any;
-                                        const defaultModel = newProvider === 'ollama' ? 'llama3.3' : RECOMMENDED_MODELS[newProvider][0];
-                                        setAiSettings({ 
-                                            ...aiSettings, 
-                                            provider: newProvider,
-                                            cloudModel: newProvider === 'ollama' ? aiSettings.ollamaModel : defaultModel
-                                        });
-                                        setIsCustomModel(false);
-                                        setIsCustomOllama(false);
-                                    }}
-                                    className={`py-2 rounded-lg border text-xs font-bold uppercase tracking-wider transition-all ${aiSettings.provider === p ? 'bg-accent text-black border-accent shadow-[0_0_10px_var(--accent-glow)]' : 'bg-input text-text-dim border-border-main hover:border-accent/50'}`}
-                                >
-                                    {p}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {aiSettings.provider === 'ollama' ? (
-                        <div className="space-y-4">
-                            <div>
-                                <div className="flex justify-between items-end mb-2">
-                                    <label className="block text-xs font-bold uppercase tracking-widest text-text-dim">{t.ollamaModel}</label>
-                                    <button 
-                                        onClick={() => setShowOllamaHelp(true)}
-                                        className="text-[10px] font-bold text-accent hover:text-accent/80 underline flex items-center gap-1"
-                                    >
-                                        <Terminal size={10} /> {t.howToConfigure}
-                                    </button>
-                                </div>
-                                <select 
-                                    value={isCustomOllama ? 'custom' : aiSettings.ollamaModel}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        if (val === 'custom') {
-                                            setIsCustomOllama(true);
-                                        } else {
-                                            setIsCustomOllama(false);
-                                            setAiSettings({ ...aiSettings, ollamaModel: val });
-                                        }
-                                    }}
-                                    className="w-full bg-input border border-border-main rounded-lg p-3 text-accent font-mono text-sm focus:outline-none focus:border-accent mb-2 transition-colors"
-                                >
-                                    <option value="" disabled>Select a local model...</option>
-                                    {RECOMMENDED_MODELS.ollama.map(m => (
-                                        <option key={m} value={m}>{m}</option>
-                                    ))}
-                                    <option value="custom">{t.customModelName}</option>
-                                </select>
-                                
-                                {isCustomOllama && (
-                                    <input 
-                                        type="text"
-                                        value={aiSettings.ollamaModel}
-                                        onChange={(e) => setAiSettings({ ...aiSettings, ollamaModel: e.target.value })}
-                                        className="w-full bg-input border border-accent/50 rounded-lg p-3 text-accent font-mono text-sm focus:outline-none focus:border-accent animate-in slide-in-from-top-1 duration-200 transition-colors"
-                                        placeholder="Enter model name (e.g. mistral:latest)"
-                                        autoFocus
-                                    />
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        <>
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-widest text-text-dim mb-2">{t.cloudModel}</label>
-                                <select 
-                                    value={isCustomModel ? 'custom' : aiSettings.cloudModel}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        if (val === 'custom') {
-                                            setIsCustomModel(true);
-                                        } else {
-                                            setIsCustomModel(false);
-                                            setAiSettings({ ...aiSettings, cloudModel: val });
-                                        }
-                                    }}
-                                    className="w-full bg-input border border-border-main rounded-lg p-3 text-accent font-mono text-sm focus:outline-none focus:border-accent mb-2 transition-colors"
-                                >
-                                    <option value="" disabled>Select a model...</option>
-                                    {(RECOMMENDED_MODELS[aiSettings.provider] || []).map(m => (
-                                        <option key={m} value={m}>{m}</option>
-                                    ))}
-                                    <option value="custom">{t.customModelName}</option>
-                                </select>
-                                
-                                {isCustomModel && (
-                                    <input 
-                                        type="text"
-                                        value={aiSettings.cloudModel}
-                                        onChange={(e) => setAiSettings({ ...aiSettings, cloudModel: e.target.value })}
-                                        className="w-full bg-input border border-accent/50 rounded-lg p-3 text-accent font-mono text-sm focus:outline-none focus:border-accent animate-in slide-in-from-top-1 duration-200 transition-colors"
-                                        placeholder="Enter custom model ID..."
-                                        autoFocus
-                                    />
-                                )}
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-widest text-text-dim mb-2">{t.apiKey}</label>
-                                <input 
-                                    type="password"
-                                    value={aiSettings.cloudKey}
-                                    onChange={(e) => setAiSettings({ ...aiSettings, cloudKey: e.target.value })}
-                                    className="w-full bg-input border border-border-main rounded-lg p-3 text-text-main text-sm focus:outline-none focus:border-accent transition-colors"
-                                    placeholder="••••••••••••••••"
-                                />
-                            </div>
-                        </>
-                    )}
-                </div>
-
-                <div className="flex flex-col h-full">
-                    <label className="block text-xs font-bold uppercase tracking-widest text-text-dim mb-3">{t.globalCriteria}</label>
-                    <textarea 
-                        value={aiSettings.evaluationCriteria}
-                        onChange={(e) => setAiSettings({ ...aiSettings, evaluationCriteria: e.target.value })}
-                        className="flex-1 w-full bg-input border border-border-main rounded-lg p-4 text-text-main text-sm focus:outline-none focus:border-accent resize-none min-h-[250px] transition-colors"
-                        placeholder="Define how the AI should grade the code..."
-                    />
-                </div>
-            </div>
-            <button 
-                onClick={() => saveAISettings(aiSettings)}
-                className="mt-8 w-full bg-accent hover:bg-accent/80 text-black py-4 rounded-lg font-bold flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg shadow-accent/10"
-            >
-                <CheckCircle2 size={20} /> {t.saveSettings}
-            </button>
-          </div>
+          <SettingsPage 
+            aiSettings={aiSettings} 
+            setAiSettings={setAiSettings} 
+            setShowOllamaHelp={setShowOllamaHelp} 
+            t={t} 
+          />
         ) : view === 'import' ? (
-          <div className="max-w-xl mx-auto mt-10 bg-panel p-8 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-border-main">
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-text-bright">
-                <Upload className="text-accent drop-shadow-[0_0_5px_var(--accent-glow)]" /> {t.importClass}
-            </h2>
-            <form onSubmit={handleImport} className="flex flex-col gap-6">
-                <div>
-                    <label className="block text-sm font-medium mb-2 text-text-dim">{t.classIdentifier}</label>
-                    <input 
-                        type="text" 
-                        required
-                        value={importTurma}
-                        onChange={(e) => setImportTurma(e.target.value)}
-                        placeholder="Ex: Class A"
-                        className="w-full bg-input border border-border-main rounded-lg p-3 text-text-main focus:outline-none focus:border-accent transition-all"
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium mb-2 text-text-dim">{t.folderTemplate}</label>
-                    <input 
-                        type="text" 
-                        required
-                        value={folderTemplate}
-                        onChange={(e) => setFolderTemplate(e.target.value)}
-                        placeholder="Ex: [EMAIL] [NAME] [ID] [EMAIL]"
-                        className="w-full bg-input border border-border-main rounded-lg p-3 text-accent font-mono text-sm focus:outline-none focus:border-accent transition-all"
-                    />
-                    <div className="flex gap-2 mt-2 text-[10px]">
-                        {['[EMAIL]', '[NAME]', '[ID]', '[IGNORE]'].map(tag => (
-                            <span key={tag} className="bg-button text-text-dim px-1 rounded border border-border-main">{tag}</span>
-                        ))}
-                    </div>
-                </div>
-                <div>
-                    <div className="flex justify-between items-end mb-2">
-                        <label className="block text-sm font-medium text-text-dim">{t.submissionsZip}</label>
-                        <button 
-                            type="button"
-                            onClick={() => setShowZipHelp(true)}
-                            className="text-[10px] font-bold text-accent hover:text-accent/80 underline flex items-center gap-1"
-                        >
-                            <Info size={10} /> {t.zipHierarchy}
-                        </button>
-                    </div>
-                    <label className="relative group block cursor-pointer">
-                        <input 
-                            type="file" 
-                            required
-                            accept=".zip"
-                            onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-                            className="sr-only"
-                        />
-                        <div className="w-full bg-input border-2 border-border-main border-dashed rounded-lg p-10 flex flex-col items-center justify-center text-center group-hover:border-accent/50 group-hover:bg-panel transition-all">
-                            {!importFile ? (
-                                <>
-                                    <div className="bg-panel p-4 rounded-full mb-4 border border-border-main group-hover:border-accent/30 transition-colors">
-                                        <Upload size={32} className="text-text-dim group-hover:text-accent transition-colors" />
-                                    </div>
-                                    <div className="flex flex-col gap-1">
-                                        <span className="text-text-dim font-semibold group-hover:text-text-main">{t.clickToUpload}</span>
-                                        <span className="text-text-dim text-xs opacity-60">{t.zipNote}</span>
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="bg-accent/20 p-4 rounded-full mb-4 border border-accent/30">
-                                        <CheckCircle2 size={32} className="text-accent drop-shadow-[0_0_8px_var(--accent-glow)]" />
-                                    </div>
-                                    <div className="flex flex-col gap-1">
-                                        <span className="text-accent font-bold">{importFile.name}</span>
-                                        <span className="text-text-dim text-xs">{t.readyForImport}</span>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </label>
-                </div>
-                <button 
-                    type="submit"
-                    disabled={importing || !importTurma || !importFile}
-                    className="w-full bg-accent hover:bg-accent/80 disabled:opacity-30 disabled:hover:bg-accent text-black py-4 rounded-lg font-bold flex items-center justify-center gap-3 text-lg transition-all active:scale-[0.98] shadow-[0_0_20px_var(--accent-glow)] hover:shadow-[0_0_25px_var(--accent-glow)]"
-                >
-                    {importing ? <><Loader2 className="animate-spin" /> {t.importing}</> : <><Upload size={20} /> {t.importClass}</>}
-                </button>
-            </form>
-          </div>
+          <ImportPage 
+            t={t} 
+            setShowZipHelp={setShowZipHelp} 
+            onImportSuccess={fetchStudents} 
+            setView={setView} 
+          />
         ) : view === 'review' ? (
-          <div className="flex flex-col gap-4 h-[calc(100vh-120px)]">
-            {!currentStudent ? (
-                <div className="flex-1 flex items-center justify-center text-text-dim italic">
-                    {t.selectStudent}
-                </div>
-            ) : (
-                <>
-                <div className="flex justify-between items-center bg-panel p-4 rounded-lg border border-border-main shadow-lg">
-                    <div className="flex items-center gap-6">
-                        <div className="flex gap-2">
-                        <button 
-                            disabled={currentIndex === 0}
-                            onClick={() => setCurrentIndex(prev => prev - 1)}
-                            className="p-2 bg-button border border-border-main rounded text-text-dim disabled:opacity-20 hover:text-accent hover:border-accent/50 active:scale-90 transition-all"
-                        >
-                            <ChevronLeft />
-                        </button>
-                        <button 
-                            disabled={currentIndex === students.length - 1}
-                            onClick={() => setCurrentIndex(prev => prev + 1)}
-                            className="p-2 bg-button border border-border-main rounded text-text-dim disabled:opacity-20 hover:text-accent hover:border-accent/50 active:scale-90 transition-all"
-                        >
-                            <ChevronRight />
-                        </button>
-                        </div>
-                        <div>
-                        <h2 className="text-lg font-semibold text-text-bright">{currentStudent.name}</h2>
-                        <p className="text-xs text-text-dim font-mono">{currentStudent.id} • {currentStudent.turma}</p>
-                        </div>
-                    </div>
-
-                    <div className="flex gap-4 items-center">
-                        <div className="flex gap-2">
-                            {questions.map(q => {
-                                const isDirty = !!pendingChanges[currentStudent.folder_name]?.[`q${q}`];
-                                return (
-                                <button
-                                    key={q}
-                                    onClick={() => setCurrentQ(q)}
-                                    className={`px-4 py-2 rounded border font-bold transition-all duration-200 active:scale-90 ${
-                                        currentQ === q 
-                                        ? 'bg-accent border-accent text-black shadow-[0_0_15px_var(--accent-glow)]' 
-                                        : `bg-button text-text-dim ${isDirty ? 'border-red-500/50 hover:border-red-500' : 'border-border-main hover:border-accent/30'} hover:text-accent`
-                                    }`}
-                                >
-                                    Q{q}
-                                </button>
-                                );
-                            })}
-                        </div>
-                        {pendingChanges[currentStudent.folder_name] && (
-                            <button 
-                                onClick={handleSaveAll}
-                                className="px-4 py-2 bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-black rounded font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2"
-                            >
-                                <Save size={14} /> {t.saveAll}
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                <div className="flex gap-4 flex-1 overflow-hidden">
-                    {showSideBySide && (
-                        <>
-                        <div 
-                            style={{ width: statementWidth }}
-                            className="bg-panel rounded-lg overflow-hidden flex flex-col border border-border-main shadow-inner"
-                        >
-                            <div className="bg-panel p-2 text-[10px] flex justify-between items-center border-b border-border-main font-bold uppercase tracking-widest text-text-dim">
-                                <span className="flex items-center gap-2"><BookOpen size={12} className="text-accent" /> {t.questionStatement}</span>
-                                <button onClick={() => setShowSideBySide(false)} className="hover:text-accent transition-colors">
-                                    <X size={14} />
-                                </button>
-                            </div>
-                            <div className="flex-1 overflow-auto p-4 text-sm text-text-main leading-relaxed markdown-content">
-                                {statements[`q${currentQ}`] ? (
-                                    <div dangerouslySetInnerHTML={{ __html: marked.parse(statements[`q${currentQ}`]) }} />
-                                ) : (
-                                    <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-4">
-                                        <div className="bg-panel p-4 rounded-full border border-border-main text-text-dim">
-                                            <BookOpen size={32} />
-                                        </div>
-                                        <div>
-                                            <p className="text-text-bright font-bold mb-1">{t.noStatementProvided}</p>
-                                            <p className="text-xs text-text-dim max-w-[250px] mx-auto">{t.statementHelp}</p>
-                                        </div>
-                                        <button 
-                                            onClick={() => setShowStatementModal(true)}
-                                            className="px-6 py-2 bg-button border border-accent/30 text-accent hover:border-accent hover:bg-accent/10 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
-                                        >
-                                            {t.editStatement}
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <div 
-                            className="w-1.5 cursor-col-resize hover:bg-accent/50 active:bg-accent transition-colors rounded-full self-stretch my-2"
-                            onMouseDown={startResizing}
-                        />
-                        </>
-                    )}
-                    <div className="flex-1 bg-app rounded-lg overflow-hidden flex flex-col border border-border-main shadow-inner">
-                        <div className="bg-panel p-2 text-[10px] flex justify-between items-center border-b border-border-main overflow-hidden">
-                        <div className="flex items-center gap-4 flex-1 min-w-0 mr-4">
-                            <button 
-                                onClick={() => setShowSideBySide(!showSideBySide)}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded border transition-all active:scale-95 font-bold uppercase tracking-widest flex-shrink-0 ${
-                                    showSideBySide 
-                                    ? 'bg-accent text-black border-accent shadow-[0_0_10px_var(--accent-glow)]' 
-                                    : 'bg-button text-accent border-accent/30 hover:border-accent hover:bg-accent/10'
-                                }`}
-                                title="Ver enunciado ao lado"
-                            >
-                                <Eye size={14} />
-                                <span>{t.questionStatement.split(' ')[0]}</span>
-                            </button>
-                            <div className="flex items-center gap-1.5 px-2 py-1 bg-app rounded border border-border-main flex-shrink-0">
-                                <BookOpen size={10} className="text-accent" />
-                                <span className="truncate max-w-[120px] font-mono text-text-dim">
-                                    {statements[`q${currentQ}`] ? t.statementLoaded : t.noStatement}
-                                </span>
-                                <button 
-                                    onClick={() => setShowStatementModal(true)}
-                                    className="ml-1 text-accent hover:text-accent/80 underline"
-                                >
-                                    {t.edit}
-                                </button>
-                            </div>
-                            <span className="truncate font-mono text-text-dim opacity-60 min-w-0 flex-1">{currentStudent.questions[`q${currentQ}`]?.path || 'No file path'}</span>
-                            {currentStudent.questions[`q${currentQ}`]?.path && (
-                            <button 
-                                onClick={() => copyToClipboard(currentStudent.questions[`q${currentQ}`].path!)}
-                                className="hover:text-accent text-text-dim transition-colors flex-shrink-0"
-                                title={t.copyPath}
-                            >
-                                <Copy size={12} />
-                            </button>
-                            )}
-                        </div>
-                        <div className="flex gap-2 flex-shrink-0">
-                            {currentStudent.questions[`q${currentQ}`]?.path && (
-                                <>
-                                <button 
-                                    onClick={handleAIAnalyze}
-                                    className="flex items-center gap-2 bg-button border border-accent/50 hover:bg-accent hover:text-black hover:border-accent px-3 py-1 rounded text-accent text-[10px] font-bold transition-all active:scale-95 group shadow-[0_0_10px_rgba(6,182,212,0.1)]"
-                                >
-                                    <Sparkles size={10} className="fill-current" /> {t.aiAnalyze}
-                                </button>
-                                <button 
-                                    onClick={() => setShowTerminal(true)}
-                                    className="flex items-center gap-2 bg-button hover:bg-panel border border-border-main px-3 py-1 rounded text-text-dim text-[10px] font-bold transition-all active:scale-95"
-                                >
-                                    <Play size={10} className="fill-current" /> {t.runCode}
-                                </button>
-                                </>
-                            )}
-                        </div>
-                        </div>
-                        <div className="flex-1 flex flex-col overflow-hidden relative monaco-wrapper">
-                            {/* Professional Editor Layer */}
-                            <div className="flex-1 bg-app overflow-hidden">
-                                <Editor
-                                    height="100%"
-                                    defaultLanguage="cpp"
-                                    theme={theme === 'dark' ? 'vs-dark' : 'light'}
-                                    value={tempCode}
-                                    onChange={handleEditorChange}
-                                    onMount={handleEditorDidMount}
-                                    options={{
-                                        fontSize: 14,
-                                        fontFamily: "monospace",
-                                        minimap: { enabled: false },
-                                        scrollBeyondLastLine: false,
-                                        lineNumbers: 'on',
-                                        renderLineHighlight: 'all',
-                                        tabSize: 4,
-                                        padding: { top: 16, bottom: 16 },
-                                        automaticLayout: true,
-                                        letterSpacing: 0,
-                                        fontLigatures: false,
-                                    }}
-                                />
-                            </div>
-
-                            {isCodeEdited && (
-                                <div className="bg-red-950/40 border-t border-red-900/50 p-2 flex justify-between items-center animate-in slide-in-from-bottom-2 duration-300">
-                                    <div className="flex items-center gap-2 text-[10px] font-bold text-red-500 uppercase tracking-widest">
-                                        <Info size={14} />
-                                        {t.tempCodeNotice}
-                                    </div>
-                                    <button 
-                                        onClick={() => setTempCode(code)}
-                                        className="px-3 py-1 bg-red-900/30 hover:bg-red-900/50 text-red-500 border border-red-900/50 rounded text-[9px] font-black uppercase tracking-widest transition-all active:scale-95"
-                                    >
-                                        {t.discardTempCode}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="w-80 bg-panel p-5 rounded-lg flex flex-col gap-5 border border-border-main shadow-2xl">
-                        <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-text-dim mb-2">{t.score}</label>
-                        <input 
-                            type="number" 
-                            step="0.1"
-                            value={editScore}
-                            onChange={(e) => handleEditChange(Number(e.target.value), editComment)}
-                            className="w-full bg-input border border-border-main rounded p-3 text-accent font-bold focus:outline-none focus:border-accent transition-all"
-                        />
-                        </div>
-                        <div className="flex-1 flex flex-col">
-                        <label className="block text-xs font-bold uppercase tracking-wider text-text-dim mb-2">{t.feedbackComment}</label>
-                        <textarea 
-                            value={editComment}
-                            onChange={(e) => handleEditChange(editScore, e.target.value)}
-                            className="flex-1 w-full bg-input border border-border-main rounded p-3 text-text-main focus:outline-none focus:border-accent resize-none text-sm transition-all"
-                            placeholder={t.enterFeedback}
-                        />
-                        </div>
-                        
-                        <div className="flex flex-col gap-2">
-                            {pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`] && (
-                                <button 
-                                    onClick={handleDiscardChanges}
-                                    className="w-full py-2 text-[10px] font-bold uppercase tracking-widest text-text-dim hover:text-red-500 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <Trash2 size={12} /> {t.discardChanges}
-                                </button>
-                            )}
-                            <button 
-                                onClick={() => handleSave()}
-                                disabled={saving}
-                                className={`w-full py-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg ${
-                                    pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`]
-                                    ? 'bg-button text-accent border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)] hover:bg-accent hover:text-black'
-                                    : 'bg-button border border-border-main hover:bg-accent hover:text-black hover:border-accent'
-                                }`}
-                            >
-                                <Save size={18} /> {saving ? t.saving : t.saveGrade}
-                            </button>
-                        </div>
-                        
-                        <div className="mt-2 pt-4 border-t border-border-main">
-                        <div className="flex justify-between items-baseline mb-3">
-                            <span className="text-[10px] font-bold text-text-dim uppercase tracking-widest">{t.performance}</span>
-                            <span className="text-xl font-black text-text-bright drop-shadow-[0_0_5px_rgba(255,255,255,0.2)]">{calculateTotal(currentStudent)}</span>
-                        </div>
-                        <div className="grid grid-cols-4 gap-1.5">
-                            {questions.map(q => {
-                                const isDirty = !!pendingChanges[currentStudent.folder_name]?.[`q${q}`];
-                                const currentQScore = isDirty 
-                                    ? pendingChanges[currentStudent.folder_name][`q${q}`].score 
-                                    : currentStudent.questions[`q${q}`]?.score || 0;
-                                return (
-                                <button 
-                                    key={q} 
-                                    onClick={() => setCurrentQ(q)}
-                                    className={`text-center text-[9px] font-bold p-1.5 rounded border transition-all active:scale-95 ${
-                                        currentQ === q 
-                                        ? 'bg-accent text-black border-accent' 
-                                        : isDirty
-                                          ? 'bg-red-500/10 border-red-500 text-red-500'
-                                          : 'bg-input border-border-main text-text-dim hover:border-accent/50'
-                                    }`}
-                                >
-                                    Q{q}: {currentQScore}
-                                </button>
-                                );
-                            })}
-                        </div>
-                        </div>
-                    </div>
-                </div>
-                </>
-            )}
-          </div>
+          <ReviewPage 
+            students={students}
+            setStudents={setStudents}
+            currentIndex={currentIndex}
+            setCurrentIndex={setCurrentIndex}
+            currentQ={currentQ}
+            setCurrentQ={setCurrentQ}
+            selectedTurma={selectedTurma}
+            pendingChanges={pendingChanges}
+            setPendingChanges={setPendingChanges}
+            aiSettings={aiSettings}
+            statements={statements}
+            setShowStatementModal={setShowStatementModal}
+            setShowAIPreviewModal={setShowAIPreviewModal}
+            setAiResult={setAiResult}
+            setAnalyzing={setAnalyzing}
+            setShowTerminal={setShowTerminal}
+            calculateTotal={calculateTotal}
+            theme={theme}
+            t={t}
+          />
         ) : (
-          <div className="flex flex-col gap-4">
-            <div className="flex justify-between items-center px-2">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-text-dim">
-                    {t.activeClass}: <span className="text-accent">{selectedTurma}</span> • <span className="text-text-bright">{students.filter(s => s.turma === selectedTurma).length}</span> {t.studentsCount} • {t.classAverage}: <span className="text-accent drop-shadow-[0_0_5px_var(--accent-glow)]">{calculateClassAverage()}</span>
-                </div>
-                <div className="flex gap-2">
-                    <button 
-                        onClick={handleExportExcel}
-                        className="flex items-center gap-2 bg-panel hover:bg-button border border-border-main px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] text-green-500 transition-all active:scale-95 shadow-lg group"
-                    >
-                        <FileText size={14} className="group-hover:translate-y-0.5 transition-transform" />
-                        {t.exportExcel}
-                    </button>
-                    <button 
-                        onClick={handleExportGrades}
-                        className="flex items-center gap-2 bg-panel hover:bg-button border border-border-main px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] text-accent transition-all active:scale-95 shadow-lg group"
-                    >
-                        <Download size={14} className="group-hover:translate-y-0.5 transition-transform" />
-                        {t.exportJson}
-                    </button>
-                    <div className="flex items-center bg-panel rounded-lg border border-border-main overflow-hidden shadow-lg">
-                        <label className="flex items-center gap-2 hover:bg-button px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-accent cursor-pointer transition-all active:scale-95 group">
-                            <Upload size={14} className="group-hover:animate-bounce" />
-                            {t.importJson}
-                            <input 
-                                type="file" 
-                                accept=".json" 
-                                className="hidden" 
-                                onChange={handleImportGrades}
-                            />
-                        </label>
-                        <button 
-                            onClick={() => setShowJsonHelp(true)}
-                            className="px-3 py-2 border-l border-border-main hover:bg-button text-text-dim hover:text-accent transition-colors"
-                            title={t.expectedJson}
-                        >
-                            <Info size={14} />
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div className="bg-panel rounded-xl overflow-hidden border border-border-main shadow-2xl">
-              <div className="overflow-x-auto max-h-[calc(100vh-180px)]">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-button/50 border-b border-border-main">
-                    <tr>
-                      <th className="py-1 px-4 text-xs font-bold uppercase tracking-wider text-text-dim">{t.studentName}</th>
-                      {questions.map(q => (
-                        <th key={q} className="py-1 px-2 text-xs font-bold uppercase tracking-wider text-text-dim text-center border-l border-border-main/50">Q{q}</th>
-                      ))}
-                      <th className="py-1 px-2 text-xs font-bold uppercase tracking-wider text-accent text-center border-l border-border-main">{t.total}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border-main/50">
-                    {students
-                      .filter(s => s.turma === selectedTurma)
-                      .map((s) => (
-                      <tr 
-                        key={s.id} 
-                        className="hover:bg-accent/5 transition-colors cursor-pointer group" 
-                        onClick={() => { 
-                          const globalIdx = students.findIndex(student => student.id === s.id);
-                          setCurrentIndex(globalIdx); 
-                          setView('review'); 
-                        }}
-                      >
-                        <td className="py-1 px-4 border-r border-border-main/30">
-                          <div className="font-bold text-text-main group-hover:text-accent transition-colors text-sm">{s.name}</div>
-                          <div className="text-[10px] text-text-dim font-mono">{s.id}</div>
-                        </td>
-                        {questions.map(q => (
-                          <td key={q} className="py-1 px-2 text-center text-sm text-text-dim tabular-nums border-r border-border-main/30">{s.questions[`q${q}`]?.score || 0}</td>
-                        ))}
-                        <td className="py-1 px-2 text-center font-black text-text-bright tabular-nums group-hover:text-accent transition-colors">{calculateTotal(s)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+          <TablePage 
+            students={students}
+            selectedTurma={selectedTurma}
+            calculateTotal={calculateTotal}
+            calculateClassAverage={calculateClassAverage}
+            setCurrentIndex={setCurrentIndex}
+            setView={setView}
+            fetchStudents={fetchStudents}
+            setShowJsonHelp={setShowJsonHelp}
+            t={t}
+          />
         )}
       </main>
 
@@ -1425,7 +389,8 @@ const App = () => {
             onBlur={(e) => saveStatement(e.target.value)}
             className="w-full bg-input border border-border-main rounded-lg p-4 text-text-main text-sm focus:outline-none focus:border-accent min-h-[300px] transition-colors"
             placeholder={t.enterStatement}
-        />        <div className="mt-6 flex justify-end">
+        />
+        <div className="mt-6 flex justify-end">
             <button onClick={() => setShowStatementModal(false)} className="px-6 py-2 bg-accent text-black font-black uppercase tracking-widest text-xs rounded-lg active:scale-95 transition-all shadow-lg shadow-accent/20">{t.closeSave}</button>
         </div>
       </Modal>
@@ -1594,7 +559,6 @@ const App = () => {
                     <Folder size={14} className="text-accent" /> {t.zipHierarchyQuestion} 1/
                 </div>
                 <div className="pl-6 space-y-3 border-l border-border-main ml-1.5">
-                    {/* Example 1: Simple */}
                     <div className="flex items-center gap-2 text-text-main">
                         <Folder size={14} className="text-text-dim" /> {t.zipHierarchyStudent1}/
                     </div>
@@ -1602,7 +566,6 @@ const App = () => {
                         <FileText size={12} /> {t.zipHierarchyFile}
                     </div>
                     
-                    {/* Example 2: With subfolder */}
                     <div className="flex items-center gap-2 text-text-main mt-3">
                         <Folder size={14} className="text-text-dim" /> {t.zipHierarchyStudent2}/
                     </div>
@@ -1638,7 +601,6 @@ const App = () => {
         <TerminalPanel 
           isOpen={showTerminal}
           filePath={currentStudent.questions[`q${currentQ}`].path!} 
-          codeOverride={isCodeEdited ? tempCode : undefined}
           onClose={() => setShowTerminal(false)} 
           t={t}
           theme={theme}
@@ -1648,7 +610,6 @@ const App = () => {
       <Toaster 
         position="top-center" 
         toastOptions={{
-          className: '',
           style: {
             background: 'var(--bg-panel)',
             color: 'var(--text-main)',
@@ -1689,48 +650,7 @@ const App = () => {
         .animate-crt-close {
           animation: crt-close 0.1s ease-in forwards;
         }
-        @keyframes toast-enter {
-          from { opacity: 0; transform: scale(0.9) translateY(-20px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        @keyframes toast-leave {
-          from { opacity: 1; transform: scale(1) translateY(0); }
-          to { opacity: 0; transform: scale(0.95) translateY(-10px); }
-        }
-        pre[class*="language-"] {
-          background: var(--bg-app) !important;
-          margin: 0 !important;
-          transition: background 0.2s ease;
-        }
-        pre code {
-          font-family: 'Fira Code', 'Consolas', monospace !important;
-          background: transparent !important;
-          color: var(--accent) !important;
-          transition: color 0.2s ease;
-        }
-        .namespace { opacity: .7; }
-        .token.string { color: #22c55e !important; }
-        .token.comment { color: #525252 !important; }
-        .token.keyword { color: #f43f5e !important; font-weight: bold; }
-        .token.operator { color: #a3a3a3 !important; }
-        .token.function { color: #38bdf8 !important; }
-        .token.number { color: #fbbf24 !important; }
-
-        /* Prism Line Numbers Custom Styles */
-        .line-numbers .line-numbers-rows {
-          border-right: 1px solid var(--border-main) !important;
-          padding-top: 1rem !important; /* Matches !py-4 on code tag */
-          background: var(--bg-panel);
-          opacity: 0.5;
-        }
-        .line-numbers-rows > span:before {
-          color: var(--text-dim) !important;
-          text-shadow: none !important;
-        }
-        pre[class*="language-"].line-numbers {
-          padding-left: 3.5rem !important;
-        }
-
+        
         ::-webkit-scrollbar {
           width: 6px;
           height: 6px;
@@ -1747,7 +667,6 @@ const App = () => {
           box-shadow: 0 0 10px var(--accent-glow);
         }
 
-        /* Markdown Content Styling */
         .markdown-content h1 { font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem; color: var(--text-bright); }
         .markdown-content h2 { font-size: 1.25rem; font-weight: bold; margin-bottom: 0.75rem; color: var(--text-bright); }
         .markdown-content h3 { font-size: 1.1rem; font-weight: bold; margin-bottom: 0.5rem; color: var(--text-bright); }
@@ -1763,15 +682,6 @@ const App = () => {
         .markdown-content table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
         .markdown-content th, .markdown-content td { border: 1px solid var(--border-main); padding: 0.5rem; text-align: left; }
         .markdown-content th { background: var(--bg-button); font-weight: bold; }
-
-        /* Monaco Editor Precision Fixes */
-        .monaco-wrapper .monaco-editor, 
-        .monaco-wrapper .monaco-editor .view-lines, 
-        .monaco-wrapper .monaco-editor .view-line {
-          letter-spacing: 0px !important;
-          word-spacing: 0px !important;
-          text-align: left !important;
-        }
       `}</style>
     </div>
   );
