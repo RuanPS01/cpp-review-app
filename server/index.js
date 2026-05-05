@@ -45,7 +45,7 @@ const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const DEFAULT_SETTINGS = {
   provider: 'ollama',
   ollamaModel: 'llama3',
-  cloudModel: 'gemini-1.5-flash',
+  cloudModel: 'gemini-1.5-flash-lite',
   cloudKey: '',
   evaluationCriteria: `Sistema de correção:
 
@@ -79,7 +79,9 @@ Situações conhecidas:
 
 - Não há notas negativas.
 
-- Se uma questão teve bastantes erros mas teve alguma implementação que faça sentido, mesmo que minimamente, ou seja, ela não é completamente 0, mesmo que a subtração dos pontos citados acima chegue em 0. Ou seja, pondere o grau de assertividade geral caso as subtrações dos critérios não se aplique corretamente.`
+- Se uma questão teve bastantes erros mas teve alguma implementação que faça sentido, mesmo que minimamente, ou seja, ela não é completamente 0, mesmo que a subtração dos pontos citados acima chegue em 0. Ou seja, pondere o grau de assertividade geral caso as subtrações dos critérios não se aplique corretamente.
+
+- O comentário que deve ser gerado, deve ser apenas uma frase curta simples, e citando quais estruturas estão com erros.`
 };
 
 if (!fs.existsSync(SETTINGS_FILE)) {

@@ -47,7 +47,7 @@ const App = () => {
   const [aiSettings, setAiSettings] = useState<AISettings>({
     provider: 'ollama',
     ollamaModel: 'llama3.3',
-    cloudModel: 'gemini-1.5-flash',
+    cloudModel: 'gemini-1.5-flash-lite',
     cloudKey: '',
     evaluationCriteria: ''
   });

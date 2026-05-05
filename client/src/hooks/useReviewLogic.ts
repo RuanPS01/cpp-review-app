@@ -38,7 +38,7 @@ export const useReviewLogic = (
         const pending = pendingChanges[student.folder_name]?.[qKey];
         const q = student.questions[qKey];
         if (q) {
-            setEditScore(pending ? pending.score : q.score);
+            setEditScore(q.path ? (pending ? pending.score : q.score) : 0);
             setEditComment(pending ? pending.comment : q.comment);
             if (q.path) {
               fetchCode(q.path);
@@ -57,23 +57,27 @@ export const useReviewLogic = (
   }, [currentIndex, currentQ, students, fetchCode, pendingChanges]);
 
   const handleEditChange = (score: number, comment: string) => {
-    setEditScore(score);
-    setEditComment(comment);
-    
     const student = students[currentIndex];
     if (!student) return;
     const qKey = `q${currentQ}`;
     const original = student.questions[qKey];
+    
+    // Force 0 score if no path
+    const finalScore = (original && original.path) ? score : 0;
+
+    setEditScore(finalScore);
+    setEditComment(comment);
+    
     if (!original) return;
 
-    const isDirty = original.score !== score || original.comment !== comment;
+    const isDirty = original.score !== finalScore || original.comment !== comment;
     
     setPendingChanges(prev => {
         const newPending = { ...prev };
         if (isDirty) {
             newPending[student.folder_name] = {
                 ...(newPending[student.folder_name] || {}),
-                [qKey]: { score, comment }
+                [qKey]: { score: finalScore, comment }
             };
         } else {
             if (newPending[student.folder_name]) {
@@ -93,7 +97,8 @@ export const useReviewLogic = (
     const qKey = `q${questionNum}`;
     const pending = pendingChanges[student.folder_name]?.[qKey];
     
-    const scoreToSave = pending ? pending.score : editScore;
+    const original = student.questions[qKey];
+    const scoreToSave = (original && original.path) ? (pending ? pending.score : editScore) : 0;
     const commentToSave = pending ? pending.comment : editComment;
 
     try {
@@ -107,8 +112,11 @@ export const useReviewLogic = (
       
       setStudents(prev => {
         const updated = [...prev];
-        updated[studentIdx].questions[qKey].score = scoreToSave;
-        updated[studentIdx].questions[qKey].comment = commentToSave;
+        const targetStudent = updated[studentIdx];
+        if (targetStudent && targetStudent.questions[qKey]) {
+            targetStudent.questions[qKey].score = scoreToSave;
+            targetStudent.questions[qKey].comment = commentToSave;
+        }
         return updated;
       });
 
@@ -156,10 +164,14 @@ export const useReviewLogic = (
         setStudents(prev => {
             const updated = [...prev];
             const sIdx = updated.findIndex(s => s.folder_name === student.folder_name);
-            Object.keys(studentPending).forEach(qKey => {
-                updated[sIdx].questions[qKey].score = studentPending[qKey].score;
-                updated[sIdx].questions[qKey].comment = studentPending[qKey].comment;
-            });
+            if (sIdx !== -1) {
+                Object.keys(studentPending).forEach(qKey => {
+                    if (updated[sIdx].questions[qKey]) {
+                        updated[sIdx].questions[qKey].score = studentPending[qKey].score;
+                        updated[sIdx].questions[qKey].comment = studentPending[qKey].comment;
+                    }
+                });
+            }
             return updated;
         });
 

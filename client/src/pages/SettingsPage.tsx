@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 
 const RECOMMENDED_MODELS: Record<string, string[]> = {
   openai: ['gpt-5.4-mini', 'gpt-5.4', 'gpt-5.5', 'gpt-4o', 'gpt-4-turbo'],
-  gemini: ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-3-flash-preview', 'gemini-3.1-pro-preview', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+  gemini: ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-3-flash-preview', 'gemini-3.1-pro-preview', 'gemini-1.5-pro', 'gemini-1.5-flash-lite'],
   claude: ['claude-3-5-sonnet-20240620', 'claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7'],
   ollama: ['llama3.3', 'qwen3.6', 'deepseek-v4-flash', 'qwen3-coder-next', 'mistral-medium-3.5', 'gemma4', 'kimi-k2.6'],
 };

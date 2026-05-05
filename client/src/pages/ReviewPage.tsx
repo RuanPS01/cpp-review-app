@@ -66,7 +66,14 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
     handleDiscardChanges
   } = useReviewLogic(students, currentIndex, currentQ, pendingChanges, setPendingChanges, setStudents, t);
 
-  const [showSideBySide, setShowSideBySide] = useState(false);
+  const [showSideBySide, setShowSideBySide] = useState(() => {
+    return localStorage.getItem('showSideBySide') === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('showSideBySide', showSideBySide.toString());
+  }, [showSideBySide]);
+
   const [statementWidth, setStatementWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
 
@@ -351,16 +358,18 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
                   type="number" 
                   step="0.1"
                   value={editScore}
+                  disabled={!currentStudent.questions[`q${currentQ}`]?.path}
                   onChange={(e) => handleEditChange(Number(e.target.value), editComment)}
-                  className="w-full bg-input border border-border-main rounded p-3 text-accent font-bold focus:outline-none focus:border-accent transition-all"
+                  className="w-full bg-input border border-border-main rounded p-3 text-accent font-bold focus:outline-none focus:border-accent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               />
               </div>
               <div className="flex-1 flex flex-col">
               <label className="block text-xs font-bold uppercase tracking-wider text-text-dim mb-2">{t.feedbackComment}</label>
               <textarea 
                   value={editComment}
+                  disabled={!currentStudent.questions[`q${currentQ}`]?.path}
                   onChange={(e) => handleEditChange(editScore, e.target.value)}
-                  className="flex-1 w-full bg-input border border-border-main rounded p-3 text-text-main focus:outline-none focus:border-accent resize-none text-sm transition-all"
+                  className="flex-1 w-full bg-input border border-border-main rounded p-3 text-text-main focus:outline-none focus:border-accent resize-none text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder={t.enterFeedback}
               />
               </div>
@@ -376,8 +385,8 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
                   )}
                   <button 
                       onClick={() => handleSave()}
-                      disabled={saving}
-                      className={`w-full py-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg ${
+                      disabled={saving || !currentStudent.questions[`q${currentQ}`]?.path}
+                      className={`w-full py-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${
                           pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`]
                           ? 'bg-button text-accent border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)] hover:bg-accent hover:text-black'
                           : 'bg-button border border-border-main hover:bg-accent hover:text-black hover:border-accent'
