@@ -27,6 +27,7 @@ interface ReviewPageProps {
   setAiResult: (result: AIResult | null) => void;
   setAnalyzing: (analyzing: boolean) => void;
   setShowTerminal: (show: boolean) => void;
+  setCodeOverride: (code: string | undefined) => void;
   calculateTotal: (student: Student) => string;
   theme: 'light' | 'dark';
   t: any;
@@ -48,6 +49,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
   setAiResult,
   setAnalyzing,
   setShowTerminal,
+  setCodeOverride,
   calculateTotal,
   theme,
   t
@@ -301,7 +303,10 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
                           <Sparkles size={10} className="fill-current" /> {t.aiAnalyze}
                       </button>
                       <button 
-                          onClick={() => setShowTerminal(true)}
+                          onClick={() => {
+                              setCodeOverride(isCodeEdited ? tempCode : undefined);
+                              setShowTerminal(true);
+                          }}
                           className="flex items-center gap-2 bg-button hover:bg-panel border border-border-main px-3 py-1 rounded text-text-dim text-[10px] font-bold transition-all active:scale-95"
                       >
                           <Play size={10} className="fill-current" /> {t.runCode}

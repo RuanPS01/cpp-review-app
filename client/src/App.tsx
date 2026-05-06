@@ -25,6 +25,14 @@ const App = () => {
   const [view, setView] = useState<View>('review');
   const [selectedTurma, setSelectedTurma] = useState<string>('');
   const [showTerminal, setShowTerminal] = useState(false);
+  const [codeOverride, setCodeOverride] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!showTerminal) {
+      setCodeOverride(undefined);
+    }
+  }, [showTerminal]);
+
   const [lang, setLang] = useState<'pt-BR' | 'en-US'>('pt-BR');
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
@@ -356,6 +364,7 @@ const App = () => {
             setAiResult={setAiResult}
             setAnalyzing={setAnalyzing}
             setShowTerminal={setShowTerminal}
+            setCodeOverride={setCodeOverride}
             calculateTotal={calculateTotal}
             theme={theme}
             t={t}
@@ -601,6 +610,7 @@ const App = () => {
         <TerminalPanel 
           isOpen={showTerminal}
           filePath={currentStudent.questions[`q${currentQ}`].path!} 
+          codeOverride={codeOverride}
           onClose={() => setShowTerminal(false)} 
           t={t}
           theme={theme}
