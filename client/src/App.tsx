@@ -73,13 +73,22 @@ const App = () => {
   const [showZipHelp, setShowZipHelp] = useState(false);
 
   const calculateTotal = (student: Student) => {
+    const classQuestions = Array.from(new Set(
+      students
+        .filter(s => s.turma === student.turma)
+        .flatMap(s => Object.keys(s.questions))
+    ));
+    const totalQuestions = classQuestions.length || 1;
+
     const studentPending = pendingChanges[student.folder_name] || {};
-    const scores = Object.keys(student.questions).map(qKey => {
-        return studentPending[qKey] ? studentPending[qKey].score : student.questions[qKey].score;
-    });
-    if (scores.length === 0) return '0.00';
-    const sum = scores.reduce((acc, s) => acc + s, 0);
-    return (sum / scores.length).toFixed(2);
+    const sum = classQuestions.reduce((acc, qKey) => {
+        const score = studentPending[qKey] 
+          ? studentPending[qKey].score 
+          : (student.questions[qKey]?.score || 0);
+        return acc + score;
+    }, 0);
+    
+    return (sum / totalQuestions).toFixed(2);
   };
 
   const calculateClassAverage = () => {
