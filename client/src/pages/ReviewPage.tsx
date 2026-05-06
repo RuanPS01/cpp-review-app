@@ -129,7 +129,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
         code: code
       });
       setAiResult(res.data);
-    } catch (err: unknown) {
+    } catch (_err: unknown) {
       toast.error('AI analysis failed');
       setShowAIPreviewModal(false);
     } finally {
