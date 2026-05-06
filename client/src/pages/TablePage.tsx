@@ -34,7 +34,24 @@ const TablePage: React.FC<TablePageProps> = ({
   )).sort((a, b) => a - b);
 
   const handleExportExcel = () => {
-    const data = classStudents.map(s => {
+    // Determine all question keys present in the class
+    const questionKeys = Array.from(new Set(
+      classStudents.flatMap(s => Object.keys(s.questions))
+    )).sort((a, b) => {
+        const numA = parseInt(a.replace('q', ''));
+        const numB = parseInt(b.replace('q', ''));
+        return numA - numB;
+    });
+
+    const headers = [
+        'ID (Matrícula)',
+        'Nome completo',
+        ...questionKeys.map(k => k.toUpperCase()),
+        'Média',
+        'Comentários'
+    ];
+
+    const rows = classStudents.map((s, rowIndex) => {
         let cleanId = s.id;
         const numbers = s.id.match(/\d+/g);
         if (numbers && numbers.length > 0) {
@@ -43,22 +60,46 @@ const TablePage: React.FC<TablePageProps> = ({
             }
         }
 
-        return {
+        const studentRow: any = {
             'ID (Matrícula)': cleanId,
-            'Nome completo': s.name,
-            'Q1': s.questions.q1?.score || 0,
-            'Q2': s.questions.q2?.score || 0,
-            'Q3': s.questions.q3?.score || 0,
-            'Q4': s.questions.q4?.score || 0,
-            'Média': calculateTotal(s),
-            'Comentário': Object.values(s.questions)
-                .map((q, i) => `Q${i+1}: ${q.comment || ''}`)
-                .filter(c => !c.endsWith(': '))
-                .join(' | ')
+            'Nome completo': s.name
         };
+
+        questionKeys.forEach(k => {
+            studentRow[k.toUpperCase()] = s.questions[k]?.score || 0;
+        });
+
+        // Calculate Average using Formula
+        // ID is Col A (index 0), Name is Col B (index 1)
+        // Questions start at Col C (index 2)
+        // Average will be at the next column after questions
+        const startCol = 2; // Col C
+        const endCol = startCol + questionKeys.length - 1;
+        const startRef = XLSX.utils.encode_col(startCol) + (rowIndex + 2);
+        const endRef = XLSX.utils.encode_col(endCol) + (rowIndex + 2);
+        
+        studentRow['Média'] = { f: `AVERAGE(${startRef}:${endRef})` };
+
+        studentRow['Comentários'] = Object.entries(s.questions)
+            .map(([qKey, qData]) => `${qKey.toUpperCase()}: ${qData.comment || ''}`)
+            .filter(c => !c.endsWith(': '))
+            .join(' | ');
+
+        return studentRow;
     });
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
+    const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers });
+
+    // Apply some basic formatting if possible (widths)
+    const wscols = [
+        { wch: 15 }, // ID
+        { wch: 40 }, // Name
+        ...questionKeys.map(() => ({ wch: 8 })), // Questions
+        { wch: 10 }, // Average
+        { wch: 60 }  // Comments
+    ];
+    worksheet['!cols'] = wscols;
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Grades");
     XLSX.writeFile(workbook, `grades_${selectedTurma}.xlsx`);

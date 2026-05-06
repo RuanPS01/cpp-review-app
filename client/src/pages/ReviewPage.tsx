@@ -68,6 +68,19 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
     handleDiscardChanges
   } = useReviewLogic(students, currentIndex, currentQ, pendingChanges, setPendingChanges, setStudents, t);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`]) {
+          handleSave();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleSave, pendingChanges, currentStudent.folder_name, currentQ]);
+
   const [showSideBySide, setShowSideBySide] = useState(() => {
     return localStorage.getItem('showSideBySide') === 'true';
   });
@@ -185,24 +198,6 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
           </div>
 
           <div className="flex gap-4 items-center">
-              <div className="flex gap-2">
-                  {questions.map(q => {
-                      const isDirty = !!pendingChanges[currentStudent.folder_name]?.[`q${q}`];
-                      return (
-                      <button
-                          key={q}
-                          onClick={() => setCurrentQ(q)}
-                          className={`px-4 py-2 rounded border font-bold transition-all duration-200 active:scale-90 ${
-                              currentQ === q 
-                              ? 'bg-accent border-accent text-black shadow-[0_0_15px_var(--accent-glow)]' 
-                              : `bg-button text-text-dim ${isDirty ? 'border-red-500/50 hover:border-red-500' : 'border-border-main hover:border-accent/30'} hover:text-accent`
-                          }`}
-                      >
-                          Q{q}
-                      </button>
-                      );
-                  })}
-              </div>
               {pendingChanges[currentStudent.folder_name] && (
                   <button 
                       onClick={handleSaveAll}
@@ -211,7 +206,8 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
                       <Save size={14} /> {t.saveAll}
                   </button>
               )}
-          </div>
+              <div className="flex gap-2">
+                  {questions.map(q => {
       </div>
 
       <div className="flex gap-4 flex-1 overflow-hidden">
