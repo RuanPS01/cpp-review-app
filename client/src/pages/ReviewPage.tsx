@@ -142,7 +142,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
         code: code
       });
       setAiResult(res.data);
-    } catch (_err: unknown) {
+    } catch {
       toast.error('AI analysis failed');
       setShowAIPreviewModal(false);
     } finally {
@@ -208,6 +208,23 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
               )}
               <div className="flex gap-2">
                   {questions.map(q => {
+                      const isDirty = !!pendingChanges[currentStudent.folder_name]?.[`q${q}`];
+                      return (
+                      <button
+                          key={q}
+                          onClick={() => setCurrentQ(q)}
+                          className={`px-4 py-2 rounded border font-bold transition-all duration-200 active:scale-90 ${
+                              currentQ === q 
+                              ? 'bg-accent border-accent text-black shadow-[0_0_15px_var(--accent-glow)]' 
+                              : `bg-button text-text-dim ${isDirty ? 'border-red-500/50 hover:border-red-500' : 'border-border-main hover:border-accent/30'} hover:text-accent`
+                          }`}
+                      >
+                          Q{q}
+                      </button>
+                      );
+                  })}
+              </div>
+          </div>
       </div>
 
       <div className="flex gap-4 flex-1 overflow-hidden">

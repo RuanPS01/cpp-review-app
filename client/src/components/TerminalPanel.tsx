@@ -34,11 +34,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, codeOve
 
   useEffect(() => {
     if (isOpen && !shouldRender) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShouldRender(true);
       // Center on open if in free mode
       if (!isFocused) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setPos({
           x: (window.innerWidth - size.width) / 2,
           y: (window.innerHeight - size.height) / 2
