@@ -25,6 +25,14 @@ function createWindow() {
   // Open maximized
   mainWindow.maximize();
 
+  // Permite abrir o DevTools com Ctrl+Shift+I mesmo em produção
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i') {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
+
   if (isDev) {
     // Wait a bit for Vite to start
     setTimeout(() => {
