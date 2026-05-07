@@ -73,6 +73,7 @@ const App = () => {
   const [showZipHelp, setShowZipHelp] = useState(false);
 
   const calculateTotal = (student: Student) => {
+    if (!student) return '0.00';
     const classQuestions = Array.from(new Set(
       students
         .filter(s => s.turma === student.turma)
@@ -138,10 +139,15 @@ const App = () => {
       if (!selectedTurma && turmas.length > 0) {
         setSelectedTurma(turmas[0]);
       }
+      if (currentIndex >= students.length) {
+        setCurrentIndex(0);
+      }
     } else if (!loading) {
       setView('import');
+      setSelectedTurma('');
+      setCurrentIndex(0);
     }
-  }, [students, loading, selectedTurma]);
+  }, [students, loading, selectedTurma, currentIndex]);
 
   useEffect(() => {
     if (selectedTurma) {
@@ -163,6 +169,7 @@ const App = () => {
   const applyAIResult = () => {
     if (aiResult) {
       const student = students[currentIndex];
+      if (!student) return;
       const qKey = `q${currentQ}`;
       
       setPendingChanges(prev => ({

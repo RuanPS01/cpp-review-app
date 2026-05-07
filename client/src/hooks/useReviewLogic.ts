@@ -92,8 +92,10 @@ export const useReviewLogic = (
   };
 
   const handleSave = async (studentIdx = currentIndex, questionNum = currentQ) => {
-    setSaving(true);
     const student = students[studentIdx];
+    if (!student) return;
+
+    setSaving(true);
     const qKey = `q${questionNum}`;
     const pending = pendingChanges[student.folder_name]?.[qKey];
     
@@ -206,8 +208,10 @@ export const useReviewLogic = (
     });
 
     const original = student.questions[qKey];
-    setEditScore(original.score);
-    setEditComment(original.comment);
+    if (original) {
+      setEditScore(original.score);
+      setEditComment(original.comment);
+    }
     toast.success(t.changesDiscarded);
   };
 

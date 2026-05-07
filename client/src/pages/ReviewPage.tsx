@@ -69,6 +69,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
   } = useReviewLogic(students, currentIndex, currentQ, pendingChanges, setPendingChanges, setStudents, t);
 
   useEffect(() => {
+    if (!currentStudent) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
@@ -79,7 +80,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleSave, pendingChanges, currentStudent.folder_name, currentQ]);
+  }, [handleSave, pendingChanges, currentStudent, currentQ]);
 
   const [showSideBySide, setShowSideBySide] = useState(() => {
     return localStorage.getItem('showSideBySide') === 'true';
@@ -124,6 +125,17 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
     };
   }, [isResizing, resize]);
 
+  if (!currentStudent) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-text-dim">
+        <div className="p-6 bg-panel border border-border-main rounded-2xl flex flex-col items-center gap-4 shadow-2xl">
+          <Info size={48} className="text-accent opacity-50" />
+          <p className="font-bold uppercase tracking-[0.2em] text-sm">{t.noData}</p>
+        </div>
+      </div>
+    );
+  }
+
   const handleAIAnalyze = async () => {
     const statement = statements[`q${currentQ}`];
     if (!statement) {
@@ -160,14 +172,6 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
       .filter(s => s.turma === selectedTurma)
       .flatMap(s => Object.keys(s.questions).map(k => parseInt(k.replace('q', ''))))
   )).sort((a, b) => a - b);
-
-  if (!currentStudent) {
-    return (
-        <div className="flex-1 flex items-center justify-center text-text-dim italic">
-            {t.selectStudent}
-        </div>
-    );
-  }
 
   const isCodeEdited = code !== tempCode;
 

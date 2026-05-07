@@ -1,14 +1,14 @@
 import axios from 'axios';
 import type { AISettings, Student } from '../types';
 
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = 'https://supreme-system-6v6wqrrq667h5r6x-3001.app.github.dev/api';
 
 export const api = {
   getStudents: () => axios.get<Student[]>(`${API_BASE}/students`),
   getSettings: () => axios.get<AISettings>(`${API_BASE}/settings`),
   saveSettings: (settings: AISettings) => axios.post(`${API_BASE}/settings`, settings),
   getStatements: (turma: string) => axios.get<Record<string, string>>(`${API_BASE}/statements`, { params: { turma } }),
-  saveStatements: (turma: string, statements: Record<string, string>) => 
+  saveStatements: (turma: string, statements: Record<string, string>) =>
     axios.post(`${API_BASE}/statements`, { turma, statements }),
   getCode: (path: string) => axios.get<string>(`${API_BASE}/code`, { params: { path } }),
   updateGrade: (data: {
