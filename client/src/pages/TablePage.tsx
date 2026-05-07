@@ -28,7 +28,8 @@ const TablePage: React.FC<TablePageProps> = ({
   setShowJsonHelp,
   t 
 }) => {
-  const classStudents = students.filter(s => s.turma === selectedTurma);
+  const safeStudents = Array.isArray(students) ? students : [];
+  const classStudents = safeStudents.filter(s => s.turma === selectedTurma);
   const questions = Array.from(new Set(
     classStudents.flatMap(s => Object.keys(s.questions).map(k => parseInt(k.replace('q', ''))))
   )).sort((a, b) => a - b);

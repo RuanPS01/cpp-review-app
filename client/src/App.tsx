@@ -102,10 +102,16 @@ const App = () => {
   const fetchStudents = useCallback(async () => {
     try {
       const res = await api.getStudents();
-      setStudents(res.data);
+      if (Array.isArray(res.data)) {
+        setStudents(res.data);
+      } else {
+        console.error('Invalid students data:', res.data);
+        setStudents([]);
+      }
       setLoading(false);
     } catch (err) {
       console.error('Error fetching students', err);
+      setStudents([]);
       setLoading(false);
     }
   }, []);
@@ -113,7 +119,9 @@ const App = () => {
   const fetchAISettings = useCallback(async () => {
     try {
       const res = await api.getSettings();
-      setAiSettings(res.data);
+      if (res.data && typeof res.data === 'object') {
+        setAiSettings(res.data);
+      }
     } catch (err) {
       console.error('Error fetching AI settings', err);
     }
@@ -122,7 +130,9 @@ const App = () => {
   const fetchStatements = useCallback(async (turma: string) => {
     try {
       const res = await api.getStatements(turma);
-      setStatements(res.data);
+      if (res.data && typeof res.data === 'object') {
+        setStatements(res.data);
+      }
     } catch (err) {
       console.error('Error fetching statements', err);
     }
@@ -254,8 +264,8 @@ const App = () => {
     </div>
   );
 
-  const turmas = Array.from(new Set(students.map(s => s.turma)));
-  const currentStudent = students[currentIndex];
+  const turmas = Array.from(new Set((Array.isArray(students) ? students : []).map(s => s.turma)));
+  const currentStudent = Array.isArray(students) ? students[currentIndex] : undefined;
 
   return (
     <div className="min-h-screen bg-app text-text-main font-sans monaco-reset">

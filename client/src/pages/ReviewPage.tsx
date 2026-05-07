@@ -54,7 +54,8 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
   theme,
   t
 }) => {
-  const currentStudent = students[currentIndex];
+  const safeStudents = Array.isArray(students) ? students : [];
+  const currentStudent = safeStudents[currentIndex] || { name: '', id: '', turma: '', folder_name: '', questions: {} };
   const {
     code,
     tempCode,
@@ -168,7 +169,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
   };
 
   const questions = Array.from(new Set(
-    students
+    safeStudents
       .filter(s => s.turma === selectedTurma)
       .flatMap(s => Object.keys(s.questions).map(k => parseInt(k.replace('q', ''))))
   )).sort((a, b) => a - b);
@@ -188,7 +189,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
                   <ChevronLeft />
               </button>
               <button 
-                  disabled={currentIndex === students.length - 1}
+                  disabled={currentIndex === safeStudents.length - 1}
                   onClick={() => setCurrentIndex(prev => prev + 1)}
                   className="p-2 bg-button border border-border-main rounded text-text-dim disabled:opacity-20 hover:text-accent hover:border-accent/50 active:scale-90 transition-all"
               >

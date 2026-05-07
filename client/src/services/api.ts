@@ -1,7 +1,19 @@
 import axios from 'axios';
 import type { AISettings, Student } from '../types';
 
-const API_BASE = 'https://supreme-system-6v6wqrrq667h5r6x-3001.app.github.dev/api';
+const getApiBase = () => {
+  const hostname = window.location.hostname;
+  
+  // If in Codespaces
+  if (hostname.endsWith('.app.github.dev')) {
+    return window.location.origin.replace('-5173.', '-3001.').replace('-3000.', '-3001.') + '/api';
+  }
+  
+  // Default for local development and Electron production
+  return 'http://localhost:3001/api';
+};
+
+const API_BASE = getApiBase();
 
 export const api = {
   getStudents: () => axios.get<Student[]>(`${API_BASE}/students`),
