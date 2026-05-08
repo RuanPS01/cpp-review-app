@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, CheckCircle2, Terminal } from 'lucide-react';
+import { Settings, CheckCircle2, Terminal, Info } from 'lucide-react';
 import type { AISettings } from '../types';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
+import pkg from '../../package.json';
 
 const RECOMMENDED_MODELS: Record<string, string[]> = {
   openai: ['gpt-5.4-mini', 'gpt-5.4', 'gpt-5.5', 'gpt-4o', 'gpt-4-turbo'],
@@ -186,6 +187,14 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ aiSettings, setAiSettings, 
       >
           <CheckCircle2 size={20} /> {t.saveSettings}
       </button>
+
+      <div className="mt-8 pt-6 border-t border-border-main flex items-center justify-between opacity-50">
+          <div className="flex items-center gap-2 text-text-dim">
+              <Info size={14} />
+              <span className="text-[10px] font-bold uppercase tracking-widest">{t.appVersion || 'Project Version'}</span>
+          </div>
+          <span className="text-xs font-mono text-accent">v{pkg.version}</span>
+      </div>
     </div>
   );
 };
