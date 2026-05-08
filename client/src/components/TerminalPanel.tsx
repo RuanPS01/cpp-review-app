@@ -46,10 +46,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, codeOve
     }
   }, [isOpen, shouldRender, isFocused, size.width, size.height]);
 
-  const handleAnimationEnd = () => {
-    if (!isOpen) setShouldRender(false);
-  };
-
   const toggleMode = () => {
     const newMode = !isFocused;
     setIsFocused(newMode);
@@ -137,10 +133,21 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, codeOve
     term.open(terminalRef.current);
     
     // Initial fit
-    setTimeout(() => {
-      fitAddon.fit();
-      term.scrollToBottom();
-    }, 50);
+    const performFit = () => {
+      if (fitAddonRef.current && xtermRef.current) {
+        fitAddonRef.current.fit();
+        const term = xtermRef.current;
+        if (socketRef.current) {
+          socketRef.current.emit('terminal-resize', {
+            cols: term.cols,
+            rows: term.rows
+          });
+        }
+        term.scrollToBottom();
+      }
+    };
+
+    setTimeout(performFit, 200);
 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
@@ -151,13 +158,15 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, codeOve
     socket.on('connect', () => {
       term.writeln(`\x1b[32m${t.connectedToServer}\x1b[0m`);
       socket.emit('run-code', { filePath, codeOverride });
+      // Send initial size after connection if already fitted
+      setTimeout(performFit, 100);
     });
 
     socket.on('terminal-data', (data: string) => {
       term.write(data, () => {
-        // Only scroll if we were already at the bottom or near it
+        // More robust auto-scroll: if we are within 3 lines of bottom, scroll
         const buffer = term.buffer.active;
-        if (buffer.viewportY + term.rows >= buffer.baseY - 1) {
+        if (buffer.viewportY + term.rows >= buffer.baseY - 3) {
           term.scrollToBottom();
         }
       });
@@ -167,13 +176,15 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, codeOve
       socket.emit('terminal-input', data);
     });
 
-    const handleResize = () => {
-      fitAddon.fit();
-    };
-    window.addEventListener('resize', handleResize);
+    // Resize Observer for robust fitting
+    const resizeObserver = new ResizeObserver(() => {
+      // Small delay to ensure container size is settled
+      setTimeout(performFit, 50);
+    });
+    resizeObserver.observe(terminalRef.current);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       socket.disconnect();
       term.dispose();
       xtermRef.current = null;
@@ -181,15 +192,27 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, codeOve
     };
   }, [shouldRender, filePath, codeOverride, t, theme]);
 
-  // Re-fit when size changes
-  useEffect(() => {
-    if (xtermRef.current && fitAddonRef.current) {
+  // Handle animation end to trigger fit
+  const handleAnimationEnd = () => {
+    if (!isOpen) {
+      setShouldRender(false);
+    } else {
       setTimeout(() => {
-        fitAddonRef.current?.fit();
-        xtermRef.current?.scrollToBottom();
-      }, 10);
+        if (fitAddonRef.current) {
+          fitAddonRef.current.fit();
+          // Force a small scroll after animation to ensure cursor isn't clipped
+          xtermRef.current?.scrollToBottom();
+          
+          if (socketRef.current && xtermRef.current) {
+            socketRef.current.emit('terminal-resize', {
+              cols: xtermRef.current.cols,
+              rows: xtermRef.current.rows
+            });
+          }
+        }
+      }, 150);
     }
-  }, [size, isFocused]);
+  };
 
   if (!shouldRender) return null;
 
@@ -242,7 +265,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, codeOve
             </button>
           </div>
         </div>
-        <div ref={terminalRef} className={`flex-1 p-4 ${theme === 'light' ? 'bg-white' : 'bg-black'} transition-colors terminal-container`} />
+        <div ref={terminalRef} className={`flex-1 ${theme === 'light' ? 'bg-white' : 'bg-black'} transition-colors terminal-container pb-2`} />
         {!isFocused && (
             <div 
                 onMouseDown={onResizeStart}

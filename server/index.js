@@ -626,13 +626,22 @@ io.on('connection', (socket) => {
   });
 
   socket.on('terminal-input', (data) => {
-    if (ptyProcess) {
-      ptyProcess.write(data);
-    }
+  if (ptyProcess) {
+    ptyProcess.write(data);
+  }
   });
 
-  socket.on('disconnect', () => {
-    if (ptyProcess) {
+  socket.on('terminal-resize', ({ cols, rows }) => {
+  if (ptyProcess && cols && rows) {
+    try {
+      ptyProcess.resize(cols, rows);
+    } catch (e) {
+      console.error('Error resizing pty:', e);
+    }
+  }
+  });
+
+  socket.on('disconnect', () => {    if (ptyProcess) {
       try {
         ptyProcess.kill();
       } catch (e) {}
