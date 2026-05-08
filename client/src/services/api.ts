@@ -34,7 +34,7 @@ export const api = {
     turma: string;
     questionNum: number;
     code: string;
-  }) => axios.post(`${API_BASE}/analyze`, data),
+  }, signal?: AbortSignal) => axios.post(`${API_BASE}/analyze`, data, { signal }),
   deleteTurma: (turmaName: string) => axios.delete(`${API_BASE}/turma/${turmaName}`),
   importTurma: (formData: FormData) => axios.post(`${API_BASE}/import`, formData),
   importGrades: (turma: string, grades: any) => axios.post(`${API_BASE}/import-grades`, { turma, grades }),

@@ -394,6 +394,7 @@ const App = () => {
             calculateTotal={calculateTotal}
             theme={theme}
             t={t}
+            showAIPreviewModal={showAIPreviewModal}
           />
         ) : (
           <TablePage 
@@ -433,7 +434,7 @@ const App = () => {
       {/* AI Preview Modal */}
       <Modal
         isOpen={showAIPreviewModal}
-        onClose={() => !analyzing && setShowAIPreviewModal(false)}
+        onClose={() => setShowAIPreviewModal(false)}
         title={t.aiReviewProposal}
         icon={Sparkles}
       >

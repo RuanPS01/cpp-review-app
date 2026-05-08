@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   ChevronLeft, ChevronRight, Copy, Save, 
   Sparkles, BookOpen, X, Play, Eye, Info, Trash2
@@ -7,6 +7,7 @@ import { marked } from 'marked';
 import Editor from '@monaco-editor/react';
 import type { Student, PendingChanges, AISettings, AIResult } from '../types';
 import { api } from '../services/api';
+import axios from 'axios';
 import toast from 'react-hot-toast';
 import { useReviewLogic } from '../hooks/useReviewLogic';
 
@@ -31,6 +32,7 @@ interface ReviewPageProps {
   calculateTotal: (student: Student) => string;
   theme: 'light' | 'dark';
   t: any;
+  showAIPreviewModal: boolean;
 }
 
 const ReviewPage: React.FC<ReviewPageProps> = ({
@@ -52,7 +54,8 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
   setCodeOverride,
   calculateTotal,
   theme,
-  t
+  t,
+  showAIPreviewModal
 }) => {
   const safeStudents = Array.isArray(students) ? students : [];
   const currentStudent = safeStudents[currentIndex] || { name: '', id: '', turma: '', folder_name: '', questions: {} };
@@ -68,6 +71,24 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
     handleSaveAll,
     handleDiscardChanges
   } = useReviewLogic(students, currentIndex, currentQ, pendingChanges, setPendingChanges, setStudents, t);
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+  // Cancel analysis if modal is closed while analyzing
+  useEffect(() => {
+    if (!showAIPreviewModal && abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+  }, [showAIPreviewModal]);
 
   useEffect(() => {
     if (!currentStudent) return;
@@ -144,6 +165,11 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
       return;
     }
 
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     setAnalyzing(true);
     setAiResult(null);
     setShowAIPreviewModal(true);
@@ -153,13 +179,18 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
         turma: selectedTurma,
         questionNum: currentQ,
         code: code
-      });
+      }, abortControllerRef.current.signal);
       setAiResult(res.data);
-    } catch {
-      toast.error('AI analysis failed');
-      setShowAIPreviewModal(false);
+    } catch (err: any) {
+      if (axios.isCancel(err)) {
+        console.log('AI analysis cancelled');
+      } else {
+        toast.error('AI analysis failed');
+        setShowAIPreviewModal(false);
+      }
     } finally {
       setAnalyzing(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -268,7 +299,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
                   </div>
               </div>
               <div 
-                  className="w-1.5 cursor-col-resize hover:bg-accent/50 active:bg-accent transition-colors rounded-full self-stretch my-2"
+                  className="w-1.5 cursor-col-resize bg-border-main hover:bg-accent/50 active:bg-accent transition-colors rounded-full self-stretch my-2"
                   onMouseDown={startResizing}
               />
               </>

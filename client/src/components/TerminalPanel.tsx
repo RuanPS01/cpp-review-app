@@ -18,6 +18,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, codeOve
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
   const [shouldRender, setShouldRender] = useState(isOpen);
   
   const [isFocused, setIsFocused] = useState(() => {
@@ -126,14 +127,23 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, codeOve
       },
       fontSize: 14,
       fontFamily: 'Fira Code, Menlo, Monaco, "Courier New", monospace',
+      scrollback: 10000,
+      scrollSensitivity: 1,
+      overviewRulerWidth: 10,
     });
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(terminalRef.current);
-    fitAddon.fit();
+    
+    // Initial fit
+    setTimeout(() => {
+      fitAddon.fit();
+      term.scrollToBottom();
+    }, 50);
 
     xtermRef.current = term;
+    fitAddonRef.current = fitAddon;
 
     const socket = io('http://localhost:3001');
     socketRef.current = socket;
@@ -144,7 +154,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, codeOve
     });
 
     socket.on('terminal-data', (data: string) => {
-      term.write(data);
+      term.write(data, () => {
+        // Only scroll if we were already at the bottom or near it
+        const buffer = term.buffer.active;
+        if (buffer.viewportY + term.rows >= buffer.baseY - 1) {
+          term.scrollToBottom();
+        }
+      });
     });
 
     term.onData((data) => {
@@ -160,15 +176,18 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, codeOve
       window.removeEventListener('resize', handleResize);
       socket.disconnect();
       term.dispose();
+      xtermRef.current = null;
+      fitAddonRef.current = null;
     };
   }, [shouldRender, filePath, codeOverride, t, theme]);
 
   // Re-fit when size changes
   useEffect(() => {
-    if (xtermRef.current) {
-      const fitAddon = new FitAddon();
-      xtermRef.current.loadAddon(fitAddon);
-      setTimeout(() => fitAddon.fit(), 10);
+    if (xtermRef.current && fitAddonRef.current) {
+      setTimeout(() => {
+        fitAddonRef.current?.fit();
+        xtermRef.current?.scrollToBottom();
+      }, 10);
     }
   }, [size, isFocused]);
 
@@ -192,7 +211,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, codeOve
       <div 
         onAnimationEnd={handleAnimationEnd}
         style={containerStyle}
-        className={`${isOpen ? 'animate-crt-open' : 'animate-crt-close'} bg-panel rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-border-main flex flex-col overflow-hidden transition-colors`}
+        className={`${isOpen ? 'animate-crt-open' : 'animate-crt-close'} bg-panel rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-border-main flex flex-col overflow-hidden transition-colors relative`}
       >
         <div 
           onMouseDown={onDragStart}
@@ -223,11 +242,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ isOpen, filePath, codeOve
             </button>
           </div>
         </div>
-        <div ref={terminalRef} className={`flex-1 p-4 ${theme === 'light' ? 'bg-white' : 'bg-black'} transition-colors`} />
+        <div ref={terminalRef} className={`flex-1 p-4 ${theme === 'light' ? 'bg-white' : 'bg-black'} transition-colors terminal-container`} />
         {!isFocused && (
             <div 
                 onMouseDown={onResizeStart}
-                className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize flex items-center justify-center"
+                className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize flex items-center justify-center z-50"
             >
                 <div className="w-1.5 h-1.5 bg-accent/30 rounded-full"></div>
             </div>
