@@ -64,6 +64,7 @@ const App = () => {
   const [showStatementModal, setShowStatementModal] = useState(false);
   const [showAIPreviewModal, setShowAIPreviewModal] = useState(false);
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
+  const [, setAiError] = useState<any>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [pendingChanges, setPendingChanges] = useState<PendingChanges>({});
 
@@ -390,6 +391,7 @@ const App = () => {
             setShowStatementModal={setShowStatementModal}
             setShowAIPreviewModal={setShowAIPreviewModal}
             setAiResult={setAiResult}
+            setAiError={setAiError}
             setAnalyzing={setAnalyzing}
             setShowTerminal={setShowTerminal}
             setCodeOverride={setCodeOverride}
@@ -419,12 +421,12 @@ const App = () => {
       <Modal
         isOpen={showEditStudentModal}
         onClose={() => setShowEditStudentModal(false)}
-        title="Editar Aluno"
+        title={t.editStudent}
         icon={Settings}
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-text-dim mb-2">Nome Completo</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-text-dim mb-2">{t.fullName}</label>
             <input 
               type="text" 
               defaultValue={editingStudent?.name || ''}
@@ -433,7 +435,7 @@ const App = () => {
             />
           </div>
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-text-dim mb-2">ID (Matrícula)</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-text-dim mb-2">{t.idMatricula}</label>
             <input 
               type="text" 
               defaultValue={editingStudent?.id || ''}
@@ -446,7 +448,7 @@ const App = () => {
               onClick={() => setShowEditStudentModal(false)}
               className="flex-1 px-4 py-2 border border-border-main text-text-dim hover:bg-button rounded-lg text-xs font-bold uppercase tracking-widest transition-all"
             >
-              Cancelar
+              {t.cancel}
             </button>
             <button 
               onClick={async () => {
@@ -460,7 +462,7 @@ const App = () => {
                       name,
                       id
                     });
-                    toast.success('Aluno atualizado com sucesso');
+                    toast.success(t.studentUpdated);
                     setShowEditStudentModal(false);
                     await fetchStudents();
                   } catch {
@@ -470,7 +472,7 @@ const App = () => {
               }}
               className="flex-1 px-4 py-2 bg-accent text-black font-black uppercase tracking-widest text-xs rounded-lg active:scale-95 transition-all"
             >
-              Salvar
+              {t.saveSettings.split(' ')[0] === 'SALVAR' ? 'Salvar' : 'Save'}
             </button>
           </div>
         </div>

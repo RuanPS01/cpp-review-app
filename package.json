@@ -1,6 +1,6 @@
 {
   "name": "review-app",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Uma aplicação para revisão de código C++ usando Electron e IA.",
   "main": "electron-main.js",
   "scripts": {

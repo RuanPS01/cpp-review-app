@@ -27,6 +27,7 @@ interface ReviewPageProps {
   setShowStatementModal: (show: boolean) => void;
   setShowAIPreviewModal: (show: boolean) => void;
   setAiResult: (result: AIResult | null) => void;
+  setAiError: (error: any) => void;
   setAnalyzing: (analyzing: boolean) => void;
   setShowTerminal: (show: boolean) => void;
   setCodeOverride: (code: string | undefined) => void;
@@ -50,6 +51,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
   setShowStatementModal,
   setShowAIPreviewModal,
   setAiResult,
+  setAiError,
   setAnalyzing,
   setShowTerminal,
   setCodeOverride,
@@ -58,7 +60,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
   t,
   showAIPreviewModal
 }) => {
-  const safeStudents = Array.isArray(students) ? students : [];
+  const safeStudents = React.useMemo(() => Array.isArray(students) ? students : [], [students]);
   const classStudents = safeStudents.filter(s => s.turma === selectedTurma);
   
   const currentStudent = React.useMemo(() => {
@@ -222,40 +224,40 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
         setAiError(errorObj);
         setShowAIPreviewModal(false);
         
-        toast((t) => (
+        toast((t_toast) => (
           <div className="flex flex-col gap-3 min-w-[300px]">
             <div className="flex items-center gap-2 text-red-500 font-bold">
               <AlertCircle size={18} />
-              <span>AI Analysis Failed</span>
+              <span>{t.aiAnalysisFailed}</span>
             </div>
             <div className="flex gap-2">
               <button 
                 onClick={() => {
                   navigator.clipboard.writeText(errorObj.errorLog);
-                  toast.success('Error log copied!', { id: 'copy-log' });
+                  toast.success(t.errorLogCopied, { id: 'copy-log' });
                 }}
                 className="px-2 py-1 bg-panel border border-border-main rounded text-[10px] font-bold hover:bg-button transition-colors flex items-center gap-1"
               >
-                <Copy size={12} /> Copy Log
+                <Copy size={12} /> {t.copyLog}
               </button>
               <button 
                 onClick={() => {
                   navigator.clipboard.writeText(errorObj.fullPrompt);
-                  toast.success('Prompt copied!', { id: 'copy-prompt' });
+                  toast.success(t.promptCopied, { id: 'copy-prompt' });
                 }}
                 className="px-2 py-1 bg-panel border border-border-main rounded text-[10px] font-bold hover:bg-button transition-colors flex items-center gap-1"
               >
-                <Copy size={12} /> Copy Prompt
+                <Copy size={12} /> {t.copyPrompt}
               </button>
               <button 
-                onClick={() => toast.dismiss(t.id)}
+                onClick={() => toast.dismiss(t_toast.id)}
                 className="px-2 py-1 bg-accent/20 border border-accent/30 text-accent rounded text-[10px] font-bold hover:bg-accent hover:text-black transition-colors"
               >
-                Ok, ignore
+                {t.okIgnore}
               </button>
             </div>
           </div>
-        ), { duration: 10000, position: 'bottom-right', style: { background: '#1a1a1a', color: '#fff', border: '1px solid #333' } });
+        ), { duration: 10000, position: 'top-center' });
       }
     } finally {
       setAnalyzing(false);
@@ -296,7 +298,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
             </h3>
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {classStudents.map((s, idx) => {
+            {classStudents.map((s, _idx) => {
               const isCurrent = s.folder_name === currentStudent.folder_name;
               const isFullyReviewed = Object.values(s.questions).every(q => q.reviewed || !q.path);
               return (
@@ -590,37 +592,36 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
                             onClick={() => handleToggleQuestionReviewed(currentIndex, currentQ, false)}
                             className="w-full py-2 bg-red-500/10 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                         >
-                            <RotateCcw size={14} /> Reset Status Questão
-                        </button>
-                    )}
-                    {pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`] && (
-                        <button 
+                            <RotateCcw size={14} /> {t.resetStatus || 'Reset Questão'}
+                            </button>
+                            )}
+                            {pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`] && (
+                            <button 
                             onClick={handleDiscardChanges}
                             className="w-full py-2 text-[10px] font-bold uppercase tracking-widest text-text-dim hover:text-red-500 transition-colors flex items-center justify-center gap-2"
-                        >
+                            >
                             <Trash2 size={12} /> {t.discardChanges}
-                        </button>
-                    )}
-                    <button 
-                        onClick={() => handleSave(currentIndex, currentQ, true)}
-                        disabled={saving || !currentStudent.questions[`q${currentQ}`]?.path}
-                        className={`w-full py-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${
+                            </button>
+                            )}
+                            <button 
+                            onClick={() => handleSave(currentIndex, currentQ, true)}
+                            disabled={saving || !currentStudent.questions[`q${currentQ}`]?.path}
+                            className={`w-full py-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${
                             pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`]
                             ? 'bg-button text-accent border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)] hover:bg-accent hover:text-black'
                             : (currentQuestion?.reviewed || !currentQuestion?.path)
                               ? 'bg-accent/10 border border-accent text-accent' 
                               : 'bg-button border border-border-main hover:bg-accent hover:text-black hover:border-accent'
-                        }`}
-                    >
-                        {(currentQuestion?.reviewed || !currentQuestion?.path) && !pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`] ? <CheckCircle2 size={18} /> : <Save size={18} />}
-                        {saving 
+                            }`}
+                            >
+                            {(currentQuestion?.reviewed || !currentQuestion?.path) && !pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`] ? <CheckCircle2 size={18} /> : <Save size={18} />}
+                            {saving 
                             ? t.saving 
                             : ((currentQuestion?.reviewed || !currentQuestion?.path) && !pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`] 
                                 ? (t.reviewed || 'Questão Revisada') 
                                 : t.saveGrade)}
-                    </button>
-                </div>
-                
+                            </button>
+                            </div>                
                 <div className="mt-2 pt-4 border-t border-border-main">
                 <div className="flex justify-between items-baseline mb-3">
                     <span className="text-[10px] font-bold text-text-dim uppercase tracking-widest">{t.performance}</span>

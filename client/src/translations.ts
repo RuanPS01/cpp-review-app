@@ -110,10 +110,16 @@ const translations = {
     ollamaHelpStep2: 'Abra seu terminal e baixe o modelo desejado (ex: Llama 3.3):',
     ollamaHelpStep3: 'O Review App se conecta a http://localhost:11434. Se você vir "Ollama is running" no seu navegador, você está pronto!',
     gotIt: 'Entendi',
-    note: 'Nota'
-  },
-  'en-US': {
-    appName: 'Review App',
+    note: 'Nota',
+    aiAnalysisFailed: 'Falha na Análise de IA',
+    copyLog: 'Copiar Log',
+    copyPrompt: 'Copiar Prompt',
+    okIgnore: 'Ok, ignorar',
+    errorLogCopied: 'Log de erro copiado!',
+    promptCopied: 'Prompt copiado!',
+    resetStatus: 'Reset Status Questão'
+    },
+    'en-US': {    appName: 'Review App',
     loading: 'LOADING SYSTEM...',
     review: 'Review',
     table: 'Table',
@@ -223,7 +229,14 @@ const translations = {
     ollamaHelpStep2: 'Open your terminal and pull the desired model (e.g., Llama 3.3):',
     ollamaHelpStep3: 'The Review App connects to http://localhost:11434. If you see "Ollama is running" in your browser, you are ready!',
     gotIt: 'Got it',
-    note: 'Note'
+    note: 'Note',
+    aiAnalysisFailed: 'AI Analysis Failed',
+    copyLog: 'Copy Log',
+    copyPrompt: 'Copy Prompt',
+    okIgnore: 'Ok, ignore',
+    errorLogCopied: 'Error log copied!',
+    promptCopied: 'Prompt copied!',
+    resetStatus: 'Reset Question Status'
   }
 };
 
