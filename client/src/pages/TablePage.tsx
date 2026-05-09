@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Download, Upload, Info } from 'lucide-react';
+import { FileText, Download, Upload, Info, Pencil, CheckCircle2 } from 'lucide-react';
 import type { Student } from '../types';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
@@ -14,6 +14,8 @@ interface TablePageProps {
   setView: (view: 'review' | 'table' | 'import' | 'settings') => void;
   fetchStudents: () => Promise<void>;
   setShowJsonHelp: (show: boolean) => void;
+  setEditingStudent: (student: Student) => void;
+  setShowEditStudentModal: (show: boolean) => void;
   t: any;
 }
 
@@ -26,6 +28,8 @@ const TablePage: React.FC<TablePageProps> = ({
   setView,
   fetchStudents,
   setShowJsonHelp,
+  setEditingStudent,
+  setShowEditStudentModal,
   t 
 }) => {
   const safeStudents = Array.isArray(students) ? students : [];
@@ -189,6 +193,7 @@ const TablePage: React.FC<TablePageProps> = ({
           <table className="w-full text-left border-collapse">
             <thead className="bg-button/50 border-b border-border-main">
               <tr>
+                <th className="py-1 px-2 text-xs font-bold uppercase tracking-wider text-text-dim text-center w-10"></th>
                 <th className="py-1 px-4 text-xs font-bold uppercase tracking-wider text-text-dim">{t.studentName}</th>
                 {questions.map(q => (
                   <th key={q} className="py-1 px-2 text-xs font-bold uppercase tracking-wider text-text-dim text-center border-l border-border-main/50">Q{q}</th>
@@ -197,26 +202,59 @@ const TablePage: React.FC<TablePageProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-border-main/50">
-              {classStudents.map((s) => (
-                <tr 
-                  key={s.id} 
-                  className="hover:bg-accent/5 transition-colors cursor-pointer group" 
-                  onClick={() => { 
-                    const globalIdx = students.findIndex(student => student.id === s.id);
-                    setCurrentIndex(globalIdx); 
-                    setView('review'); 
-                  }}
-                >
-                  <td className="py-1 px-4 border-r border-border-main/30">
-                    <div className="font-bold text-text-main group-hover:text-accent transition-colors text-sm">{s.name}</div>
-                    <div className="text-[10px] text-text-dim font-mono">{s.id}</div>
-                  </td>
-                  {questions.map(q => (
-                    <td key={q} className="py-1 px-2 text-center text-sm text-text-dim tabular-nums border-r border-border-main/30">{s.questions[`q${q}`]?.score || 0}</td>
-                  ))}
-                  <td className="py-1 px-2 text-center font-black text-text-bright tabular-nums group-hover:text-accent transition-colors">{calculateTotal(s)}</td>
-                </tr>
-              ))}
+              {classStudents.map((s) => {
+                const total = Number(calculateTotal(s));
+                const isFullyReviewed = s.reviewed || Object.values(s.questions).every(q => q.reviewed || !q.path);
+                
+                return (
+                  <tr 
+                    key={s.id} 
+                    className="hover:bg-accent/5 transition-colors cursor-pointer group" 
+                    onClick={() => { 
+                      const globalIdx = students.findIndex(student => student.id === s.id);
+                      setCurrentIndex(globalIdx); 
+                      setView('review'); 
+                    }}
+                  >
+                    <td className="py-1 px-2 text-center border-r border-border-main/30">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingStudent(s);
+                          setShowEditStudentModal(true);
+                        }}
+                        className="p-1.5 text-text-dim hover:text-accent hover:bg-button rounded-md transition-all"
+                        title="Editar Aluno"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    </td>
+                    <td className="py-1 px-4 border-r border-border-main/30">
+                      <div className="flex items-center gap-2">
+                          <div className="font-bold text-text-main group-hover:text-accent transition-colors text-sm">{s.name}</div>
+                          {isFullyReviewed && (
+                              <CheckCircle2 size={14} className="text-accent flex-shrink-0" />
+                          )}
+                      </div>
+                      <div className="text-[10px] text-text-dim font-mono">{s.id}</div>
+                    </td>
+                    {questions.map(q => (
+                      <td key={q} className="py-1 px-2 text-center text-sm text-text-dim tabular-nums border-r border-border-main/30">{s.questions[`q${q}`]?.score || 0}</td>
+                    ))}
+                    <td className={`py-1 px-2 text-center font-black tabular-nums transition-colors ${
+                      total === 100
+                        ? 'text-white'
+                        : total < 50 
+                          ? 'text-red-500' 
+                          : total < 60 
+                            ? 'text-yellow-500' 
+                            : 'text-green-500'
+                    }`}>
+                      {calculateTotal(s)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

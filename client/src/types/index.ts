@@ -3,6 +3,7 @@ export interface Question {
   comment: string;
   path: string | null;
   label?: string;
+  reviewed?: boolean;
 }
 
 export interface Student {
@@ -13,6 +14,7 @@ export interface Student {
   questions: {
     [key: string]: Question;
   };
+  reviewed: boolean;
 }
 
 export interface AISettings {

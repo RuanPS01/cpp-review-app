@@ -29,7 +29,15 @@ export const api = {
     questionNum: number;
     score: number;
     comment: string;
+    markAsReviewed?: boolean;
   }) => axios.post(`${API_BASE}/update-grade`, data),
+  updateStudent: (data: {
+    turma: string;
+    studentId: string;
+    name?: string;
+    id?: string;
+    reviewed?: boolean;
+  }) => axios.post(`${API_BASE}/update-student`, data),
   analyzeCode: (data: {
     turma: string;
     questionNum: number;

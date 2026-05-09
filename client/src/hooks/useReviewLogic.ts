@@ -72,6 +72,20 @@ export const useReviewLogic = (
 
     const isDirty = original.score !== finalScore || original.comment !== comment;
     
+    // Update local students state temporarily to reflect "unreviewed" while editing a reviewed question
+    if (isDirty && original.reviewed) {
+        setStudents(prev => {
+            const updated = [...prev];
+            const sIdx = updated.findIndex(s => s.folder_name === student.folder_name);
+            if (sIdx !== -1 && updated[sIdx].questions[qKey]) {
+                updated[sIdx].questions[qKey].reviewed = false;
+                // If it was the last thing making the student reviewed, update student level too
+                updated[sIdx].reviewed = false;
+            }
+            return updated;
+        });
+    }
+
     setPendingChanges(prev => {
         const newPending = { ...prev };
         if (isDirty) {
@@ -86,12 +100,26 @@ export const useReviewLogic = (
                     delete newPending[student.folder_name];
                 }
             }
+            // If we revert to original, restore original reviewed status if it was reviewed
+            if (original.reviewed) {
+                setStudents(prev => {
+                    const updated = [...prev];
+                    const sIdx = updated.findIndex(s => s.folder_name === student.folder_name);
+                    if (sIdx !== -1 && updated[sIdx].questions[qKey]) {
+                        updated[sIdx].questions[qKey].reviewed = true;
+                        // Recalculate student reviewed status
+                        const qs = Object.values(updated[sIdx].questions);
+                        updated[sIdx].reviewed = qs.filter(q => q.path).every(q => q.reviewed);
+                    }
+                    return updated;
+                });
+            }
         }
         return newPending;
     });
   };
 
-  const handleSave = async (studentIdx = currentIndex, questionNum = currentQ) => {
+  const handleSave = async (studentIdx = currentIndex, questionNum = currentQ, reviewed = true) => {
     const student = students[studentIdx];
     if (!student) return;
 
@@ -104,12 +132,13 @@ export const useReviewLogic = (
     const commentToSave = pending ? pending.comment : editComment;
 
     try {
-      await api.updateGrade({
+      const res = await api.updateGrade({
         turma: student.turma,
         studentId: student.folder_name,
         questionNum: questionNum,
         score: scoreToSave,
-        comment: commentToSave
+        comment: commentToSave,
+        reviewed: reviewed
       });
       
       setStudents(prev => {
@@ -118,6 +147,8 @@ export const useReviewLogic = (
         if (targetStudent && targetStudent.questions[qKey]) {
             targetStudent.questions[qKey].score = scoreToSave;
             targetStudent.questions[qKey].comment = commentToSave;
+            targetStudent.questions[qKey].reviewed = reviewed;
+            targetStudent.reviewed = res.data.studentReviewed;
         }
         return updated;
       });
@@ -133,11 +164,44 @@ export const useReviewLogic = (
         return newPending;
       });
 
-      toast.success(t.gradeSaved);
+      toast.success(reviewed ? t.gradeSavedAndReviewed || 'Grade saved and question reviewed' : t.gradeSaved);
     } catch {
       toast.error('Error saving grade');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleQuestionReviewed = async (studentIdx = currentIndex, questionNum = currentQ, status: boolean) => {
+    const student = students[studentIdx];
+    if (!student) return;
+
+    const qKey = `q${questionNum}`;
+    const q = student.questions[qKey];
+    if (!q) return;
+
+    try {
+      const res = await api.updateGrade({
+        turma: student.turma,
+        studentId: student.folder_name,
+        questionNum: questionNum,
+        score: q.score,
+        comment: q.comment,
+        reviewed: status
+      });
+      
+      setStudents(prev => {
+        const updated = [...prev];
+        const targetStudent = updated[studentIdx];
+        if (targetStudent && targetStudent.questions[qKey]) {
+            targetStudent.questions[qKey].reviewed = status;
+            targetStudent.reviewed = res.data.studentReviewed;
+        }
+        return updated;
+      });
+      toast.success(status ? 'Question marked as reviewed' : 'Question review reset');
+    } catch {
+      toast.error('Error updating question status');
     }
   };
 
@@ -157,11 +221,13 @@ export const useReviewLogic = (
                 studentId: student.folder_name,
                 questionNum: qNum,
                 score: data.score,
-                comment: data.comment
+                comment: data.comment,
+                reviewed: true
             });
         });
 
-        await Promise.all(promises);
+        const results = await Promise.all(promises);
+        const lastResult = results[results.length - 1];
 
         setStudents(prev => {
             const updated = [...prev];
@@ -171,8 +237,10 @@ export const useReviewLogic = (
                     if (updated[sIdx].questions[qKey]) {
                         updated[sIdx].questions[qKey].score = studentPending[qKey].score;
                         updated[sIdx].questions[qKey].comment = studentPending[qKey].comment;
+                        updated[sIdx].questions[qKey].reviewed = true;
                     }
                 });
+                updated[sIdx].reviewed = lastResult.data.studentReviewed;
             }
             return updated;
         });
@@ -195,6 +263,7 @@ export const useReviewLogic = (
     const student = students[currentIndex];
     if (!student) return;
     const qKey = `q${currentQ}`;
+    const original = student.questions[qKey];
     
     setPendingChanges(prev => {
         const newPending = { ...prev };
@@ -207,10 +276,23 @@ export const useReviewLogic = (
         return newPending;
     });
 
-    const original = student.questions[qKey];
     if (original) {
       setEditScore(original.score);
       setEditComment(original.comment);
+      
+      // Restore reviewed status if it was original
+      if (original.reviewed) {
+        setStudents(prev => {
+            const updated = [...prev];
+            const sIdx = updated.findIndex(s => s.folder_name === student.folder_name);
+            if (sIdx !== -1 && updated[sIdx].questions[qKey]) {
+                updated[sIdx].questions[qKey].reviewed = true;
+                const qs = Object.values(updated[sIdx].questions);
+                updated[sIdx].reviewed = qs.filter(q => q.path).every(q => q.reviewed);
+            }
+            return updated;
+        });
+      }
     }
     toast.success(t.changesDiscarded);
   };
@@ -225,6 +307,7 @@ export const useReviewLogic = (
     handleEditChange,
     handleSave,
     handleSaveAll,
+    handleToggleQuestionReviewed,
     handleDiscardChanges
   };
 };

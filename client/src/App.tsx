@@ -71,6 +71,8 @@ const App = () => {
   const [showJsonHelp, setShowJsonHelp] = useState(false);
   const [showOllamaHelp, setShowOllamaHelp] = useState(false);
   const [showZipHelp, setShowZipHelp] = useState(false);
+  const [showEditStudentModal, setShowEditStudentModal] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
   const calculateTotal = (student: Student) => {
     if (!student) return '0.00';
@@ -406,10 +408,73 @@ const App = () => {
             setView={setView}
             fetchStudents={fetchStudents}
             setShowJsonHelp={setShowJsonHelp}
+            setEditingStudent={setEditingStudent}
+            setShowEditStudentModal={setShowEditStudentModal}
             t={t}
           />
         )}
       </main>
+
+      {/* Edit Student Modal */}
+      <Modal
+        isOpen={showEditStudentModal}
+        onClose={() => setShowEditStudentModal(false)}
+        title="Editar Aluno"
+        icon={Settings}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-text-dim mb-2">Nome Completo</label>
+            <input 
+              type="text" 
+              defaultValue={editingStudent?.name || ''}
+              id="edit-name"
+              className="w-full bg-input border border-border-main rounded p-3 text-text-main focus:outline-none focus:border-accent transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-text-dim mb-2">ID (Matrícula)</label>
+            <input 
+              type="text" 
+              defaultValue={editingStudent?.id || ''}
+              id="edit-id"
+              className="w-full bg-input border border-border-main rounded p-3 text-text-main focus:outline-none focus:border-accent transition-all"
+            />
+          </div>
+          <div className="flex gap-4 pt-4">
+            <button 
+              onClick={() => setShowEditStudentModal(false)}
+              className="flex-1 px-4 py-2 border border-border-main text-text-dim hover:bg-button rounded-lg text-xs font-bold uppercase tracking-widest transition-all"
+            >
+              Cancelar
+            </button>
+            <button 
+              onClick={async () => {
+                const name = (document.getElementById('edit-name') as HTMLInputElement).value;
+                const id = (document.getElementById('edit-id') as HTMLInputElement).value;
+                if (editingStudent) {
+                  try {
+                    await api.updateStudent({
+                      turma: editingStudent.turma,
+                      studentId: editingStudent.folder_name,
+                      name,
+                      id
+                    });
+                    toast.success('Aluno atualizado com sucesso');
+                    setShowEditStudentModal(false);
+                    await fetchStudents();
+                  } catch {
+                    toast.error('Erro ao atualizar aluno');
+                  }
+                }
+              }}
+              className="flex-1 px-4 py-2 bg-accent text-black font-black uppercase tracking-widest text-xs rounded-lg active:scale-95 transition-all"
+            >
+              Salvar
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Statement Modal */}
       <Modal

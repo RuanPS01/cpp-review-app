@@ -250,16 +250,28 @@ app.post('/api/import', upload.single('file'), (req, res) => {
         }
         
         const student = studentsMap.get(folder);
+        const hasPath = findCppInDir(path.join(qPath, folder));
         student.questions[`q${qNum}`] = {
           score: 0,
           comment: '',
-          path: findCppInDir(path.join(qPath, folder)),
-          label: qFolder // Store the original folder name as a label
+          path: hasPath,
+          label: qFolder, // Store the original folder name as a label
+          reviewed: !hasPath
         };
       });
     });
 
     const gradesData = Array.from(studentsMap.values());
+    // After initial mapping, check if any student is already fully reviewed (e.g. no code in any question)
+    gradesData.forEach(student => {
+        const questionsWithPath = Object.values(student.questions).filter(q => q.path);
+        if (questionsWithPath.length === 0) {
+            student.reviewed = true;
+        } else {
+            student.reviewed = questionsWithPath.every(q => q.reviewed);
+        }
+    });
+
     fs.writeFileSync(gradesFilePath, JSON.stringify(gradesData, null, 2));
 
     res.json({ success: true, message: `Turma ${turma} imported with ${questionFolders.length} questions detected alphabetically.` });
@@ -280,16 +292,13 @@ app.get('/api/students', (req, res) => {
     const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
     data.forEach(studentData => {
-      // The paths in questions might need to be verified or adjusted if we moved files
-      // But they are absolute from the findCppInDir during import, or relative to DATA_DIR?
-      // Let's keep them absolute for now as determined during import.
-      
       const student = {
         id: studentData.id || studentData.folder_name,
         folder_name: studentData.folder_name,
         name: studentData.name,
         turma: turma,
-        questions: studentData.questions
+        questions: studentData.questions,
+        reviewed: studentData.reviewed || false
       };
       allStudents.push(student);
     });
@@ -312,8 +321,8 @@ app.get('/api/code', (req, res) => {
   }
 });
 
-app.post('/api/update-grade', (req, res) => {
-  const { turma, studentId, questionNum, score, comment } = req.body;
+app.post('/api/update-student', (req, res) => {
+  const { turma, studentId, name, id, reviewed } = req.body;
   const filePath = path.join(DATA_DIR, `grades_turma_${turma}.json`);
 
   if (!fs.existsSync(filePath)) {
@@ -324,13 +333,46 @@ app.post('/api/update-grade', (req, res) => {
   const index = data.findIndex(item => item.folder_name === studentId);
   
   if (index !== -1) {
-    data[index].questions[`q${questionNum}`] = { 
-      ...data[index].questions[`q${questionNum}`], 
-      score, 
-      comment 
-    };
+    if (name !== undefined) data[index].name = name;
+    if (id !== undefined) data[index].id = id;
+    if (reviewed !== undefined) data[index].reviewed = reviewed;
+    
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
     res.json({ success: true });
+  } else {
+    res.status(404).send('Student not found');
+  }
+});
+
+app.post('/api/update-grade', (req, res) => {
+  const { turma, studentId, questionNum, score, comment, reviewed } = req.body;
+  const filePath = path.join(DATA_DIR, `grades_turma_${turma}.json`);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send('Grades file not found');
+  }
+
+  let data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  const index = data.findIndex(item => item.folder_name === studentId);
+  
+  if (index !== -1) {
+    const qKey = `q${questionNum}`;
+    data[index].questions[qKey] = { 
+      ...data[index].questions[qKey], 
+      score, 
+      comment,
+      reviewed: reviewed !== undefined ? reviewed : true
+    };
+    
+    // Check if all questions with a path are reviewed
+    const allQs = Object.values(data[index].questions);
+    const questionsWithPath = allQs.filter(q => q.path);
+    const allReviewed = questionsWithPath.length > 0 && questionsWithPath.every(q => q.reviewed);
+    
+    data[index].reviewed = allReviewed;
+
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    res.json({ success: true, studentReviewed: allReviewed });
   } else {
     res.status(404).send('Student not found');
   }
@@ -466,7 +508,7 @@ app.post('/api/analyze', async (req, res) => {
 
     STRICT INSTRUCTION: Return ONLY a valid JSON object with this structure:
     {
-      "score": <number between 0 and 10>,
+      "score": <number between 0 and 100>,
       "comment": "<constructive feedback string>"
     }
   `;
@@ -528,7 +570,11 @@ app.post('/api/analyze', async (req, res) => {
 
   } catch (err) {
     console.error('AI Analysis Error:', err);
-    res.status(500).json({ error: 'AI analysis failed: ' + err.message });
+    res.status(500).json({ 
+      error: 'AI analysis failed: ' + err.message,
+      fullPrompt: `${systemPrompt}\n\n${userPrompt}`,
+      errorLog: err.stack || err.message
+    });
   }
 });
 
