@@ -87,6 +87,17 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
   } = useReviewLogic(students, currentIndex, currentQ, pendingChanges, setPendingChanges, setStudents, t);
 
   const [showTestResults, setShowTestResults] = useState(false);
+  const [allTestCases, setAllTestCases] = useState<Record<string, any[]>>({});
+
+  useEffect(() => {
+    api.getTestCases(selectedTurma).then(res => setAllTestCases(res.data)).catch(console.error);
+  }, [selectedTurma]);
+
+  useEffect(() => {
+    setShowTestResults(false);
+  }, [currentQ, currentIndex]);
+
+  const hasTestCases = !!allTestCases[`q${currentQ}`]?.length;
 
   const [showStudentList, setShowStudentList] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -523,6 +534,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
                         >
                             <Play size={10} className="fill-current" /> {t.runCode}
                         </button>
+                        {hasTestCases && (
                         <button 
                             onClick={handleRunTests}
                             disabled={runningTests}
@@ -535,6 +547,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
                             {runningTests ? <Loader2 size={10} className="animate-spin" /> : <ClipboardList size={10} />}
                             {runningTests ? t.runningTests : t.runTests}
                         </button>
+                        )}
                         {testResults && (
                             <button 
                                 onClick={() => setShowTestResults(true)}

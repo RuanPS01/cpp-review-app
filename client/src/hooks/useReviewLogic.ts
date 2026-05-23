@@ -87,6 +87,10 @@ export const useReviewLogic = (
     }
   }, [currentIndex, currentQ, students, fetchCode, pendingChanges]);
 
+  useEffect(() => {
+    setTestResults(null);
+  }, [currentIndex, currentQ]);
+
   const handleEditChange = (score: number, comment: string) => {
     const student = students[currentIndex];
     if (!student) return;
