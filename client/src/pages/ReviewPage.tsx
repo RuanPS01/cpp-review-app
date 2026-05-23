@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   ChevronLeft, ChevronRight, Copy, Save, 
-  Sparkles, BookOpen, X, Play, Eye, Info, Trash2,
+  Sparkles, BookOpen, X, Play, Eye, Info, Trash2, Loader2,
   CheckCircle2, List, ClipboardList, AlertCircle, RotateCcw
 } from 'lucide-react';
 import { marked } from 'marked';
@@ -90,8 +90,12 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
   const [allTestCases, setAllTestCases] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
-    api.getTestCases(selectedTurma).then(res => setAllTestCases(res.data)).catch(console.error);
-  }, [selectedTurma]);
+    if (selectedTurma) {
+      api.getTestCases(selectedTurma).then(res => setAllTestCases(res.data)).catch(console.error);
+    } else {
+      setAllTestCases({});
+    }
+  }, [selectedTurma, students.length]);
 
   useEffect(() => {
     setShowTestResults(false);

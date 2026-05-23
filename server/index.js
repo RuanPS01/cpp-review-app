@@ -308,42 +308,66 @@ app.post('/api/import-moodle-cookies', async (req, res) => {
       if (introContent) statements[`q${qNum}`] = introContent;
 
       // Capturar casos de teste automáticos do VPL (pre#codefileid1)
-      const casesMatch = viewHtml.match(/<pre id='codefileid1'[^>]*>([\s\S]*?)<\/pre>/);
+      const casesMatch = viewHtml.match(/<pre[^>]*id=['"]codefileid1['"][^>]*>([\s\S]*?)<\/pre>/i);
       if (casesMatch) {
+        console.log(`[DEBUG] Found test cases tag for Q${qNum}`);
         const rawCases = casesMatch[1].trim();
         const parsed = [];
-        const blocks = rawCases.split(/\n(?=Case\s*=)/i).filter(b => b.trim());
+        // Split por "Case =" considerando que pode ou não haver quebra de linha antes
+        const blocks = rawCases.split(/(?=Case\s*=)/i).filter(b => b.trim());
+        
+        console.log(`[DEBUG] Found ${blocks.length} test case blocks`);
+
         for (const block of blocks) {
           const tc = { name: '', input: '', output: '', gradeReduction: '' };
           const lines = block.split('\n');
-          let currentField = null, buffer = [];
-          const flush = () => { if (currentField && buffer.length) { tc[currentField] = buffer.join('\n').trim(); buffer = []; } };
+          let currentField = null;
+          let buffer = [];
+
+          const flush = () => {
+            if (currentField && buffer.length > 0) {
+              let val = buffer.join('\n').trim();
+              if (currentField === 'output' && val.startsWith('"') && val.endsWith('"')) {
+                val = val.slice(1, -1);
+              }
+              tc[currentField] = val;
+              buffer = [];
+            }
+          };
+
           for (const line of lines) {
-            const low = line.toLowerCase();
-            if (low.startsWith('case')) {
+            const trimmedLine = line.trim();
+            const lowerLine = trimmedLine.toLowerCase();
+
+            if (lowerLine.startsWith('case')) {
               flush();
-              tc.name = line.split('=')[1]?.trim() || '';
-            } else if (low.startsWith('input')) {
+              tc.name = trimmedLine.split('=')[1]?.trim() || '';
+              currentField = null;
+            } else if (lowerLine.startsWith('input')) {
               flush();
               currentField = 'input';
-              buffer.push(line.split('=')[1]?.trim() || '');
-            } else if (low.startsWith('output')) {
+              const val = trimmedLine.split('=')[1]?.trim();
+              if (val !== undefined && val !== '') buffer.push(val);
+            } else if (lowerLine.startsWith('output')) {
               flush();
               currentField = 'output';
-              const val = line.split('=')[1]?.trim() || '';
-              buffer.push(val.startsWith('"') && val.endsWith('"') ? val.slice(1, -1) : val);
-            } else if (low.startsWith('grade reduction')) {
+              const val = trimmedLine.split('=')[1]?.trim();
+              if (val !== undefined && val !== '') buffer.push(val);
+            } else if (lowerLine.startsWith('grade reduction')) {
               flush();
-              tc.gradeReduction = line.split('=')[1]?.trim() || '';
+              tc.gradeReduction = trimmedLine.split('=')[1]?.trim() || '';
               currentField = null;
             } else if (currentField) {
               buffer.push(line);
             }
           }
           flush();
-          parsed.push(tc);
+          if (tc.input || tc.output) parsed.push(tc);
         }
         testCases[`q${qNum}`] = parsed;
+        console.log(`[DEBUG] Successfully parsed ${parsed.length} test cases for Q${qNum}`);
+      } else {
+        console.warn(`[DEBUG] No test cases tag (codefileid1) found for Q${qNum}`);
       }
 
       await smartFetch(listUrl, viewUrl);
