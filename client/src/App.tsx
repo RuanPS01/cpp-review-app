@@ -16,6 +16,7 @@ import SettingsPage from './pages/SettingsPage';
 import ImportPage from './pages/ImportPage';
 import TablePage from './pages/TablePage';
 import ReviewPage from './pages/ReviewPage';
+import MoodleImportWizard from './components/MoodleImportWizard';
 
 const App = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -72,6 +73,7 @@ const App = () => {
   const [showJsonHelp, setShowJsonHelp] = useState(false);
   const [showOllamaHelp, setShowOllamaHelp] = useState(false);
   const [showZipHelp, setShowZipHelp] = useState(false);
+  const [showMoodleModal, setShowMoodleModal] = useState(false);
   const [showEditStudentModal, setShowEditStudentModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
@@ -374,6 +376,7 @@ const App = () => {
             setShowZipHelp={setShowZipHelp} 
             onImportSuccess={fetchStudents} 
             setView={setView} 
+            setShowMoodleModal={setShowMoodleModal}
           />
         ) : view === 'review' ? (
           <ReviewPage 
@@ -416,6 +419,24 @@ const App = () => {
           />
         )}
       </main>
+
+      <Modal
+        isOpen={showMoodleModal}
+        onClose={() => setShowMoodleModal(false)}
+        title={t.importFromMoodle}
+        icon={Plus}
+        maxWidth="max-w-2xl"
+        maxHeight="max-h-[90vh]"
+      >
+        <MoodleImportWizard 
+            t={t} 
+            onSuccess={fetchStudents} 
+            onClose={() => {
+                setShowMoodleModal(false);
+                setView('table');
+            }} 
+        />
+      </Modal>
 
       {/* Edit Student Modal */}
       <Modal

@@ -10,6 +10,7 @@ export interface Student {
   id: string;
   folder_name: string;
   name: string;
+  email?: string;
   turma: string;
   questions: {
     [key: string]: Question;

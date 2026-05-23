@@ -8,9 +8,10 @@ interface ModalProps {
   icon: React.ElementType;
   children: React.ReactNode;
   maxWidth?: string;
+  maxHeight?: string;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, icon: Icon, children, maxWidth = "max-w-2xl" }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, icon: Icon, children, maxWidth = "max-w-2xl", maxHeight = "" }) => {
   const [shouldRender, setShouldRender] = useState(isOpen);
 
   useEffect(() => {
@@ -29,7 +30,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, icon: Icon, child
     <div className={`fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md transition-opacity duration-150 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
       <div 
         onAnimationEnd={handleAnimationEnd}
-        className={`${isOpen ? 'animate-crt-open' : 'animate-crt-close'} bg-panel w-full ${maxWidth} rounded-xl border border-border-main shadow-2xl flex flex-col overflow-hidden transition-colors`}
+        className={`${isOpen ? 'animate-crt-open' : 'animate-crt-close'} bg-panel w-full ${maxWidth} ${maxHeight} rounded-xl border border-border-main shadow-2xl flex flex-col overflow-hidden transition-colors`}
       >
         <div className="p-4 border-b border-border-main flex justify-between items-center bg-header">
           <h3 className="text-sm font-black uppercase tracking-widest text-text-bright flex items-center gap-2">

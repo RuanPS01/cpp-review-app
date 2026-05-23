@@ -45,6 +45,8 @@ export const api = {
   }, signal?: AbortSignal) => axios.post(`${API_BASE}/analyze`, data, { signal }),
   deleteTurma: (turmaName: string) => axios.delete(`${API_BASE}/turma/${turmaName}`),
   importTurma: (formData: FormData) => axios.post(`${API_BASE}/import`, formData),
+  importMoodle: (data: any) => axios.post(`${API_BASE}/import-moodle`, data),
+  importMoodleCookies: (data: any) => axios.post(`${API_BASE}/import-moodle-cookies`, data),
   importGrades: (turma: string, grades: any) => axios.post(`${API_BASE}/import-grades`, { turma, grades }),
   exportGrades: (turma: string) => axios.get(`${API_BASE}/export-grades/${turma}`),
 };

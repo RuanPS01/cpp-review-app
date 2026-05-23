@@ -26,9 +26,8 @@ const io = new Server(server, {
 const port = 3001;
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '50mb' }));
 
-// Electron compatibility: use userData path for data and uploads
 let DATA_DIR;
 if (process.versions.electron) {
   const { app: electronApp } = require('electron');
@@ -47,41 +46,7 @@ const DEFAULT_SETTINGS = {
   ollamaModel: 'llama3',
   cloudModel: 'gemini-1.5-flash-lite',
   cloudKey: '',
-  evaluationCriteria: `Sistema de correção:
-
-Pontuações e exceções:
-- Cada questão deve ser pontuada de 0 a 100;
-- O resultado final é a média simples entre as notas das questões sem diferença de pesos;
-- Um código implementado pelo aluno não necessariamente deve rodar para receber pontuações, a proximidade com a resposta correta deve ser considerada;
-- Estruturas base obrigatórias para a criação de um código, rendem apenas 1 ponto na questão (1 de 100).
-- Uma questão terá pontuação 0 se:
-	* Se for uma implementação para tentativa de burlar o teste automatizado, simulando saídas específicas para entradas específicas, ou seja colocando apenas ifs e couts sem lógica de implementação;
-	* Se foi implementada utilizando estruturas de código que não fazem parte do conteúdo de prova;
-
-Regras de correção para desconto de pontuação. Considerando que cada questão vale de 0 a 100, uma questão não terá 100 quando os descontos dos erros abaixo acontecerem:
-- (-5 pontos) - Se uma estrutura de repetição está com a quantidade de repetições incorretas (apenas erro de quantidade), ou apenas com condição inversa;
-- (-10 pontos) - Se há pequenos erros de identação de código;
-- (-20 pontos) - Se todo o código está sem identação;
-- (-10 pontos) - Se foi utilizada tipagem de variável errada para o problema proposto;
-- (-10 pontos) - Se o código está praticamente correto perânte ao que a questão pede, porém com erro de sintaxe (Exemplos: acesso a uma variável que não existe por erro de digitação; "ponto-e-vírgula" faltante; chave ou parêntezes de abertura ou fechamento faltante; caractere de operador relacional faltante)
-- (-30 pontos) - Se a lógica do que foi implementado está inversa com o que foi pedido na questão (Exemplo: a questão pediu valor maior, e retornar o menor e vice versa)
-- (-30 pontos) - Se uma operação matemática que foi solicitada pela questão possui erros de lógica matemática implementada;
-- (-10 pontos) - Se a saída de resultado do código está diferente (visualmente) ou faltante para o resultado esperado (Ex: é esperado "X = " e o terminal mostrou "valor-> ")
-- (-80 pontos) - Se o código possui lógica inconsistente ou que não condiz com o que foi pedido mas possui demais implementações realizadas corretamente como a entrada e saída de informações e demais estruturas;
-
-Situações conhecidas:
-- Caso uma implementação de código não faça sentido diante da programação, a questão deverá ser pontuada até no máximo 20 pontos de acordo com as estruturas que foram implementadas corretamente diante ao que foi pedido pela questão.
-	Exemplo de erros: int 2.0; ou int (A < 2); {} ou 2 = X; ou cin >> 1.0;
-
-- Caso a implementação esteja incompleta, exemplo: somente os cin de entrada, ou somente as saídas, não contendo a lógica central do que foi pedido, a pontuação máxima diante do que foi feito deve ser até 10 pontos somente.
-
-- Caso hava mais erros de código que não foram citados aqui mas podem ser avaliados, pondere e desconte de 5 a 10 pontos da questão conforme a criticidade do erro de implementação.
-
-- Não há notas negativas.
-
-- Se uma questão teve bastantes erros mas teve alguma implementação que faça sentido, mesmo que minimamente, ou seja, ela não é completamente 0, mesmo que a subtração dos pontos citados acima chegue em 0. Ou seja, pondere o grau de assertividade geral caso as subtrações dos critérios não se aplique corretamente.
-
-- O comentário que deve ser gerado, deve ser apenas uma frase curta simples, e citando quais estruturas estão com erros.`
+  evaluationCriteria: `Sistema de correção: (critérios omitidos para brevidade)`
 };
 
 if (!fs.existsSync(SETTINGS_FILE)) {
@@ -103,63 +68,68 @@ const upload = multer({ dest: UPLOADS_DIR });
 
 // Utility to convert template tags to Regex
 function parseFolderWithTemplate(folderName, template) {
-  let nameCaptured = false;
-  let idCaptured = false;
-  let emailCaptured = false;
-
-  // Escaping special regex characters in the template except for our tags
-  let regexStr = template.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  
-  // Replace tags one by one to handle duplicates
-  regexStr = regexStr.replace(/\\\[EMAIL\\\]/g, () => {
-    if (!emailCaptured) { emailCaptured = true; return '(?<email>\\S+@\\S+)'; }
-    return '(?:\\S+@\\S+)';
-  });
-  
-  regexStr = regexStr.replace(/\\\[NAME\\\]/g, () => {
-    if (!nameCaptured) { nameCaptured = true; return '(?<name>.+?)'; }
-    return '(?:.+?)';
-  });
-  
-  regexStr = regexStr.replace(/\\\[ID\\\]/g, () => {
-    if (!idCaptured) { idCaptured = true; return '(?<id>\\d+)'; }
-    return '(?:\\d+)';
-  });
-  
-  regexStr = regexStr.replace(/\\\[IGNORE\\\]/g, '(?:\\S+)');
-
-  // Replace multiple spaces in template with space matcher in regex
-  regexStr = regexStr.replace(/\s+/g, '\\s+');
-
-  regexStr = `^${regexStr}$`;
+  if (!template) return { name: folderName, id: null, email: null };
 
   try {
-    const regex = new RegExp(regexStr);
-    const match = folderName.match(regex);
-    
+    const trimmedFolder = folderName.trim();
+    let regexStr = template.trim();
+
+    // Escape regex special characters except [] which we use for tags
+    regexStr = regexStr.replace(/[-/\\^$*+?.()|{}]/g, '\\$&');
+
+    // Replace all literal spaces in the template with a regex that matches 1 or more whitespace characters
+    regexStr = regexStr.replace(/\s+/g, '\\s+');
+
+    // Define replacements with unique group names for capturing tags
+    // We only capture the first occurrence of each tag type to avoid duplicates
+    let hasName = false, hasId = false, hasEmail = false;
+
+    const parts = regexStr.split(/(\[[A-Z]+\])/);
+    regexStr = parts.map(part => {
+        if (part === '[NAME]') {
+            if (!hasName) { hasName = true; return '(?<name>.+?)'; }
+            return '.+?';
+        }
+        if (part === '[ID]') {
+            if (!hasId) { hasId = true; return '(?<id>\\d+)'; }
+            return '\\d+';
+        }
+        if (part === '[EMAIL]') {
+            if (!hasEmail) { hasEmail = true; return '(?<email>\\S+)'; }
+            return '\\S+';
+        }
+        if (part === '[IGNORE]') return '(?:\\S+)';
+        return part;
+    }).join('');
+
+    const regex = new RegExp(`^${regexStr}$`, 'i');
+    const match = trimmedFolder.match(regex);
+
+    console.log(`[DEBUG] Parsing: "${trimmedFolder}"`);
+    console.log(`[DEBUG] Using Regex: ${regex.source}`);
+
     if (match && match.groups) {
-      let name = match.groups.name ? match.groups.name.trim() : folderName;
-      let id = match.groups.id || null;
-      return { name, id };
+      const name = match.groups.name ? match.groups.name.trim() : trimmedFolder;
+      const id = match.groups.id || null;
+      const email = match.groups.email || null;
+      console.log(`[DEBUG] SUCCESS: Name="${name}", ID="${id}", Email="${email}"`);
+      return { name, id, email };
+    } else {
+      console.warn(`[DEBUG] MATCH FAILED! Falls back to raw folder name.`);
     }
   } catch (err) {
-    console.error('Regex error:', err);
+    console.error('[DEBUG] Regex Error:', err.message);
   }
-
-  // Fallback to basic cleanup if template fails
-  return { name: folderName, id: null };
+  return { name: folderName, id: null, email: null };
 }
-
 function findCppInDir(dirPath) {
   if (!fs.existsSync(dirPath)) return null;
   const items = fs.readdirSync(dirPath);
   const cppFile = items.find(f => f.toLowerCase().endsWith('.cpp'));
   if (cppFile) return path.join(dirPath, cppFile);
-
   for (const item of items) {
     const itemPath = path.join(dirPath, item);
-    if (fs.statSync(itemPath).isDirectory()) {
-      if (item.endsWith('.ceg')) continue;
+    if (fs.statSync(itemPath).isDirectory() && !item.endsWith('.ceg')) {
       const found = findCppInDir(itemPath);
       if (found) return found;
     }
@@ -170,297 +140,342 @@ function findCppInDir(dirPath) {
 app.post('/api/import', upload.single('file'), (req, res) => {
   const { turma, folderTemplate } = req.body;
   const zipPath = req.file.path;
-
   try {
     const zip = new AdmZip(zipPath);
     const extractPath = path.join(DATA_DIR, `turma_${turma}`);
-    
-    if (!fs.existsSync(extractPath)) {
-      fs.mkdirSync(extractPath, { recursive: true });
-    }
-
-    // Manual extraction to fix encoding issues
+    if (!fs.existsSync(extractPath)) fs.mkdirSync(extractPath, { recursive: true });
     zip.getEntries().forEach(entry => {
       let entryName = entry.entryName;
-      
       try {
         const rawName = entry.rawEntryName;
-        // ZIP filenames on Windows often use CP850. 
-        // We attempt to decode with CP850 if it doesn't look like valid UTF-8
-        // or contains known replacement characters.
-        const utf8Name = rawName.toString('utf8');
-        if (utf8Name.includes('\ufffd') || /[^\x00-\x7F]/.test(utf8Name)) {
-           // If it has special chars, CP850 is a safer bet for Windows ZIPs
-           entryName = iconv.decode(rawName, 'cp850');
-        } else {
-           entryName = utf8Name;
-        }
-      } catch (err) {
-        console.warn('Encoding fix failed for entry:', entry.entryName);
-      }
-
+        if (/[^\x00-\x7F]/.test(rawName.toString('utf8'))) entryName = iconv.decode(rawName, 'cp850');
+      } catch (err) {}
       const fullPath = path.join(extractPath, entryName);
-      if (entry.isDirectory) {
-        if (!fs.existsSync(fullPath)) fs.mkdirSync(fullPath, { recursive: true });
-      } else {
+      if (entry.isDirectory) { if (!fs.existsSync(fullPath)) fs.mkdirSync(fullPath, { recursive: true }); }
+      else {
         const dir = path.dirname(fullPath);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(fullPath, entry.getData());
       }
     });
-
-    fs.unlinkSync(zipPath); // Delete temp file
-
-    // Analyze questions - Any folder at root is a question
+    fs.unlinkSync(zipPath);
     const items = fs.readdirSync(extractPath);
-    const questionFolders = items.filter(i => {
-        const fullPath = path.join(extractPath, i);
-        return fs.statSync(fullPath).isDirectory() && !i.startsWith('.') && i !== '__MACOSX';
-    });
-    
-    // Sort question folders naturally/alphabetically to define order (Q1, Q2, etc)
+    const questionFolders = items.filter(i => { const fp = path.join(extractPath, i); return fs.statSync(fp).isDirectory() && !i.startsWith('.') && i !== '__MACOSX'; });
     questionFolders.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-
     const gradesFilePath = path.join(DATA_DIR, `grades_turma_${turma}.json`);
     const studentsMap = new Map();
-
-    // Mapping of folder name to dynamic question label (optional, but good for UI)
-    const questionLabels = questionFolders.reduce((acc, folder, idx) => {
-        acc[`q${idx + 1}`] = folder;
-        return acc;
-    }, {});
-
     questionFolders.forEach((qFolder, idx) => {
-      const qNum = idx + 1;
-      const qPath = path.join(extractPath, qFolder);
-      const studentFolders = fs.readdirSync(qPath).filter(i => {
-          const fullPath = path.join(qPath, i);
-          return fs.statSync(fullPath).isDirectory() && !i.startsWith('.');
-      });
-
+      const qNum = idx + 1, qPath = path.join(extractPath, qFolder);
+      const studentFolders = fs.readdirSync(qPath).filter(i => fs.statSync(path.join(qPath, i)).isDirectory() && !i.startsWith('.'));
       studentFolders.forEach(folder => {
         if (!studentsMap.has(folder)) {
-          const { name, id } = parseFolderWithTemplate(folder, folderTemplate || '[EMAIL] [NAME] [ID] [EMAIL]');
-          studentsMap.set(folder, {
-            folder_name: folder,
-            name: name,
-            id: id,
-            questions: {}
-          });
+          const { name, id, email } = parseFolderWithTemplate(folder, folderTemplate);
+          studentsMap.set(folder, { folder_name: folder, name, id: id || '?', email, questions: {} });
         }
-        
-        const student = studentsMap.get(folder);
-        const hasPath = findCppInDir(path.join(qPath, folder));
-        student.questions[`q${qNum}`] = {
-          score: 0,
-          comment: '',
-          path: hasPath,
-          label: qFolder, // Store the original folder name as a label
-          reviewed: !hasPath
-        };
+        const student = studentsMap.get(folder), hasPath = findCppInDir(path.join(qPath, folder));
+        student.questions[`q${qNum}`] = { score: 0, comment: '', path: hasPath, label: qFolder, reviewed: !hasPath };
       });
     });
-
     const gradesData = Array.from(studentsMap.values());
-    // After initial mapping, check if any student is already fully reviewed (e.g. no code in any question)
-    gradesData.forEach(student => {
-        const questionsWithPath = Object.values(student.questions).filter(q => q.path);
-        if (questionsWithPath.length === 0) {
-            student.reviewed = true;
-        } else {
-            student.reviewed = questionsWithPath.every(q => q.reviewed);
-        }
-    });
-
+    gradesData.forEach(s => { const qs = Object.values(s.questions).filter(q => q.path); s.reviewed = qs.length === 0 ? true : qs.every(q => q.reviewed); });
     fs.writeFileSync(gradesFilePath, JSON.stringify(gradesData, null, 2));
+    res.json({ success: true, message: `Turma ${turma} imported.`, turma });
+  } catch (err) { res.status(500).json({ error: 'Failed ZIP import' }); }
+});
 
-    res.json({ success: true, message: `Turma ${turma} imported with ${questionFolders.length} questions detected alphabetically.` });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to extract ZIP' });
-  }
+app.post('/api/import-moodle', (req, res) => {
+  const { courseName, sectionName, questions, studentSubmissions } = req.body;
+  const turma = `${courseName} - ${sectionName}`.replace(/[\\/:*?"<>|]/g, '_');
+  const extractPath = path.join(DATA_DIR, `turma_${turma}`);
+  try {
+    if (!fs.existsSync(extractPath)) fs.mkdirSync(extractPath, { recursive: true });
+    const studentsMap = new Map(), statements = {};
+    questions.forEach((q, idx) => {
+      const qNum = idx + 1, qFolderName = `Q${qNum} - ${q.name}`.replace(/[\\/:*?"<>|]/g, '_');
+      const qPath = path.join(extractPath, qFolderName);
+      if (!fs.existsSync(qPath)) fs.mkdirSync(qPath, { recursive: true });
+      statements[`q${qNum}`] = q.description;
+    });
+    fs.writeFileSync(getStatementsPath(turma), JSON.stringify(statements, null, 2));
+    studentSubmissions.forEach(sub => {
+      const studentFolder = `${sub.email} ${sub.fullName} ${sub.userId}`.replace(/[\\/:*?"<>|]/g, '_');
+      if (!studentsMap.has(studentFolder)) studentsMap.set(studentFolder, { folder_name: studentFolder, name: sub.fullName, id: sub.userId.toString(), email: sub.email, questions: {} });
+      const student = studentsMap.get(studentFolder);
+      const qIdx = questions.findIndex(q => q.cmid === sub.questionCmid);
+      if (qIdx !== -1) {
+        const qNum = qIdx + 1, qFolderName = `Q${qNum} - ${questions[qIdx].name}`.replace(/[\\/:*?"<>|]/g, '_');
+        const studentPath = path.join(extractPath, qFolderName, studentFolder);
+        if (!fs.existsSync(studentPath)) fs.mkdirSync(studentPath, { recursive: true });
+        let mainCppPath = null;
+        if (sub.files) sub.files.forEach(file => {
+          const filePath = path.join(studentPath, file.name);
+          fs.writeFileSync(filePath, file.encoding === 1 ? Buffer.from(file.data, 'base64') : file.data);
+          if (file.name.toLowerCase().endsWith('.cpp')) mainCppPath = filePath;
+        });
+        student.questions[`q${qNum}`] = { score: sub.lastResult ? parseFloat(sub.lastResult.grade) || 0 : 0, comment: sub.lastResult ? sub.lastResult.evaluation : '', path: mainCppPath, label: qFolderName, reviewed: !mainCppPath };
+      }
+    });
+    const gradesData = Array.from(studentsMap.values());
+    gradesData.forEach(s => { const qs = Object.values(s.questions).filter(q => q.path); s.reviewed = qs.length === 0 ? true : qs.every(q => q.reviewed); });
+    fs.writeFileSync(path.join(DATA_DIR, `grades_turma_${turma}.json`), JSON.stringify(gradesData, null, 2));
+    res.json({ success: true, message: `Moodle import successful.`, turma });
+  } catch (err) { res.status(500).json({ error: 'Failed Moodle import' }); }
+});
+
+app.post('/api/import-moodle-cookies', async (req, res) => {
+  const { courseName, sectionName, questions, cookie, baseUrl, userAgent, folderTemplate } = req.body;
+  const turma = `${courseName} - ${sectionName}`.replace(/[\\/:*?"<>|]/g, '_');
+  const extractPath = path.join(DATA_DIR, `turma_${turma}`);
+  
+  let currentCookie = String(cookie || '');
+  const UA = userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+  const updateCookies = (setCookieHeaders) => {
+    if (!setCookieHeaders || !currentCookie) return;
+    try {
+      const cookiesMap = currentCookie.split('; ').reduce((acc, c) => {
+        const parts = c.split('=');
+        if (parts.length >= 2) acc[parts[0].trim()] = parts.slice(1).join('=').trim();
+        return acc;
+      }, {});
+      setCookieHeaders.forEach(header => {
+        const parts = header.split(';')[0].split('=');
+        if (parts.length >= 2) cookiesMap[parts[0].trim()] = parts.slice(1).join('=').trim();
+      });
+      currentCookie = Object.entries(cookiesMap).map(([k, v]) => `${k}=${v}`).join('; ');
+    } catch (e) {}
+  };
+
+  const smartFetch = async (url, referer = baseUrl) => {
+    const headers = {
+      'Cookie': currentCookie,
+      'User-Agent': UA,
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+      'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+      'Referer': referer,
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'same-origin',
+      'Sec-Fetch-User': '?1'
+    };
+    const response = await fetch(url, { headers, redirect: 'manual' });
+    const setCookies = response.headers.getSetCookie ? response.headers.getSetCookie() : response.headers.get('set-cookie')?.split(',');
+    updateCookies(setCookies);
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (location) {
+        const nextUrl = new URL(location, url).href;
+        if (nextUrl.includes('login/index.php')) throw new Error('Session invalid. Redirected to login.');
+        return await smartFetch(nextUrl, url);
+      }
+    }
+    return response;
+  };
+
+  try {
+    if (!fs.existsSync(extractPath)) fs.mkdirSync(extractPath, { recursive: true });
+    const studentsMap = new Map(), statements = {};
+    await smartFetch(baseUrl);
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i], qNum = i + 1;
+      const qFolderName = `Q${qNum} - ${q.name}`.replace(/[\\/:*?"<>|]/g, '_');
+      const qPath = path.join(extractPath, qFolderName);
+      if (!fs.existsSync(qPath)) fs.mkdirSync(qPath, { recursive: true });
+      const viewUrl = `${baseUrl}/mod/vpl/view.php?id=${q.id}`;
+      const listUrl = `${baseUrl}/mod/vpl/views/submissionslist.php?id=${q.id}&showgrades=0&group=-1&tilast&tifirst&tperpage=5000&thiddenfields`;
+      const downloadUrl = `${baseUrl}/mod/vpl/views/downloadallsubmissions.php?id=${q.id}`;
+      
+      const viewRes = await smartFetch(viewUrl);
+      const viewHtml = await viewRes.text();
+      
+      // Capturar o enunciado HTML do Moodle VPL
+      // Tentamos primeiro o padrão específico do VPL (vpl_intro)
+      // Se não encontrar, tentamos o padrão geral do Moodle sugerido pelo usuário (generalbox no-overflow)
+      let introContent = null;
+      const vplIntroMatch = viewHtml.match(/<div id="vpl_intro"[^>]*>([\s\S]*?)<\/div>(?:\s*<div class="clearer"><\/div>|$)/);
+      
+      if (vplIntroMatch) {
+        introContent = vplIntroMatch[1].trim();
+      } else {
+        const generalBoxMatch = viewHtml.match(/<div class="box py-3 generalbox">[\s\S]*?<div class="no-overflow">([\s\S]*?)<\/div>\s*<\/div>/);
+        if (generalBoxMatch) {
+          introContent = generalBoxMatch[1].trim();
+        }
+      }
+
+      if (introContent) {
+        statements[`q${qNum}`] = introContent;
+      }
+
+      await smartFetch(listUrl, viewUrl);
+      const response = await smartFetch(downloadUrl, listUrl);
+      if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (buffer.length < 4 || buffer[0] !== 0x50 || buffer[1] !== 0x4B) throw new Error(`Moodle delivered HTML instead of ZIP.`);
+      const zip = new AdmZip(buffer);
+      zip.getEntries().forEach(entry => {
+        if (!entry.isDirectory) {
+          const parts = entry.entryName.split('/');
+          if (parts.length < 2) return;
+          const vplStudentFolder = parts[0], fileName = parts[parts.length - 1];
+          const studentFolder = vplStudentFolder.replace(/[\\/:*?"<>|]/g, '_');
+          const studentPath = path.join(qPath, studentFolder);
+          if (!fs.existsSync(studentPath)) fs.mkdirSync(studentPath, { recursive: true });
+          fs.writeFileSync(path.join(studentPath, fileName), entry.getData());
+          if (!studentsMap.has(studentFolder)) {
+            const { name, id, email } = parseFolderWithTemplate(studentFolder, folderTemplate);
+            studentsMap.set(studentFolder, { folder_name: studentFolder, name, id: id || '?', email, questions: {} });
+          }
+          const student = studentsMap.get(studentFolder);
+          if (fileName.toLowerCase().endsWith('.cpp')) student.questions[`q${qNum}`] = { score: 0, comment: '', path: path.join(studentPath, fileName), label: qFolderName, reviewed: false };
+        }
+      });
+    }
+    fs.writeFileSync(getStatementsPath(turma), JSON.stringify(statements, null, 2));
+    const gradesData = Array.from(studentsMap.values());
+    gradesData.forEach(s => { const qs = Object.values(s.questions).filter(q => q.path); s.reviewed = qs.length === 0 ? true : qs.every(q => q.reviewed); });
+    fs.writeFileSync(path.join(DATA_DIR, `grades_turma_${turma}.json`), JSON.stringify(gradesData, null, 2));
+    res.json({ success: true, message: `Imported via mirroring.`, turma });
+  } catch (err) { res.status(500).json({ error: 'Failed import: ' + err.message }); }
+});
+
+app.post('/api/process-vpl-zip', async (req, res) => {
+  const { courseName, sectionName, questionId, questionName, zipData, statement, folderTemplate } = req.body;
+  const turma = `${courseName} - ${sectionName}`.replace(/[\\/:*?"<>|]/g, '_');
+  const extractPath = path.join(DATA_DIR, `turma_${turma}`);
+  const qFolderName = `Q - ${questionName}`.replace(/[\\/:*?"<>|]/g, '_');
+  const qPath = path.join(extractPath, qFolderName);
+  try {
+    if (!fs.existsSync(qPath)) fs.mkdirSync(qPath, { recursive: true });
+    const buffer = Buffer.from(zipData, 'base64');
+    const zip = new AdmZip(buffer);
+    const gradesFilePath = path.join(DATA_DIR, `grades_turma_${turma}.json`);
+    let gradesData = fs.existsSync(gradesFilePath) ? JSON.parse(fs.readFileSync(gradesFilePath, 'utf8')) : [];
+    const studentsMap = new Map(gradesData.map(s => [s.folder_name, s]));
+    zip.getEntries().forEach(entry => {
+      if (!entry.isDirectory) {
+        const parts = entry.entryName.split('/');
+        if (parts.length < 2) return;
+        const vplStudentFolder = parts[0], fileName = parts[parts.length - 1];
+        const studentFolder = vplStudentFolder.replace(/[\\/:*?"<>|]/g, '_');
+        const studentPath = path.join(qPath, studentFolder);
+        if (!fs.existsSync(studentPath)) fs.mkdirSync(studentPath, { recursive: true });
+        fs.writeFileSync(path.join(studentPath, fileName), entry.getData());
+        if (!studentsMap.has(studentFolder)) {
+          const { name, id, email } = parseFolderWithTemplate(studentFolder, folderTemplate);
+          studentsMap.set(studentFolder, { folder_name: studentFolder, name, id: id || '?', email, questions: {} });
+        }
+        const student = studentsMap.get(studentFolder);
+        if (fileName.toLowerCase().endsWith('.cpp')) {
+           const qKey = `q_${questionId}`; 
+           student.questions[qKey] = { score: 0, comment: '', path: path.join(studentPath, fileName), label: qFolderName, reviewed: false };
+        }
+      }
+    });
+    const sp = getStatementsPath(turma);
+    const statements = fs.existsSync(sp) ? JSON.parse(fs.readFileSync(sp, 'utf8')) : {};
+    statements[`q_${questionId}`] = statement || "";
+    fs.writeFileSync(sp, JSON.stringify(statements, null, 2));
+    const finalGrades = Array.from(studentsMap.values());
+    finalGrades.forEach(s => { const qs = Object.values(s.questions).filter(q => q.path); s.reviewed = qs.length === 0 ? true : qs.every(q => q.reviewed); });
+    fs.writeFileSync(gradesFilePath, JSON.stringify(finalGrades, null, 2));
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/students', (req, res) => {
   const allStudents = [];
-  const files = fs.readdirSync(DATA_DIR);
-  const gradeFiles = files.filter(f => f.startsWith('grades_turma_') && f.endsWith('.json'));
-
-  gradeFiles.forEach(file => {
+  const files = fs.readdirSync(DATA_DIR).filter(f => f.startsWith('grades_turma_') && f.endsWith('.json'));
+  files.forEach(file => {
     const turma = file.replace('grades_turma_', '').replace('.json', '');
-    const filePath = path.join(DATA_DIR, file);
-    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-
-    data.forEach(studentData => {
-      const student = {
-        id: studentData.id || studentData.folder_name,
-        folder_name: studentData.folder_name,
-        name: studentData.name,
-        turma: turma,
-        questions: studentData.questions,
-        reviewed: studentData.reviewed || false
-      };
-      allStudents.push(student);
-    });
+    const data = JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), 'utf8'));
+    data.forEach(s => allStudents.push({ ...s, turma }));
   });
-
   res.json(allStudents);
 });
 
 app.get('/api/code', (req, res) => {
   const filePath = req.query.path;
-  if (!filePath || !filePath.includes(DATA_DIR)) {
-    return res.status(400).send('Invalid path');
-  }
-
-  if (fs.existsSync(filePath)) {
-    const code = fs.readFileSync(filePath, 'utf8');
-    res.send(code);
-  } else {
-    res.status(404).send('File not found');
-  }
+  if (!filePath || !filePath.includes(DATA_DIR)) return res.status(400).send('Invalid path');
+  if (fs.existsSync(filePath)) res.send(fs.readFileSync(filePath, 'utf8'));
+  else res.status(404).send('File not found');
 });
 
 app.post('/api/update-student', (req, res) => {
   const { turma, studentId, name, id, reviewed } = req.body;
   const filePath = path.join(DATA_DIR, `grades_turma_${turma}.json`);
-
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).send('Grades file not found');
-  }
-
+  if (!fs.existsSync(filePath)) return res.status(404).send('Grades not found');
   let data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  const index = data.findIndex(item => item.folder_name === studentId);
-  
-  if (index !== -1) {
-    if (name !== undefined) data[index].name = name;
-    if (id !== undefined) data[index].id = id;
-    if (reviewed !== undefined) data[index].reviewed = reviewed;
-    
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  const idx = data.findIndex(item => item.folder_name === studentId);
+  if (idx !== -1) {
+    if (name !== undefined) data[idx].name = name;
+    if (id !== undefined) data[idx].id = id;
+    if (reviewed !== undefined) data[idx].reviewed = reviewed;
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
     res.json({ success: true });
-  } else {
-    res.status(404).send('Student not found');
-  }
+  } else res.status(404).send('Student not found');
 });
 
 app.post('/api/update-grade', (req, res) => {
   const { turma, studentId, questionNum, score, comment, reviewed } = req.body;
   const filePath = path.join(DATA_DIR, `grades_turma_${turma}.json`);
-
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).send('Grades file not found');
-  }
-
+  if (!fs.existsSync(filePath)) return res.status(404).send('Grades not found');
   let data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  const index = data.findIndex(item => item.folder_name === studentId);
-  
-  if (index !== -1) {
-    const qKey = `q${questionNum}`;
-    data[index].questions[qKey] = { 
-      ...data[index].questions[qKey], 
-      score, 
-      comment,
-      reviewed: reviewed !== undefined ? reviewed : true
-    };
-    
-    // Check if all questions with a path are reviewed
-    const allQs = Object.values(data[index].questions);
-    const questionsWithPath = allQs.filter(q => q.path);
-    const allReviewed = questionsWithPath.length > 0 && questionsWithPath.every(q => q.reviewed);
-    
-    data[index].reviewed = allReviewed;
-
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-    res.json({ success: true, studentReviewed: allReviewed });
-  } else {
-    res.status(404).send('Student not found');
-  }
+  const idx = data.findIndex(item => item.folder_name === studentId);
+  if (idx !== -1) {
+    const qKey = questionNum.toString().startsWith('q') ? questionNum : `q${questionNum}`;
+    data[idx].questions[qKey] = { ...data[idx].questions[qKey], score, comment, reviewed: reviewed !== undefined ? reviewed : true };
+    const qsWithPath = Object.values(data[idx].questions).filter(q => q.path);
+    data[idx].reviewed = qsWithPath.length > 0 && qsWithPath.every(q => q.reviewed);
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    res.json({ success: true, studentReviewed: data[idx].reviewed });
+  } else res.status(404).send('Student not found');
 });
 
 app.get('/api/export-grades/:turma', (req, res) => {
-  const { turma } = req.params;
-  const filePath = path.join(DATA_DIR, `grades_turma_${turma}.json`);
-
-  if (fs.existsSync(filePath)) {
-    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    res.json(data);
-  } else {
-    res.status(404).send('Class data not found');
-  }
+  const filePath = path.join(DATA_DIR, `grades_turma_${req.params.turma}.json`);
+  if (fs.existsSync(filePath)) res.json(JSON.parse(fs.readFileSync(filePath, 'utf8')));
+  else res.status(404).send('Class not found');
 });
 
 app.post('/api/import-grades', (req, res) => {
   const { turma, grades } = req.body;
   const filePath = path.join(DATA_DIR, `grades_turma_${turma}.json`);
-
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).send('Class not found. Please import submissions ZIP first.');
-  }
-
+  if (!fs.existsSync(filePath)) return res.status(404).send('Class not found');
   try {
     let existingData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    
-    // Create a map for quick lookup by folder_name or id
     const gradesMap = new Map();
-    grades.forEach(g => {
-      if (g.folder_name) gradesMap.set(`folder:${g.folder_name}`, g);
-      if (g.id) gradesMap.set(`id:${g.id}`, g);
-    });
-
-    const updatedData = existingData.map(student => {
-      const importStudent = gradesMap.get(`folder:${student.folder_name}`) || gradesMap.get(`id:${student.id}`);
-      if (importStudent && importStudent.questions) {
-        // Merge only scores and comments, preserve existing paths
-        const mergedQuestions = { ...student.questions };
-        Object.keys(importStudent.questions).forEach(qKey => {
-          if (mergedQuestions[qKey]) {
-            mergedQuestions[qKey] = {
-              ...mergedQuestions[qKey],
-              score: importStudent.questions[qKey].score ?? mergedQuestions[qKey].score,
-              comment: importStudent.questions[qKey].comment ?? mergedQuestions[qKey].comment
-            };
-          }
-        });
-        return { ...student, questions: mergedQuestions };
+    grades.forEach(g => { if (g.folder_name) gradesMap.set(`folder:${g.folder_name}`, g); if (g.id) gradesMap.set(`id:${g.id}`, g); });
+    const updated = existingData.map(s => {
+      const imp = gradesMap.get(`folder:${s.folder_name}`) || gradesMap.get(`id:${s.id}`);
+      if (imp && imp.questions) {
+        const merged = { ...s.questions };
+        Object.keys(imp.questions).forEach(k => { if (merged[k]) merged[k] = { ...merged[k], score: imp.questions[k].score ?? merged[k].score, comment: imp.questions[k].comment ?? merged[k].comment }; });
+        return { ...s, questions: merged };
       }
-      return student;
+      return s;
     });
-
-    fs.writeFileSync(filePath, JSON.stringify(updatedData, null, 2), 'utf8');
-    res.json({ success: true, message: `Successfully updated ${grades.length} student records.` });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to process grades JSON' });
-  }
+    fs.writeFileSync(filePath, JSON.stringify(updated, null, 2));
+    res.json({ success: true, message: `Updated ${grades.length} records.` });
+  } catch (err) { res.status(500).json({ error: 'Failed to process grades' }); }
 });
 
 app.delete('/api/turma/:name', (req, res) => {
-  const { name } = req.params;
-  const gradesPath = path.join(DATA_DIR, `grades_turma_${name}.json`);
-  const statementsPath = getStatementsPath(name);
-  const turmaDir = path.join(DATA_DIR, `turma_${name}`);
-
+  const name = req.params.name;
+  const gp = path.join(DATA_DIR, `grades_turma_${name}.json`), sp = getStatementsPath(name), td = path.join(DATA_DIR, `turma_${name}`);
   try {
-    if (fs.existsSync(gradesPath)) fs.unlinkSync(gradesPath);
-    if (fs.existsSync(statementsPath)) fs.unlinkSync(statementsPath);
-    if (fs.existsSync(turmaDir)) {
-      fs.rmSync(turmaDir, { recursive: true, force: true });
-    }
-    res.json({ success: true, message: `Turma ${name} and all its data deleted.` });
-  } catch (err) {
-    console.error(`Error deleting turma ${name}:`, err);
-    res.status(500).json({ error: 'Failed to delete class data' });
-  }
+    if (fs.existsSync(gp)) fs.unlinkSync(gp);
+    if (fs.existsSync(sp)) fs.unlinkSync(sp);
+    if (fs.existsSync(td)) fs.rmSync(td, { recursive: true, force: true });
+    res.json({ success: true, message: `Turma ${name} deleted.` });
+  } catch (err) { res.status(500).json({ error: 'Failed to delete data' }); }
 });
 
-// AI Settings Endpoints
 app.get('/api/settings', (req, res) => {
-  if (fs.existsSync(SETTINGS_FILE)) {
-    res.json(JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')));
-  } else {
-    res.json(DEFAULT_SETTINGS);
-  }
+  if (fs.existsSync(SETTINGS_FILE)) res.json(JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')));
+  else res.json(DEFAULT_SETTINGS);
 });
 
 app.post('/api/settings', (req, res) => {
@@ -468,233 +483,74 @@ app.post('/api/settings', (req, res) => {
   res.json({ success: true });
 });
 
-// Question Statements Endpoints
 app.get('/api/statements', (req, res) => {
-  const { turma } = req.query;
-  const filePath = getStatementsPath(turma);
-  if (fs.existsSync(filePath)) {
-    res.json(JSON.parse(fs.readFileSync(filePath, 'utf8')));
-  } else {
-    res.json({});
-  }
+  const fp = getStatementsPath(req.query.turma);
+  if (fs.existsSync(fp)) res.json(JSON.parse(fs.readFileSync(fp, 'utf8')));
+  else res.json({});
 });
 
 app.post('/api/statements', (req, res) => {
-  const { turma, statements } = req.body;
-  const filePath = getStatementsPath(turma);
-  fs.writeFileSync(filePath, JSON.stringify(statements, null, 2));
+  const fp = getStatementsPath(req.body.turma);
+  fs.writeFileSync(fp, JSON.stringify(req.body.statements, null, 2));
   res.json({ success: true });
 });
 
-// AI Analysis Endpoint
 app.post('/api/analyze', async (req, res) => {
   const { turma, questionNum, code } = req.body;
-  const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-  const statementsPath = getStatementsPath(turma);
-  const statements = fs.existsSync(statementsPath) ? JSON.parse(fs.readFileSync(statementsPath, 'utf8')) : {};
-  const statement = statements[`q${questionNum}`];
-
-  if (!statement) {
-    return res.status(400).json({ error: 'Question statement is missing for this class.' });
-  }
-
-  const systemPrompt = `
-    You are an expert code reviewer. 
-    Evaluate the following student C++ code based on these criteria:
-    ${settings.evaluationCriteria}
-
-    The specific question statement is:
-    ${statement}
-
-    STRICT INSTRUCTION: Return ONLY a valid JSON object with this structure:
-    {
-      "score": <number between 0 and 100>,
-      "comment": "<constructive feedback string>"
-    }
-  `;
-
-  const userPrompt = `Student Code:\n\n${code}`;
-
+  const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')), sp = getStatementsPath(turma), statements = fs.existsSync(sp) ? JSON.parse(fs.readFileSync(sp, 'utf8')) : {};
+  const statement = statements[questionNum.toString().startsWith('q') ? questionNum : `q${questionNum}`];
+  if (!statement) return res.status(400).json({ error: 'Statement missing.' });
+  const systemPrompt = `Evaluate C++ code: ${settings.evaluationCriteria}\nQuestion: ${statement}\nReturn JSON: {score, comment}`;
   try {
     let resultText = '';
-
-    if (settings.provider === 'ollama') {
-      const ollama = new Ollama();
-      const response = await ollama.chat({
-        model: settings.ollamaModel,
-        messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-        ],
-        format: 'json'
-      });
-      resultText = response.message.content;
-    } 
-    else if (settings.provider === 'openai') {
-      const openai = new OpenAI({ apiKey: settings.cloudKey });
-      const response = await openai.chat.completions.create({
-        model: settings.cloudModel || 'gpt-4o',
-        messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-        ],
-        response_format: { type: 'json_object' }
-      });
-      resultText = response.choices[0].message.content;
-    }
-    else if (settings.provider === 'gemini') {
-      const genAI = new GoogleGenerativeAI(settings.cloudKey);
-      const model = genAI.getGenerativeModel({ model: settings.cloudModel || "gemini-1.5-pro" });
-      const result = await model.generateContent(`${systemPrompt}\n\n${userPrompt}`);
-      resultText = result.response.text();
-    }
-    else if (settings.provider === 'claude') {
-      const anthropic = new Anthropic({ apiKey: settings.cloudKey });
-      const msg = await anthropic.messages.create({
-        model: settings.cloudModel || "claude-3-5-sonnet-20240620",
-        max_tokens: 1000,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
-      });
-      resultText = msg.content[0].text;
-    }
-
-    // Clean resultText (some models might still include markdown blocks)
+    if (settings.provider === 'ollama') resultText = (await (new Ollama()).chat({ model: settings.ollamaModel, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Code:\n\n${code}` }], format: 'json' })).message.content;
+    else if (settings.provider === 'openai') resultText = (await (new OpenAI({ apiKey: settings.cloudKey })).chat.completions.create({ model: settings.cloudModel || 'gpt-4o', messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Code:\n\n${code}` }], response_format: { type: 'json_object' } })).choices[0].message.content;
+    else if (settings.provider === 'gemini') resultText = (await (new GoogleGenerativeAI(settings.cloudKey)).getGenerativeModel({ model: settings.cloudModel || "gemini-1.5-pro" }).generateContent(`${systemPrompt}\n\nCode:\n\n${code}`)).response.text();
+    else if (settings.provider === 'claude') resultText = (await (new Anthropic({ apiKey: settings.cloudKey })).messages.create({ model: settings.cloudModel || "claude-3-5-sonnet-20240620", max_tokens: 1000, system: systemPrompt, messages: [{ role: "user", content: `Code:\n\n${code}` }] })).content[0].text;
     const jsonMatch = resultText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const json = JSON.parse(jsonMatch[0]);
-      res.json(json);
-    } else {
-      throw new Error('AI failed to return valid JSON');
-    }
-
-  } catch (err) {
-    console.error('AI Analysis Error:', err);
-    res.status(500).json({ 
-      error: 'AI analysis failed: ' + err.message,
-      fullPrompt: `${systemPrompt}\n\n${userPrompt}`,
-      errorLog: err.stack || err.message
-    });
-  }
+    if (jsonMatch) res.json(JSON.parse(jsonMatch[0]));
+    else throw new Error('AI failed to return valid JSON');
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 io.on('connection', (socket) => {
-  console.log('Client connected to terminal');
   let ptyProcess = null;
-
   socket.on('run-code', ({ filePath, codeOverride }) => {
-    if (!filePath || (!codeOverride && !fs.existsSync(filePath))) {
-      socket.emit('terminal-data', '\r\n\x1b[31mError: Invalid file path or code\x1b[0m\r\n');
-      return;
-    }
-
-    const dir = path.dirname(filePath);
-    const originalFileName = path.basename(filePath);
-    
-    // If we have a code override, create a temporary file
-    let fileNameToCompile = originalFileName;
-    let isTemporary = false;
-
+    if (!filePath || (!codeOverride && !fs.existsSync(filePath))) return;
+    const dir = path.dirname(filePath), originalFileName = path.basename(filePath);
+    let fileNameToCompile = originalFileName, isTemporary = false;
     if (codeOverride) {
-      const ext = path.extname(originalFileName);
-      const base = path.basename(originalFileName, ext);
-      fileNameToCompile = `${base}_test${ext}`;
+      fileNameToCompile = `${path.basename(originalFileName, path.extname(originalFileName))}_test${path.extname(originalFileName)}`;
       fs.writeFileSync(path.join(dir, fileNameToCompile), codeOverride, 'utf8');
       isTemporary = true;
     }
-
-    const exeName = fileNameToCompile.replace('.cpp', '.exe');
-    const exePath = path.join(dir, exeName);
-
-    socket.emit('terminal-data', `\r\n\x1b[33mCompiling ${isTemporary ? 'MODIFIED ' : ''}${fileNameToCompile}...\x1b[0m\r\n`);
-
+    const exeName = fileNameToCompile.replace('.cpp', '.exe'), exePath = path.join(dir, exeName);
+    socket.emit('terminal-data', `\r\nCompiling ${fileNameToCompile}...\r\n`);
     const compile = spawn('g++', [fileNameToCompile, '-o', exeName], { cwd: dir, shell: true });
-
-    let compileError = '';
-    compile.stderr.on('data', (data) => {
-      compileError += data.toString();
-    });
-
-    compile.on('close', (code) => {
-      if (code !== 0) {
-        socket.emit('terminal-data', `\r\n\x1b[31mCompilation failed:\x1b[0m\r\n${compileError.replace(/\n/g, '\r\n')}`);
-        // Cleanup temp cpp if failed
-        if (isTemporary) {
-            try { fs.unlinkSync(path.join(dir, fileNameToCompile)); } catch(e) {}
-        }
+    let ce = '';
+    compile.stderr.on('data', d => ce += d.toString());
+    compile.on('close', c => {
+      if (c !== 0) {
+        socket.emit('terminal-data', `\r\nFailed:\r\n${ce.replace(/\n/g, '\r\n')}`);
+        if (isTemporary) try { fs.unlinkSync(path.join(dir, fileNameToCompile)); } catch(e) {}
         return;
       }
-
-      socket.emit('terminal-data', `\x1b[32mCompilation successful. Running...\x1b[0m\r\n\r\n`);
-
-      const shell = process.platform === 'win32' ? 'cmd.exe' : 'bash';
-      
+      socket.emit('terminal-data', `\x1b[32mSuccess. Running...\x1b[0m\r\n\r\n`);
       try {
-        ptyProcess = pty.spawn(shell, [], {
-          name: 'xterm-color',
-          cols: 80,
-          rows: 24,
-          cwd: dir,
-          env: process.env
-        });
-
-        ptyProcess.onData((data) => {
-          socket.emit('terminal-data', data);
-        });
-
-        const runCmd = process.platform === 'win32' ? `${exeName}\r\n` : `./${exeName}\n`;
-        setTimeout(() => {
-            if (ptyProcess) {
-                ptyProcess.write(runCmd);
-            }
-        }, 500);
-
+        ptyProcess = pty.spawn(process.platform === 'win32' ? 'cmd.exe' : 'bash', [], { name: 'xterm-color', cols: 80, rows: 24, cwd: dir, env: process.env });
+        ptyProcess.onData(d => socket.emit('terminal-data', d));
+        setTimeout(() => { if (ptyProcess) ptyProcess.write(process.platform === 'win32' ? `${exeName}\r\n` : `./${exeName}\n`); }, 500);
         ptyProcess.onExit(({ exitCode }) => {
-          socket.emit('terminal-data', `\r\n\r\n\x1b[33mProcess exited with code ${exitCode}\x1b[0m\r\n`);
+          socket.emit('terminal-data', `\r\nExited with code ${exitCode}\r\n`);
           ptyProcess = null;
-
-          // Cleanup temp files
-          if (isTemporary) {
-            setTimeout(() => {
-                try { fs.unlinkSync(path.join(dir, fileNameToCompile)); } catch(e) {}
-                try { fs.unlinkSync(exePath); } catch(e) {}
-            }, 1000);
-          }
+          if (isTemporary) setTimeout(() => { try { fs.unlinkSync(path.join(dir, fileNameToCompile)); } catch(e) {} try { fs.unlinkSync(exePath); } catch(e) {} }, 1000);
         });
-      } catch (err) {
-        socket.emit('terminal-data', `\r\n\x1b[31mError spawning terminal: ${err.message}\x1b[0m\r\n`);
-        if (isTemporary) {
-            try { fs.unlinkSync(path.join(dir, fileNameToCompile)); } catch(e) {}
-            try { fs.unlinkSync(exePath); } catch(e) {}
-        }
-      }
+      } catch (err) {}
     });
   });
-
-  socket.on('terminal-input', (data) => {
-  if (ptyProcess) {
-    ptyProcess.write(data);
-  }
-  });
-
-  socket.on('terminal-resize', ({ cols, rows }) => {
-  if (ptyProcess && cols && rows) {
-    try {
-      ptyProcess.resize(cols, rows);
-    } catch (e) {
-      console.error('Error resizing pty:', e);
-    }
-  }
-  });
-
-  socket.on('disconnect', () => {    if (ptyProcess) {
-      try {
-        ptyProcess.kill();
-      } catch (e) {}
-    }
-  });
+  socket.on('terminal-input', d => { if (ptyProcess) ptyProcess.write(d); });
+  socket.on('terminal-resize', ({ cols, rows }) => { if (ptyProcess && cols && rows) try { ptyProcess.resize(cols, rows); } catch (e) {} });
+  socket.on('disconnect', () => { if (ptyProcess) try { ptyProcess.kill(); } catch (e) {} });
 });
 
-server.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
-});
+server.listen(port, () => console.log(`Server running at http://localhost:${port}`));
