@@ -1,14 +1,14 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, session } = require('electron');
 const path = require('path');
 const isDev = !app.isPackaged;
 
 // Start the server
-// We import the server logic. We might need to adjust server/index.js 
-// to ensure it doesn't conflict with Electron or handles paths correctly.
 require('./server/index.js');
 
+let mainWindow;
+
 function createWindow() {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
@@ -54,6 +54,133 @@ app.whenReady().then(() => {
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+// IPC Handler for Moodle Login & Cookie Capture
+ipcMain.handle('open-moodle-login', async (event, moodleUrl, credentials) => {
+  return new Promise((resolve) => {
+    const loginWin = new BrowserWindow({
+      width: 1000,
+      height: 800,
+      parent: mainWindow,
+      modal: true,
+      title: 'Conectando ao Moodle...',
+      autoHideMenuBar: true,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true
+      }
+    });
+
+    loginWin.loadURL(moodleUrl);
+
+    let loginAttempted = false;
+    let isClosed = false;
+
+    const interval = setInterval(async () => {
+      if (isClosed || loginWin.isDestroyed()) {
+        clearInterval(interval);
+        return;
+      }
+      await checkCookies();
+    }, 2000);
+
+    const checkCookies = async () => {
+      if (isClosed || loginWin.isDestroyed()) return;
+
+      try {
+        const currentUrl = loginWin.webContents.getURL();
+        
+        // Auto-fill logic with more robust checks
+        if (currentUrl.includes('login/index.php') && credentials && !loginAttempted) {
+            console.log('[DEBUG] Attempting auto-fill...');
+            await loginWin.webContents.executeJavaScript(`
+                (function() {
+                    const u = document.getElementById('username');
+                    const p = document.getElementById('password');
+                    if (u && p) {
+                        u.value = "${credentials.username}";
+                        p.value = "${credentials.password}";
+                        const btn = document.querySelector('button[type="submit"]') || 
+                                    document.getElementById('loginbtn') || 
+                                    document.querySelector('form input[type="submit"]');
+                        if (btn) {
+                            btn.click();
+                            return true;
+                        }
+                    }
+                    return false;
+                })()
+            `).then(success => {
+                if (success) {
+                    console.log('[DEBUG] Auto-fill submitted.');
+                    loginAttempted = true;
+                }
+            }).catch(e => console.error('[DEBUG] JS Auto-fill error:', e));
+        }
+
+        // Wait until we are NO LONGER on the login page AND have a MoodleSession
+        if (currentUrl.includes('login/index.php') || currentUrl.includes('error=')) {
+            return;
+        }
+
+        const cookies = await loginWin.webContents.session.cookies.get({});
+        const moodleSession = cookies.find(c => c.name === 'MoodleSession');
+        
+        if (moodleSession) {
+          // Extra wait to ensure all tokens are finalized
+          await new Promise(r => setTimeout(r, 1500));
+          
+          if (isClosed || loginWin.isDestroyed()) return;
+
+          const finalCookies = await loginWin.webContents.session.cookies.get({});
+          const cookieString = finalCookies.map(c => `${c.name}=${c.value}`).join('; ');
+          const userAgent = loginWin.webContents.getUserAgent();
+          
+          console.log(`[DEBUG] Session captured successfully from ${currentUrl}`);
+          isClosed = true;
+          clearInterval(interval);
+          resolve({ cookie: cookieString, userAgent });
+          loginWin.close();
+        }
+      } catch (e) {
+        if (!e.message?.includes('destroyed')) {
+            console.error('Error during cookie check:', e);
+        }
+      }
+    };
+
+    loginWin.webContents.on('did-finish-load', checkCookies);
+    loginWin.webContents.on('did-navigate', checkCookies);
+
+    loginWin.on('closed', () => {
+      isClosed = true;
+      clearInterval(interval);
+      resolve(null);
+    });
+  });
+});
+
+ipcMain.handle('moodle-download-zip', async (event, url) => {
+  try {
+    const { net } = require('electron');
+    const response = await session.defaultSession.fetch(url, {
+      method: 'GET',
+      redirect: 'follow'
+    });
+
+    if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
+
+    const buffer = await response.arrayBuffer();
+    return {
+      success: true,
+      data: Buffer.from(buffer).toString('base64'), // Send as base64 to renderer
+      url: response.url
+    };
+  } catch (e) {
+    console.error('Electron Download Error:', e);
+    return { success: false, error: e.message };
+  }
 });
 
 app.on('window-all-closed', function () {
