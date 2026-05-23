@@ -165,7 +165,6 @@ const MoodleImportWizard: React.FC<MoodleImportWizardProps> = ({ t, onSuccess, o
     };
 
     const startImport = async (section: any) => {
-        setSelectedSection(section);
         setStep('PROGRESS');
         setLoading(true);
 

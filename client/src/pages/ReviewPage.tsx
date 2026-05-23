@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   ChevronLeft, ChevronRight, Copy, Save, 
-  Sparkles, BookOpen, X, Play, Eye, Info, Trash2,
+  Sparkles, BookOpen, X, Play, Eye, Info, Trash2, Loader2,
   CheckCircle2, List, ClipboardList, AlertCircle, RotateCcw
 } from 'lucide-react';
 import { marked } from 'marked';
@@ -80,8 +80,28 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
     handleSave,
     handleSaveAll,
     handleToggleQuestionReviewed,
-    handleDiscardChanges
+    handleDiscardChanges,
+    handleRunTests,
+    runningTests,
+    testResults
   } = useReviewLogic(students, currentIndex, currentQ, pendingChanges, setPendingChanges, setStudents, t);
+
+  const [showTestResults, setShowTestResults] = useState(false);
+  const [allTestCases, setAllTestCases] = useState<Record<string, any[]>>({});
+
+  useEffect(() => {
+    if (selectedTurma) {
+      api.getTestCases(selectedTurma).then(res => setAllTestCases(res.data)).catch(console.error);
+    } else {
+      setAllTestCases({});
+    }
+  }, [selectedTurma, students.length]);
+
+  useEffect(() => {
+    setShowTestResults(false);
+  }, [currentQ, currentIndex]);
+
+  const hasTestCases = !!allTestCases[`q${currentQ}`]?.length;
 
   const [showStudentList, setShowStudentList] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -518,12 +538,91 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
                         >
                             <Play size={10} className="fill-current" /> {t.runCode}
                         </button>
+                        {hasTestCases && (
+                        <button 
+                            onClick={handleRunTests}
+                            disabled={runningTests}
+                            className={`flex items-center gap-2 px-3 py-1 rounded text-[10px] font-bold transition-all active:scale-95 shadow-lg ${
+                                runningTests 
+                                ? 'bg-panel text-text-dim cursor-wait' 
+                                : 'bg-button border border-accent/30 text-accent hover:bg-accent hover:text-black hover:border-accent'
+                            }`}
+                        >
+                            {runningTests ? <Loader2 size={10} className="animate-spin" /> : <ClipboardList size={10} />}
+                            {runningTests ? t.runningTests : t.runTests}
+                        </button>
+                        )}
+                        {testResults && (
+                            <button 
+                                onClick={() => setShowTestResults(true)}
+                                className="flex items-center gap-2 bg-accent/20 border border-accent text-accent px-3 py-1 rounded text-[10px] font-bold animate-pulse"
+                            >
+                                <Eye size={10} /> {testResults.filter(r => r.passed).length}/{testResults.length} {t.testResults}
+                            </button>
+                        )}
                         </>
-                    )}
-                </div>
-                </div>
-                <div className="flex-1 flex flex-col overflow-hidden relative monaco-wrapper">
-                    <div className="flex-1 bg-app overflow-hidden">
+                        )}
+                        </div>
+                        </div>
+                        <div className="flex-1 flex flex-col overflow-hidden relative monaco-wrapper">
+                        {showTestResults && testResults && (
+                        <div className="absolute inset-0 z-20 bg-app/95 backdrop-blur-md p-6 flex flex-col animate-in fade-in zoom-in duration-200">
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h3 className="text-lg font-black uppercase tracking-tighter text-accent flex items-center gap-2">
+                                        <ClipboardList size={24} /> {t.testResults}
+                                    </h3>
+                                    <p className="text-[10px] font-bold text-text-dim uppercase tracking-widest">{t.vplTestCasesNote}</p>
+                                </div>
+                                <button onClick={() => setShowTestResults(false)} className="p-2 hover:bg-button rounded-full text-text-dim hover:text-red-500 transition-all">
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-auto rounded-xl border border-border-main bg-panel shadow-2xl">
+                                <table className="w-full border-collapse">
+                                    <thead className="sticky top-0 bg-button/50 backdrop-blur-md z-10">
+                                        <tr className="text-[10px] font-black uppercase tracking-widest text-text-dim border-b border-border-main">
+                                            <th className="px-4 py-3 text-left w-12">{t.testStatus}</th>
+                                            <th className="px-4 py-3 text-left">{t.testName}</th>
+                                            <th className="px-4 py-3 text-left">{t.testInput}</th>
+                                            <th className="px-4 py-3 text-left">{t.testExpected}</th>
+                                            <th className="px-4 py-3 text-left">{t.testActual}</th>
+                                            <th className="px-4 py-3 text-right">{t.testDuration}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border-main/30">
+                                        {testResults.map((res, i) => (
+                                            <tr key={i} className={`text-xs hover:bg-button/20 transition-colors ${res.passed ? '' : 'bg-red-500/5'}`}>
+                                                <td className="px-4 py-4">
+                                                    {res.passed ? (
+                                                        <span className="flex items-center gap-1.5 text-accent font-black">
+                                                            <CheckCircle2 size={14} /> {t.testPass}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="flex items-center gap-1.5 text-red-500 font-black">
+                                                            <AlertCircle size={14} /> {res.actual?.includes('Timeout') ? t.testTimeout : t.testFail}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-4 font-mono font-bold text-text-bright">{res.name || `Case ${i}`}</td>
+                                                <td className="px-4 py-4"><code className="bg-app px-1.5 py-0.5 rounded border border-border-main text-text-dim text-[10px]">{res.input}</code></td>
+                                                <td className="px-4 py-4"><code className="bg-app px-1.5 py-0.5 rounded border border-border-main text-accent text-[10px]">{res.expected}</code></td>
+                                                <td className="px-4 py-4">
+                                                    <code className={`px-1.5 py-0.5 rounded border text-[10px] ${res.passed ? 'bg-app border-border-main text-text-dim' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
+                                                        {res.actual || '(empty)'}
+                                                    </code>
+                                                </td>
+                                                <td className="px-4 py-4 text-right font-mono text-[10px] text-text-dim">{res.duration}ms</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        )}
+                        <div className="flex-1 bg-app overflow-hidden">
+
                         <Editor
                             height="100%"
                             defaultLanguage="cpp"

@@ -59,6 +59,12 @@ function getStatementsPath(turma) {
   return path.join(turmaDir, 'statements.json');
 }
 
+function getTestCasesPath(turma) {
+  const turmaDir = path.join(DATA_DIR, `turma_${turma}`);
+  if (!fs.existsSync(turmaDir)) fs.mkdirSync(turmaDir, { recursive: true });
+  return path.join(turmaDir, 'testcases.json');
+}
+
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -276,7 +282,7 @@ app.post('/api/import-moodle-cookies', async (req, res) => {
 
   try {
     if (!fs.existsSync(extractPath)) fs.mkdirSync(extractPath, { recursive: true });
-    const studentsMap = new Map(), statements = {};
+    const studentsMap = new Map(), statements = {}, testCases = {};
     await smartFetch(baseUrl);
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i], qNum = i + 1;
@@ -291,22 +297,77 @@ app.post('/api/import-moodle-cookies', async (req, res) => {
       const viewHtml = await viewRes.text();
       
       // Capturar o enunciado HTML do Moodle VPL
-      // Tentamos primeiro o padrão específico do VPL (vpl_intro)
-      // Se não encontrar, tentamos o padrão geral do Moodle sugerido pelo usuário (generalbox no-overflow)
       let introContent = null;
       const vplIntroMatch = viewHtml.match(/<div id="vpl_intro"[^>]*>([\s\S]*?)<\/div>(?:\s*<div class="clearer"><\/div>|$)/);
-      
       if (vplIntroMatch) {
         introContent = vplIntroMatch[1].trim();
       } else {
         const generalBoxMatch = viewHtml.match(/<div class="box py-3 generalbox">[\s\S]*?<div class="no-overflow">([\s\S]*?)<\/div>\s*<\/div>/);
-        if (generalBoxMatch) {
-          introContent = generalBoxMatch[1].trim();
-        }
+        if (generalBoxMatch) introContent = generalBoxMatch[1].trim();
       }
+      if (introContent) statements[`q${qNum}`] = introContent;
 
-      if (introContent) {
-        statements[`q${qNum}`] = introContent;
+      // Capturar casos de teste automáticos do VPL (pre#codefileid1)
+      const casesMatch = viewHtml.match(/<pre[^>]*id=['"]codefileid1['"][^>]*>([\s\S]*?)<\/pre>/i);
+      if (casesMatch) {
+        console.log(`[DEBUG] Found test cases tag for Q${qNum}`);
+        const rawCases = casesMatch[1].trim();
+        const parsed = [];
+        // Split por "Case =" considerando que pode ou não haver quebra de linha antes
+        const blocks = rawCases.split(/(?=Case\s*=)/i).filter(b => b.trim());
+        
+        console.log(`[DEBUG] Found ${blocks.length} test case blocks`);
+
+        for (const block of blocks) {
+          const tc = { name: '', input: '', output: '', gradeReduction: '' };
+          const lines = block.split('\n');
+          let currentField = null;
+          let buffer = [];
+
+          const flush = () => {
+            if (currentField && buffer.length > 0) {
+              let val = buffer.join('\n').trim();
+              if (currentField === 'output' && val.startsWith('"') && val.endsWith('"')) {
+                val = val.slice(1, -1);
+              }
+              tc[currentField] = val;
+              buffer = [];
+            }
+          };
+
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+            const lowerLine = trimmedLine.toLowerCase();
+
+            if (lowerLine.startsWith('case')) {
+              flush();
+              tc.name = trimmedLine.split('=')[1]?.trim() || '';
+              currentField = null;
+            } else if (lowerLine.startsWith('input')) {
+              flush();
+              currentField = 'input';
+              const val = trimmedLine.split('=')[1]?.trim();
+              if (val !== undefined && val !== '') buffer.push(val);
+            } else if (lowerLine.startsWith('output')) {
+              flush();
+              currentField = 'output';
+              const val = trimmedLine.split('=')[1]?.trim();
+              if (val !== undefined && val !== '') buffer.push(val);
+            } else if (lowerLine.startsWith('grade reduction')) {
+              flush();
+              tc.gradeReduction = trimmedLine.split('=')[1]?.trim() || '';
+              currentField = null;
+            } else if (currentField) {
+              buffer.push(line);
+            }
+          }
+          flush();
+          if (tc.input || tc.output) parsed.push(tc);
+        }
+        testCases[`q${qNum}`] = parsed;
+        console.log(`[DEBUG] Successfully parsed ${parsed.length} test cases for Q${qNum}`);
+      } else {
+        console.warn(`[DEBUG] No test cases tag (codefileid1) found for Q${qNum}`);
       }
 
       await smartFetch(listUrl, viewUrl);
@@ -334,6 +395,7 @@ app.post('/api/import-moodle-cookies', async (req, res) => {
       });
     }
     fs.writeFileSync(getStatementsPath(turma), JSON.stringify(statements, null, 2));
+    fs.writeFileSync(getTestCasesPath(turma), JSON.stringify(testCases, null, 2));
     const gradesData = Array.from(studentsMap.values());
     gradesData.forEach(s => { const qs = Object.values(s.questions).filter(q => q.path); s.reviewed = qs.length === 0 ? true : qs.every(q => q.reviewed); });
     fs.writeFileSync(path.join(DATA_DIR, `grades_turma_${turma}.json`), JSON.stringify(gradesData, null, 2));
@@ -493,6 +555,71 @@ app.post('/api/statements', (req, res) => {
   const fp = getStatementsPath(req.body.turma);
   fs.writeFileSync(fp, JSON.stringify(req.body.statements, null, 2));
   res.json({ success: true });
+});
+
+app.get('/api/testcases', (req, res) => {
+  const fp = getTestCasesPath(req.query.turma);
+  if (fs.existsSync(fp)) res.json(JSON.parse(fs.readFileSync(fp, 'utf8')));
+  else res.json({});
+});
+
+app.post('/api/run-tests', async (req, res) => {
+  const { turma, studentId, questionNum, filePath } = req.body;
+  if (!filePath || !fs.existsSync(filePath)) return res.status(400).json({ error: 'File not found' });
+
+  const tp = getTestCasesPath(turma);
+  const allCases = fs.existsSync(tp) ? JSON.parse(fs.readFileSync(tp, 'utf8')) : {};
+  const cases = allCases[questionNum.toString().startsWith('q') ? questionNum : `q${questionNum}`];
+  if (!cases || !cases.length) return res.status(400).json({ error: 'No test cases found' });
+
+  const dir = path.dirname(filePath), base = path.basename(filePath, '.cpp');
+  const exeName = `${base}_test.exe`, exePath = path.join(dir, exeName);
+
+  try {
+    // Compile
+    await new Promise((resolve, reject) => {
+      const compile = spawn('g++', [path.basename(filePath), '-o', exeName], { cwd: dir, shell: true });
+      let err = '';
+      compile.stderr.on('data', d => err += d.toString());
+      compile.on('close', c => c === 0 ? resolve() : reject(new Error(err)));
+    });
+
+    const results = [];
+    for (const tc of cases) {
+      const start = Date.now();
+      const output = await new Promise((resolve) => {
+        const child = spawn(process.platform === 'win32' ? exeName : `./${exeName}`, { cwd: dir, shell: true });
+        let out = '', err = '';
+        const timer = setTimeout(() => { child.kill(); resolve({ error: 'Timeout (2s)' }); }, 2000);
+        
+        child.stdin.write(tc.input + '\n');
+        child.stdin.end();
+
+        child.stdout.on('data', d => out += d.toString());
+        child.stderr.on('data', d => err += d.toString());
+        child.on('close', () => {
+          clearTimeout(timer);
+          resolve({ out: out.trim(), err: err.trim() });
+        });
+      });
+
+      const duration = Date.now() - start;
+      const passed = output.out === tc.output.trim();
+      results.push({
+        name: tc.name,
+        input: tc.input,
+        expected: tc.output,
+        actual: output.out || output.error || output.err,
+        passed,
+        duration
+      });
+    }
+
+    try { fs.unlinkSync(exePath); } catch(e) {}
+    res.json({ success: true, results });
+  } catch (err) {
+    res.status(500).json({ error: 'Compilation failed', details: err.message });
+  }
 });
 
 app.post('/api/analyze', async (req, res) => {
