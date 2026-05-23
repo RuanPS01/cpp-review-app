@@ -17,6 +17,37 @@ export const useReviewLogic = (
   const [editScore, setEditScore] = useState(0);
   const [editComment, setEditComment] = useState('');
   const [saving, setSaving] = useState(false);
+  const [runningTests, setRunningTests] = useState(false);
+  const [testResults, setTestResults] = useState<any[] | null>(null);
+
+  const handleRunTests = async () => {
+    const student = students[currentIndex];
+    if (!student) return;
+    const q = student.questions[`q${currentQ}`];
+    if (!q || !q.path) return;
+
+    setRunningTests(true);
+    setTestResults(null);
+    try {
+      const res = await api.runTests({
+        turma: student.turma,
+        studentId: student.folder_name,
+        questionNum: currentQ,
+        filePath: q.path
+      });
+      if (res.data.success) {
+        setTestResults(res.data.results);
+        const passed = res.data.results.filter((r: any) => r.passed).length;
+        const total = res.data.results.length;
+        toast.success(t.passedCount.replace('{passed}', passed).replace('{total}', total));
+      }
+    } catch (err: any) {
+      console.error('Test error:', err);
+      toast.error(err.response?.data?.error || t.testError);
+    } finally {
+      setRunningTests(false);
+    }
+  };
 
   const fetchCode = useCallback(async (path: string) => {
     try {
@@ -308,6 +339,9 @@ export const useReviewLogic = (
     handleSave,
     handleSaveAll,
     handleToggleQuestionReviewed,
-    handleDiscardChanges
+    handleDiscardChanges,
+    handleRunTests,
+    runningTests,
+    testResults
   };
 };
