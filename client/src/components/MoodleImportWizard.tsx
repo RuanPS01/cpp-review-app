@@ -18,7 +18,6 @@ type Step = 'CONFIG' | 'COURSE' | 'SECTION' | 'PROGRESS' | 'DONE';
 
 const MoodleImportWizard: React.FC<MoodleImportWizardProps> = ({ t, onSuccess, onClose }) => {
     const [step, setStep] = useState<Step>('CONFIG');
-    const [isConfirmed, setIsConfirmed] = useState(false);
     const isConfirmedRef = useRef(false);
     const [importResult, setImportResult] = useState<any>(null);
     
@@ -34,7 +33,6 @@ const MoodleImportWizard: React.FC<MoodleImportWizardProps> = ({ t, onSuccess, o
 
     const handleConfirm = async () => {
         isConfirmedRef.current = true;
-        setIsConfirmed(true);
         await onSuccess();
         onClose();
     };
@@ -52,7 +50,6 @@ const MoodleImportWizard: React.FC<MoodleImportWizardProps> = ({ t, onSuccess, o
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCourse, setSelectedCourse] = useState<any>(null);
     const [sections, setSections] = useState<any[]>([]);
-    const [selectedSection, setSelectedSection] = useState<any>(null);
     
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState({ current: 0, total: 0, status: '' });
@@ -119,7 +116,7 @@ const MoodleImportWizard: React.FC<MoodleImportWizardProps> = ({ t, onSuccess, o
         const prevStatus = progress.status;
         setProgress(p => ({ ...p, status: t.capturingSession }));
         try {
-            // @ts-ignore - Exposed via preload
+            // @ts-expect-error - Exposed via preload
             const res = await window.moodleAuth.captureCookie(config.url, credentials);
             if (res && res.cookie) {
                 setMoodleSession(res.cookie);
