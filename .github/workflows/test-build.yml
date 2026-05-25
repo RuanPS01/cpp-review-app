@@ -1,0 +1,54 @@
+name: Test Build (PR)
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Root Dependencies
+        run: npm install
+
+      - name: Install All Dependencies (Client & Server)
+        run: npm run install:all
+
+      - name: Build Client
+        run: npm run build:client
+
+      - name: Build Electron App
+        run: npm run electron:build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compress EXE to ZIP
+        shell: pwsh
+        run: |
+          Get-ChildItem "dist-electron/*.exe" | ForEach-Object {
+            $exePath = $_.FullName
+            $zipPath = "$($_.DirectoryName)\$($_.BaseName)-win-exe.zip"
+            Compress-Archive -Path $exePath -DestinationPath $zipPath -Force
+            Write-Host "Created: $zipPath"
+          }
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-build-windows
+          path: |
+            dist-electron/*.exe
+            dist-electron/*.zip
+          retention-days: 7
