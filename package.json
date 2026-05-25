@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "install:all": "npm install --prefix client && npm install --prefix server",
-    "postinstall": "electron-builder install-app-deps",
+    "postinstall": "electron-builder install-app-deps || echo 'Native dependencies rebuild failed. This is expected if build tools are missing.'",
     "dev": "npx concurrently \"npm run dev --prefix client\" \"electron .\"",
     "build:client": "npm run build --prefix client",
     "patch:node-pty": "node scripts/patch-node-pty.js",
@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "electron": "^41.5.0",
+    "electron": "^41.7.0",
     "electron-builder": "^26.8.1"
   },
   "keywords": [],

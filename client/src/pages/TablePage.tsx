@@ -1,9 +1,10 @@
-import React from 'react';
-import { FileText, Download, Upload, Info, Pencil, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText, Download, Upload, Info, Pencil, CheckCircle2, Sparkles } from 'lucide-react';
 import type { Student } from '../types';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
+import GlobalAIAnalysisModal from '../components/GlobalAIAnalysisModal';
 
 interface TablePageProps {
   students: Student[];
@@ -32,6 +33,7 @@ const TablePage: React.FC<TablePageProps> = ({
   setShowEditStudentModal,
   t 
 }) => {
+  const [showGlobalAIModal, setShowGlobalAIModal] = useState(false);
   const safeStudents = Array.isArray(students) ? students : [];
   const classStudents = safeStudents.filter(s => s.turma === selectedTurma);
   const questions = Array.from(new Set(
@@ -154,6 +156,13 @@ const TablePage: React.FC<TablePageProps> = ({
           </div>
           <div className="flex gap-2">
               <button 
+                  onClick={() => setShowGlobalAIModal(true)}
+                  className="flex items-center gap-2 bg-accent/10 hover:bg-accent/20 border border-accent/30 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] text-accent transition-all active:scale-95 shadow-lg group"
+              >
+                  <Sparkles size={14} className="group-hover:rotate-12 transition-transform fill-current" />
+                  {t.globalAiAnalyze}
+              </button>
+              <button 
                   onClick={handleExportExcel}
                   className="flex items-center gap-2 bg-panel hover:bg-button border border-border-main px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] text-green-500 transition-all active:scale-95 shadow-lg group"
               >
@@ -259,6 +268,15 @@ const TablePage: React.FC<TablePageProps> = ({
           </table>
         </div>
       </div>
+
+      <GlobalAIAnalysisModal
+        isOpen={showGlobalAIModal}
+        onClose={() => setShowGlobalAIModal(false)}
+        students={students}
+        selectedTurma={selectedTurma}
+        onAnalysisComplete={fetchStudents}
+        t={t}
+      />
     </div>
   );
 };
