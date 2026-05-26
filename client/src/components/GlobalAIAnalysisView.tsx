@@ -16,6 +16,7 @@ interface GlobalAIAnalysisViewProps {
   onBack: () => void;
   onRetry: (studentId: string, questionNum: number) => void;
   onRetryAllErrors: () => void;
+  onRetryRemaining: () => void;
   onApplyAll: () => void;
   t: any;
 }
@@ -34,6 +35,7 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
   onBack,
   onRetry,
   onRetryAllErrors,
+  onRetryRemaining,
   onApplyAll,
   t
 }) => {
@@ -174,6 +176,15 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
 
                     {!isAnalyzing && (errorCount > 0 || pendingCount > 0) && (
                         <div className="flex gap-3">
+                            {errorCount > 0 && pendingCount > 0 && (
+                                <button
+                                    onClick={onRetryRemaining}
+                                    className="flex items-center gap-2 px-4 py-2 bg-accent/20 border border-accent hover:bg-accent hover:text-black rounded-lg text-accent text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_0_10px_rgba(6,182,212,0.2)]"
+                                >
+                                    <RotateCw size={14} />
+                                    Reiniciar pendente e com erros ({pendingCount + errorCount})
+                                </button>
+                            )}
                             {pendingCount > 0 && (
                                 <button
                                     onClick={onResume}

@@ -298,40 +298,46 @@ const App = () => {
             </div>
             {turmas.length > 0 && (
                 <div className="flex gap-2 ml-4">
-                    {turmas.map(turmaName => (
-                        <div 
-                            key={turmaName} 
-                            className={`flex items-center bg-button rounded border transition-all group overflow-hidden ${
-                                selectedTurma === turmaName 
-                                ? 'border-accent shadow-[0_0_15px_var(--accent-glow)]' 
-                                : 'border-border-main hover:border-accent/50'
-                            }`}
-                        >
-                            <button
-                                onClick={() => {
-                                    setSelectedTurma(turmaName);
-                                    const firstIdx = students.findIndex(s => s.turma === turmaName);
-                                    setCurrentIndex(firstIdx);
-                                }}
-                                className={`px-4 py-2 text-xs font-bold transition-all ${
-                                    selectedTurma === turmaName 
-                                    ? 'bg-accent text-black' 
-                                    : 'text-text-dim hover:text-accent'
+                    {turmas.map(turmaName => {
+                        const isSelected = selectedTurma === turmaName && (view === 'review' || view === 'table');
+                        return (
+                            <div 
+                                key={turmaName} 
+                                className={`flex items-center bg-button rounded border transition-all group overflow-hidden ${
+                                    isSelected 
+                                    ? 'border-accent shadow-[0_0_15px_var(--accent-glow)]' 
+                                    : 'border-border-main hover:border-accent/50'
                                 }`}
                             >
-                                {turmaName}
-                            </button>
-                            <button 
-                                onClick={() => handleClearTurma(turmaName)}
-                                className={`px-3 py-2 text-text-dim hover:text-red-500 transition-colors border-l border-border-main h-full flex items-center ${
-                                    selectedTurma === turmaName ? 'bg-accent/10' : ''
-                                }`}
-                                title={t.clearData}
-                            >
-                                <Trash2 size={14} />
-                            </button>
-                        </div>
-                    ))}
+                                <button
+                                    onClick={() => {
+                                        setSelectedTurma(turmaName);
+                                        const firstIdx = students.findIndex(s => s.turma === turmaName);
+                                        setCurrentIndex(firstIdx);
+                                        if (view === 'import' || view === 'settings') {
+                                            setView('table');
+                                        }
+                                    }}
+                                    className={`px-4 py-2 text-xs font-bold transition-all ${
+                                        isSelected 
+                                        ? 'bg-accent text-black' 
+                                        : 'text-text-dim hover:text-accent'
+                                    }`}
+                                >
+                                    {turmaName}
+                                </button>
+                                <button 
+                                    onClick={() => handleClearTurma(turmaName)}
+                                    className={`px-3 py-2 text-text-dim hover:text-red-500 transition-colors border-l border-border-main h-full flex items-center ${
+                                        isSelected ? 'bg-accent/10' : ''
+                                    }`}
+                                    title={t.clearData}
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
         </div>
@@ -350,6 +356,10 @@ const App = () => {
           >
             <TableIcon size={18} /> {t.table}
           </button>
+          
+          {/* Divider between class-specific and general tabs */}
+          <div className="w-px h-8 bg-border-main self-center mx-2 opacity-50" />
+
           <button 
             onClick={() => setView('import')}
             className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 ${view === 'import' ? 'bg-accent !border-accent text-black font-bold shadow-[0_0_15px_var(--accent-glow)]' : 'bg-button text-text-dim border-border-main hover:border-accent/50 hover:text-accent'}`}
