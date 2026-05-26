@@ -33,7 +33,8 @@ export const useReviewLogic = (
         turma: student.turma,
         studentId: student.folder_name,
         questionNum: currentQ,
-        filePath: q.path
+        filePath: q.path,
+        code: tempCode
       });
       if (res.data.success) {
         setTestResults(res.data.results);
@@ -314,6 +315,8 @@ export const useReviewLogic = (
     if (original) {
       setEditScore(original.score);
       setEditComment(original.comment);
+      setTempCode(code);
+      setTestResults(null);
       
       // Restore reviewed status if it was original
       if (original.reviewed) {
@@ -346,6 +349,7 @@ export const useReviewLogic = (
     handleDiscardChanges,
     handleRunTests,
     runningTests,
-    testResults
+    testResults,
+    setTestResults
   };
 };

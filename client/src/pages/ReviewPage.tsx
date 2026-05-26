@@ -83,7 +83,8 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
     handleDiscardChanges,
     handleRunTests,
     runningTests,
-    testResults
+    testResults,
+    setTestResults
   } = useReviewLogic(students, currentIndex, currentQ, pendingChanges, setPendingChanges, setStudents, t);
 
   const [showTestResults, setShowTestResults] = useState(false);
@@ -652,7 +653,10 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
                                 {t.tempCodeNotice}
                             </div>
                             <button 
-                                onClick={() => setTempCode(code)}
+                                onClick={() => {
+                                  setTempCode(code);
+                                  setTestResults(null);
+                                }}
                                 className="px-3 py-1 bg-red-900/30 hover:bg-red-900/50 text-red-500 border border-red-900/50 rounded text-[9px] font-black uppercase tracking-widest transition-all active:scale-95"
                             >
                                 {t.discardTempCode}

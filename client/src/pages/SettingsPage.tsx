@@ -17,9 +17,10 @@ interface SettingsPageProps {
   setAiSettings: (settings: AISettings) => void;
   setShowOllamaHelp: (show: boolean) => void;
   t: any;
+  isGlobalAnalyzing?: boolean;
 }
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ aiSettings, setAiSettings, setShowOllamaHelp, t }) => {
+const SettingsPage: React.FC<SettingsPageProps> = ({ aiSettings, setAiSettings, setShowOllamaHelp, t, isGlobalAnalyzing = false }) => {
   const [isCustomModel, setIsCustomModel] = useState(false);
   const [isCustomOllama, setIsCustomOllama] = useState(false);
 
@@ -47,9 +48,14 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ aiSettings, setAiSettings, 
   };
 
   return (
-    <div className="max-w-3xl mx-auto mt-10 bg-panel p-8 rounded-xl shadow-2xl border border-border-main">
+    <div className={`max-w-3xl mx-auto mt-10 bg-panel p-8 rounded-xl shadow-2xl border border-border-main transition-opacity ${isGlobalAnalyzing ? 'opacity-50 pointer-events-none' : ''}`}>
       <h2 className="text-2xl font-bold mb-8 flex items-center gap-3 text-text-bright">
           <Settings className="text-accent drop-shadow-[0_0_5px_var(--accent-glow)]" /> {t.aiConfig}
+          {isGlobalAnalyzing && (
+            <span className="text-xs font-bold uppercase tracking-widest text-accent animate-pulse ml-4">
+               ({t.statusAnalyzing}...)
+            </span>
+          )}
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="space-y-6">
@@ -59,6 +65,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ aiSettings, setAiSettings, 
                       {['ollama', 'openai', 'gemini', 'claude'].map(p => (
                           <button
                               key={p}
+                              disabled={isGlobalAnalyzing}
                               onClick={() => {
                                   const newProvider = p as any;
                                   const defaultModel = newProvider === 'ollama' ? 'llama3.3' : RECOMMENDED_MODELS[newProvider][0];
@@ -85,6 +92,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ aiSettings, setAiSettings, 
                               <label className="block text-xs font-bold uppercase tracking-widest text-text-dim">{t.ollamaModel}</label>
                               <button 
                                   onClick={() => setShowOllamaHelp(true)}
+                                  disabled={isGlobalAnalyzing}
                                   className="text-[10px] font-bold text-accent hover:text-accent/80 underline flex items-center gap-1"
                               >
                                   <Terminal size={10} /> {t.howToConfigure}
@@ -92,6 +100,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ aiSettings, setAiSettings, 
                           </div>
                           <select 
                               value={isCustomOllama ? 'custom' : aiSettings.ollamaModel}
+                              disabled={isGlobalAnalyzing}
                               onChange={(e) => {
                                   const val = e.target.value;
                                   if (val === 'custom') {
@@ -113,6 +122,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ aiSettings, setAiSettings, 
                           {isCustomOllama && (
                               <input 
                                   type="text"
+                                  disabled={isGlobalAnalyzing}
                                   value={aiSettings.ollamaModel}
                                   onChange={(e) => setAiSettings({ ...aiSettings, ollamaModel: e.target.value })}
                                   className="w-full bg-input border border-accent/50 rounded-lg p-3 text-accent font-mono text-sm focus:outline-none focus:border-accent animate-in slide-in-from-top-1 duration-200 transition-colors"
@@ -128,6 +138,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ aiSettings, setAiSettings, 
                           <label className="block text-xs font-bold uppercase tracking-widest text-text-dim mb-2">{t.cloudModel}</label>
                           <select 
                               value={isCustomModel ? 'custom' : aiSettings.cloudModel}
+                              disabled={isGlobalAnalyzing}
                               onChange={(e) => {
                                   const val = e.target.value;
                                   if (val === 'custom') {
@@ -149,6 +160,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ aiSettings, setAiSettings, 
                           {isCustomModel && (
                               <input 
                                   type="text"
+                                  disabled={isGlobalAnalyzing}
                                   value={aiSettings.cloudModel}
                                   onChange={(e) => setAiSettings({ ...aiSettings, cloudModel: e.target.value })}
                                   className="w-full bg-input border border-accent/50 rounded-lg p-3 text-accent font-mono text-sm focus:outline-none focus:border-accent animate-in slide-in-from-top-1 duration-200 transition-colors"
@@ -161,6 +173,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ aiSettings, setAiSettings, 
                           <label className="block text-xs font-bold uppercase tracking-widest text-text-dim mb-2">{t.apiKey}</label>
                           <input 
                               type="password"
+                              disabled={isGlobalAnalyzing}
                               value={aiSettings.cloudKey}
                               onChange={(e) => setAiSettings({ ...aiSettings, cloudKey: e.target.value })}
                               className="w-full bg-input border border-border-main rounded-lg p-3 text-text-main text-sm focus:outline-none focus:border-accent transition-colors"
@@ -175,6 +188,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ aiSettings, setAiSettings, 
               <label className="block text-xs font-bold uppercase tracking-widest text-text-dim mb-3">{t.globalCriteria}</label>
               <textarea 
                   value={aiSettings.evaluationCriteria}
+                  disabled={isGlobalAnalyzing}
                   onChange={(e) => setAiSettings({ ...aiSettings, evaluationCriteria: e.target.value })}
                   className="flex-1 w-full bg-input border border-border-main rounded-lg p-4 text-text-main text-sm focus:outline-none focus:border-accent resize-none min-h-[250px] transition-colors"
                   placeholder="Define how the AI should grade the code..."
@@ -183,7 +197,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ aiSettings, setAiSettings, 
       </div>
       <button 
           onClick={() => saveAISettings(aiSettings)}
-          className="mt-8 w-full bg-accent hover:bg-accent/80 text-black py-4 rounded-lg font-bold flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg shadow-accent/10"
+          disabled={isGlobalAnalyzing}
+          className="mt-8 w-full bg-accent hover:bg-accent/80 text-black py-4 rounded-lg font-bold flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg shadow-accent/10 disabled:opacity-50"
       >
           <CheckCircle2 size={20} /> {t.saveSettings}
       </button>

@@ -10,6 +10,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import translations from './translations';
 import type { Student, AISettings, View, PendingChanges, AIResult } from './types';
 import { api } from './services/api';
+import { useGlobalAI } from './hooks/useGlobalAI';
 
 // Pages
 import SettingsPage from './pages/SettingsPage';
@@ -69,6 +70,25 @@ const App = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [pendingChanges, setPendingChanges] = useState<PendingChanges>({});
 
+  const fetchStudents = useCallback(async () => {
+    try {
+      const res = await api.getStudents();
+      if (Array.isArray(res.data)) {
+        setStudents(res.data);
+      } else {
+        console.error('Invalid students data:', res.data);
+        setStudents([]);
+      }
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching students', err);
+      setStudents([]);
+      setLoading(false);
+    }
+  }, []);
+
+  const globalAI = useGlobalAI(selectedTurma, t, fetchStudents);
+
   // Help Modals
   const [showJsonHelp, setShowJsonHelp] = useState(false);
   const [showOllamaHelp, setShowOllamaHelp] = useState(false);
@@ -103,23 +123,6 @@ const App = () => {
     const sum = classStudents.reduce((acc, s) => acc + parseFloat(calculateTotal(s)), 0);
     return (sum / classStudents.length).toFixed(2);
   };
-
-  const fetchStudents = useCallback(async () => {
-    try {
-      const res = await api.getStudents();
-      if (Array.isArray(res.data)) {
-        setStudents(res.data);
-      } else {
-        console.error('Invalid students data:', res.data);
-        setStudents([]);
-      }
-      setLoading(false);
-    } catch (err) {
-      console.error('Error fetching students', err);
-      setStudents([]);
-      setLoading(false);
-    }
-  }, []);
 
   const fetchAISettings = useCallback(async () => {
     try {
@@ -369,6 +372,7 @@ const App = () => {
             setAiSettings={setAiSettings} 
             setShowOllamaHelp={setShowOllamaHelp} 
             t={t} 
+            isGlobalAnalyzing={globalAI.isAnalyzing}
           />
         ) : view === 'import' ? (
           <ImportPage 
@@ -416,6 +420,7 @@ const App = () => {
             setEditingStudent={setEditingStudent}
             setShowEditStudentModal={setShowEditStudentModal}
             t={t}
+            globalAI={globalAI}
           />
         )}
       </main>
