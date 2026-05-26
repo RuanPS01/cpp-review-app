@@ -10,18 +10,20 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
   const [onlyUnreviewed, setOnlyUnreviewed] = useState(true);
   const [showConfirm, setShowConfirm] = useState(true);
   const [isActive, setIsActive] = useState(false);
+  const [hasCanceled, setHasCanceled] = useState(false);
+  const [lastAnalyzedTurma, setLastAnalyzedTurma] = useState('');
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (items.length > 0) {
-      const done = items.filter(it => it.status === 'success' || it.status === 'error').length;
+      const done = items.filter(it => it.status === 'success').length;
       setProgress(Math.round((done / items.length) * 100));
     }
   }, [items]);
 
   const initAnalysis = useCallback((students: Student[]) => {
-    // Se já estiver ativo e com itens, não reseta a menos que a turma tenha mudado
-    if (isActive && items.length > 0) {
+    // Retoma a análise se já existir para a turma atual e não foi cancelada
+    if (items.length > 0 && !hasCanceled && lastAnalyzedTurma === selectedTurma) {
       setIsActive(true);
       return;
     }
@@ -51,7 +53,9 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
     setIsAnalyzing(false);
     setShowConfirm(true);
     setIsActive(true);
-  }, [selectedTurma, onlyUnreviewed, isActive, items.length]);
+    setHasCanceled(false);
+    setLastAnalyzedTurma(selectedTurma);
+  }, [selectedTurma, onlyUnreviewed, items.length, hasCanceled, lastAnalyzedTurma]);
 
   const runSingleAnalysis = async (item: AnalysisItem, index: number, signal?: AbortSignal) => {
     setItems(prev => prev.map((it, idx) => 
@@ -85,6 +89,7 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
   const startAnalysis = async () => {
     setShowConfirm(false);
     setIsAnalyzing(true);
+    setHasCanceled(false);
     
     abortControllerRef.current = new AbortController();
     
@@ -113,6 +118,7 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
       abortControllerRef.current.abort();
     }
     setIsAnalyzing(false);
+    setHasCanceled(true);
   }, []);
 
   const retryItem = async (studentId: string, questionNum: number) => {
@@ -129,6 +135,7 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
     if (errorItems.length === 0) return;
 
     setIsAnalyzing(true);
+    setHasCanceled(false);
     abortControllerRef.current = new AbortController();
     
     for (const { it, idx } of errorItems) {
@@ -141,6 +148,32 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
     setIsAnalyzing(false);
     if (!abortControllerRef.current.signal.aborted) {
       toast.success(t.analysisComplete);
+    } else {
+      toast.error('Retentativa cancelada');
+    }
+    abortControllerRef.current = null;
+  };
+
+  const resumePendingAnalysis = async () => {
+    const pendingItems = items.map((it, idx) => ({ it, idx })).filter(x => x.it.status === 'pending');
+    if (pendingItems.length === 0) return;
+
+    setIsAnalyzing(true);
+    setHasCanceled(false);
+    abortControllerRef.current = new AbortController();
+    
+    for (const { it, idx } of pendingItems) {
+      const success = await runSingleAnalysis(it, idx, abortControllerRef.current.signal);
+      if (!success && abortControllerRef.current.signal.aborted) {
+        break;
+      }
+    }
+    
+    setIsAnalyzing(false);
+    if (!abortControllerRef.current.signal.aborted) {
+      toast.success(t.analysisComplete);
+    } else {
+      toast.error('Análise cancelada');
     }
     abortControllerRef.current = null;
   };
@@ -165,6 +198,8 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
       await Promise.all(promises);
       toast.success(t.allGradesSaved);
       await onComplete();
+      setItems([]);
+      setHasCanceled(false);
       setIsActive(false);
     } catch {
       toast.error('Error applying results');
@@ -186,6 +221,7 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
     initAnalysis,
     startAnalysis,
     cancelAnalysis,
+    resumePendingAnalysis,
     retryItem,
     retryAllErrors,
     applyAll

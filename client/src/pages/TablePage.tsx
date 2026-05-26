@@ -53,6 +53,7 @@ const TablePage: React.FC<TablePageProps> = ({
             selectedTurma={selectedTurma}
             onStart={globalAI.startAnalysis}
             onCancel={globalAI.cancelAnalysis}
+            onResume={globalAI.resumePendingAnalysis}
             onBack={() => globalAI.setIsActive(false)}
             onRetry={globalAI.retryItem}
             onRetryAllErrors={globalAI.retryAllErrors}
@@ -268,7 +269,7 @@ const TablePage: React.FC<TablePageProps> = ({
                     ))}
                     <td className={`py-1 px-2 text-center font-black tabular-nums transition-colors ${
                       total === 100
-                        ? 'text-white'
+                        ? 'text-text-bright'
                         : total < 50 
                           ? 'text-red-500' 
                           : total < 60 
