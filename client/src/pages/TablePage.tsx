@@ -52,6 +52,7 @@ const TablePage: React.FC<TablePageProps> = ({
             showConfirm={globalAI.showConfirm}
             selectedTurma={selectedTurma}
             onStart={globalAI.startAnalysis}
+            onCancel={globalAI.cancelAnalysis}
             onBack={() => globalAI.setIsActive(false)}
             onRetry={globalAI.retryItem}
             onRetryAllErrors={globalAI.retryAllErrors}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Loader2, CheckCircle2, AlertCircle, Play, Save, ArrowLeft, RotateCw } from 'lucide-react';
+import { Sparkles, Loader2, CheckCircle2, AlertCircle, Play, Save, ArrowLeft, RotateCw, XCircle } from 'lucide-react';
 import type { AnalysisItem } from '../types';
 
 interface GlobalAIAnalysisViewProps {
@@ -11,6 +11,7 @@ interface GlobalAIAnalysisViewProps {
   showConfirm: boolean;
   selectedTurma: string;
   onStart: () => void;
+  onCancel: () => void;
   onBack: () => void;
   onRetry: (studentId: string, questionNum: number) => void;
   onRetryAllErrors: () => void;
@@ -27,6 +28,7 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
   showConfirm,
   selectedTurma,
   onStart,
+  onCancel,
   onBack,
   onRetry,
   onRetryAllErrors,
@@ -35,21 +37,32 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
 }) => {
   const successCount = items.filter(it => it.status === 'success').length;
   const errorCount = items.filter(it => it.status === 'error').length;
-  const showApply = !isAnalyzing && successCount > 0;
+  const showApply = successCount > 0;
 
   const actionButtons = (
     <div className="flex gap-4">
-        <button
-          onClick={onBack}
-          disabled={isAnalyzing}
-          className="px-6 py-2 rounded-lg border border-border-main text-text-dim font-bold uppercase text-[10px] tracking-widest hover:bg-white/5 transition-all disabled:opacity-50"
-        >
-          {t.cancel}
-        </button>
+        {isAnalyzing ? (
+          <button
+            onClick={onCancel}
+            className="px-6 py-2 rounded-lg border border-red-500 text-red-500 font-bold uppercase text-[10px] tracking-widest hover:bg-red-500 hover:text-white transition-all shadow-[0_0_10px_rgba(239,68,68,0.2)] flex items-center gap-2"
+          >
+            <XCircle size={14} />
+            {t.cancel}
+          </button>
+        ) : (
+          <button
+            onClick={onBack}
+            className="px-6 py-2 rounded-lg border border-border-main text-text-dim font-bold uppercase text-[10px] tracking-widest hover:bg-white/5 transition-all disabled:opacity-50"
+          >
+            {t.cancel}
+          </button>
+        )}
+        
         {showApply && (
           <button
             onClick={onApplyAll}
-            className="px-8 py-2 rounded-lg bg-green-600 text-white font-black uppercase text-[10px] tracking-widest hover:bg-green-500 active:scale-95 transition-all shadow-lg flex items-center gap-2 animate-in zoom-in duration-300"
+            disabled={isAnalyzing}
+            className="px-8 py-2 rounded-lg border border-green-600 text-green-600 font-black uppercase text-[10px] tracking-widest hover:bg-green-600 hover:text-white active:scale-95 transition-all shadow-[0_0_10px_rgba(22,163,74,0.2)] flex items-center gap-2 animate-in zoom-in duration-300 disabled:opacity-50 disabled:pointer-events-none disabled:grayscale"
           >
             <Save size={14} />
             {t.applyAllResults}
@@ -65,7 +78,8 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
           <div className="flex items-center gap-4">
             <button 
               onClick={onBack}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors text-accent flex items-center gap-2 font-bold text-xs uppercase tracking-widest"
+              disabled={isAnalyzing}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors text-accent flex items-center gap-2 font-bold text-xs uppercase tracking-widest disabled:opacity-30 disabled:pointer-events-none"
               title={t.back}
             >
               <ArrowLeft size={20} />
@@ -73,7 +87,7 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
             </button>
             <div className="w-px h-8 bg-border-main mx-2"></div>
             <div className="flex items-center gap-3">
-                <div className="p-2 bg-accent/20 rounded-lg text-accent">
+                <div className="p-2 bg-accent/20 rounded-lg text-accent shadow-[0_0_15px_rgba(6,182,212,0.2)]">
                 <Sparkles size={24} />
                 </div>
                 <div>
@@ -89,7 +103,7 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {showConfirm ? (
             <div className="max-w-2xl mx-auto space-y-8 py-10">
-              <div className="bg-accent/5 border border-accent/20 rounded-2xl p-8 text-center space-y-4">
+              <div className="bg-accent/5 border border-accent/20 rounded-2xl p-8 text-center space-y-4 shadow-[inset_0_0_40px_rgba(6,182,212,0.05)]" id="confirm-container">
                 <p className="text-lg text-text-main leading-relaxed">
                   {t.globalAiConfirmMsg}
                 </p>
@@ -102,8 +116,8 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
                           onChange={(e) => setOnlyUnreviewed(e.target.checked)}
                           className="peer sr-only"
                         />
-                        <div className="w-10 h-6 bg-button border border-border-main rounded-full peer-checked:bg-accent transition-colors"></div>
-                        <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full peer-checked:translate-x-4 transition-transform"></div>
+                        <div className="w-10 h-6 bg-button border border-border-main rounded-full peer-checked:bg-accent peer-checked:border-accent peer-checked:shadow-[0_0_10px_var(--accent-glow)] transition-all"></div>
+                        <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full peer-checked:translate-x-4 transition-transform shadow-sm"></div>
                       </div>
                       <span className="text-sm font-bold text-text-dim group-hover:text-text-main transition-colors">
                         {t.analyzeOnlyUnreviewed}
@@ -112,17 +126,17 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
                 </div>
               </div>
               
-              <div className="flex justify-center gap-4">
+              <div className="flex justify-center gap-4 w-full max-w-2xl">
                 <button
                   onClick={onBack}
-                  className="px-8 py-4 rounded-xl border border-border-main text-text-dim font-black uppercase tracking-widest hover:bg-white/5 transition-all"
+                  className="flex-1 py-4 rounded-xl border border-border-main text-text-dim font-black uppercase tracking-widest hover:bg-white/5 transition-all"
                 >
                   {t.cancel}
                 </button>
                 <button
                   onClick={onStart}
                   disabled={items.length === 0}
-                  className="px-10 py-4 rounded-xl bg-accent text-white font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-accent/20 flex items-center gap-3 disabled:opacity-50 disabled:pointer-events-none"
+                  className="flex-1 py-4 rounded-xl border border-accent text-accent font-black uppercase tracking-widest hover:bg-accent hover:text-black active:scale-95 transition-all shadow-[0_0_20px_rgba(6,182,212,0.15)] flex items-center justify-center gap-3 disabled:opacity-50 disabled:pointer-events-none"
                 >
                   <Play size={20} className="fill-current" />
                   {t.startGlobalAnalysis}
@@ -148,7 +162,7 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
                         </div>
                         <div className="h-2 w-64 bg-button rounded-full overflow-hidden border border-border-main">
                             <div 
-                                className="h-full bg-accent transition-all duration-500 relative"
+                                className="h-full bg-accent transition-all duration-500 relative shadow-[0_0_10px_var(--accent-glow)]"
                                 style={{ width: `${progress}%` }}
                             >
                                 <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
@@ -159,7 +173,7 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
                     {!isAnalyzing && errorCount > 0 && (
                         <button
                             onClick={onRetryAllErrors}
-                            className="flex items-center gap-2 px-4 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/50 rounded-lg text-yellow-500 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
+                            className="flex items-center gap-2 px-4 py-2 bg-transparent border border-yellow-600/50 hover:bg-yellow-600 hover:text-black rounded-lg text-yellow-500 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_0_10px_rgba(202,138,4,0.1)]"
                         >
                             <RotateCw size={14} />
                             Retentar todos com erro ({errorCount})

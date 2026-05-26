@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { api } from '../services/api';
 import type { Student, AnalysisItem } from '../types';
 import toast from 'react-hot-toast';
@@ -10,6 +10,7 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
   const [onlyUnreviewed, setOnlyUnreviewed] = useState(true);
   const [showConfirm, setShowConfirm] = useState(true);
   const [isActive, setIsActive] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (items.length > 0) {
@@ -19,6 +20,12 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
   }, [items]);
 
   const initAnalysis = useCallback((students: Student[]) => {
+    // Se já estiver ativo e com itens, não reseta a menos que a turma tenha mudado
+    if (isActive && items.length > 0) {
+      setIsActive(true);
+      return;
+    }
+
     const classStudents = students.filter(s => s.turma === selectedTurma);
     const newItems: AnalysisItem[] = [];
 
@@ -44,9 +51,9 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
     setIsAnalyzing(false);
     setShowConfirm(true);
     setIsActive(true);
-  }, [selectedTurma, onlyUnreviewed]);
+  }, [selectedTurma, onlyUnreviewed, isActive, items.length]);
 
-  const runSingleAnalysis = async (item: AnalysisItem, index: number) => {
+  const runSingleAnalysis = async (item: AnalysisItem, index: number, signal?: AbortSignal) => {
     setItems(prev => prev.map((it, idx) => 
       idx === index ? { ...it, status: 'analyzing', error: undefined } : it
     ));
@@ -59,13 +66,14 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
         turma: selectedTurma,
         questionNum: item.questionNum,
         code
-      });
+      }, signal);
 
       setItems(prev => prev.map((it, idx) => 
         idx === index ? { ...it, status: 'success', result: analysisRes.data } : it
       ));
       return true;
     } catch (err: any) {
+      if (err.name === 'AbortError') return false;
       console.error(`Error analyzing ${item.studentName} Q${item.questionNum}:`, err);
       setItems(prev => prev.map((it, idx) => 
         idx === index ? { ...it, status: 'error', error: err.response?.data?.error || err.message } : it
@@ -78,17 +86,34 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
     setShowConfirm(false);
     setIsAnalyzing(true);
     
+    abortControllerRef.current = new AbortController();
+    
     for (let i = 0; i < items.length; i++) {
       if (items[i].status === 'success') {
         continue;
       }
       
-      await runSingleAnalysis(items[i], i);
+      const success = await runSingleAnalysis(items[i], i, abortControllerRef.current.signal);
+      if (!success && abortControllerRef.current.signal.aborted) {
+        break;
+      }
     }
 
     setIsAnalyzing(false);
-    toast.success(t.analysisComplete);
+    if (!abortControllerRef.current.signal.aborted) {
+      toast.success(t.analysisComplete);
+    } else {
+      toast.error('Análise cancelada');
+    }
+    abortControllerRef.current = null;
   };
+
+  const cancelAnalysis = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setIsAnalyzing(false);
+  }, []);
 
   const retryItem = async (studentId: string, questionNum: number) => {
     const index = items.findIndex(it => it.studentId === studentId && it.questionNum === questionNum);
@@ -104,11 +129,20 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
     if (errorItems.length === 0) return;
 
     setIsAnalyzing(true);
+    abortControllerRef.current = new AbortController();
+    
     for (const { it, idx } of errorItems) {
-      await runSingleAnalysis(it, idx);
+      const success = await runSingleAnalysis(it, idx, abortControllerRef.current.signal);
+      if (!success && abortControllerRef.current.signal.aborted) {
+        break;
+      }
     }
+    
     setIsAnalyzing(false);
-    toast.success(t.analysisComplete);
+    if (!abortControllerRef.current.signal.aborted) {
+      toast.success(t.analysisComplete);
+    }
+    abortControllerRef.current = null;
   };
 
   const applyAll = async () => {
@@ -151,6 +185,7 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
     setIsActive,
     initAnalysis,
     startAnalysis,
+    cancelAnalysis,
     retryItem,
     retryAllErrors,
     applyAll
