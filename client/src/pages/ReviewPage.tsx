@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   ChevronLeft, ChevronRight, Copy, Save, 
   Sparkles, BookOpen, X, Play, Eye, Info, Trash2, Loader2,
-  CheckCircle2, List, ClipboardList, AlertCircle, RotateCcw
+  CheckCircle2, List, ClipboardList, AlertCircle, RotateCcw, Settings
 } from 'lucide-react';
 import { marked } from 'marked';
 import Editor from '@monaco-editor/react';
@@ -35,6 +35,7 @@ interface ReviewPageProps {
   theme: 'light' | 'dark';
   t: any;
   showAIPreviewModal: boolean;
+  onEditWeights: () => void;
 }
 
 const ReviewPage: React.FC<ReviewPageProps> = ({
@@ -58,7 +59,8 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
   calculateTotal,
   theme,
   t,
-  showAIPreviewModal
+  showAIPreviewModal,
+  onEditWeights
 }) => {
   const safeStudents = React.useMemo(() => Array.isArray(students) ? students : [], [students]);
   const classStudents = safeStudents.filter(s => s.turma === selectedTurma);
@@ -438,6 +440,13 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
                         </button>
                         );
                     })}
+                    <button 
+                        onClick={onEditWeights}
+                        className="px-3 py-2 bg-button border border-border-main text-text-dim hover:text-accent hover:border-accent/50 rounded transition-all active:scale-90 flex items-center gap-2"
+                        title={t.editWeights}
+                    >
+                        <Settings size={18} />
+                    </button>
                 </div>
             </div>
         </div>
@@ -695,7 +704,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
                             onClick={() => handleToggleQuestionReviewed(currentIndex, currentQ, false)}
                             className="w-full py-2 bg-red-500/10 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                         >
-                            <RotateCcw size={14} /> {t.resetStatus || 'Reset Questão'}
+                            <RotateCcw size={14} /> {t.resetStatus}
                             </button>
                             )}
                             {pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`] && (
@@ -721,7 +730,7 @@ const ReviewPage: React.FC<ReviewPageProps> = ({
                             {saving 
                             ? t.saving 
                             : ((currentQuestion?.reviewed || !currentQuestion?.path) && !pendingChanges[currentStudent.folder_name]?.[`q${currentQ}`] 
-                                ? (t.reviewed || 'Questão Revisada') 
+                                ? t.questionReviewed
                                 : t.saveGrade)}
                             </button>
                             </div>                

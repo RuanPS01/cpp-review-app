@@ -63,6 +63,29 @@ const App = () => {
   });
   
   const [statements, setStatements] = useState<Record<string, string>>({});
+  const [weights, setWeights] = useState<Record<string, number>>({});
+  const [editingWeights, setEditingWeights] = useState<Record<string, number>>({});
+  const [showWeightsModal, setShowWeightsModal] = useState(false);
+  
+  const handleOpenWeightsModal = () => {
+    if (!selectedTurma) return;
+    
+    const classQuestions = Array.from(new Set(
+      students
+        .filter(s => s.turma === selectedTurma)
+        .flatMap(s => Object.keys(s.questions).map(k => parseInt(k.replace('q', ''))))
+    )).sort((a, b) => a - b);
+
+    const initial: Record<string, number> = {};
+    classQuestions.forEach(qNum => {
+      const qKey = `q${qNum}`;
+      // Initialize with existing weight or split 100 evenly
+      initial[qKey] = weights[qKey] ?? Number((100 / classQuestions.length).toFixed(0));
+    });
+
+    setEditingWeights(initial);
+    setShowWeightsModal(true);
+  };
   const [showStatementModal, setShowStatementModal] = useState(false);
   const [showAIPreviewModal, setShowAIPreviewModal] = useState(false);
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
@@ -104,17 +127,39 @@ const App = () => {
         .filter(s => s.turma === student.turma)
         .flatMap(s => Object.keys(s.questions))
     ));
-    const totalQuestions = classQuestions.length || 1;
-
+    
     const studentPending = pendingChanges[student.folder_name] || {};
-    const sum = classQuestions.reduce((acc, qKey) => {
+    
+    // Check if we have weights for this turma
+    const hasWeights = Object.keys(weights).length > 0;
+    
+    if (hasWeights) {
+      let totalWeightedScore = 0;
+      let totalWeight = 0;
+      
+      classQuestions.forEach(qKey => {
         const score = studentPending[qKey] 
           ? studentPending[qKey].score 
           : (student.questions[qKey]?.score || 0);
-        return acc + score;
-    }, 0);
-    
-    return (sum / totalQuestions).toFixed(2);
+        
+        const weight = weights[qKey] ?? 0;
+        totalWeightedScore += score * weight;
+        totalWeight += weight;
+      });
+      
+      if (totalWeight === 0) return '0.00';
+      return (totalWeightedScore / totalWeight).toFixed(2);
+    } else {
+      const totalQuestions = classQuestions.length || 1;
+      const sum = classQuestions.reduce((acc, qKey) => {
+          const score = studentPending[qKey] 
+            ? studentPending[qKey].score 
+            : (student.questions[qKey]?.score || 0);
+          return acc + score;
+      }, 0);
+      
+      return (sum / totalQuestions).toFixed(2);
+    }
   };
 
   const calculateClassAverage = () => {
@@ -146,6 +191,20 @@ const App = () => {
     }
   }, []);
 
+  const fetchWeights = useCallback(async (turma: string) => {
+    try {
+      const res = await api.getWeights(turma);
+      if (res.data && typeof res.data === 'object') {
+        setWeights(res.data);
+      } else {
+        setWeights({});
+      }
+    } catch (err) {
+      console.error('Error fetching weights', err);
+      setWeights({});
+    }
+  }, []);
+
   useEffect(() => {
     fetchStudents();
     fetchAISettings();
@@ -170,17 +229,29 @@ const App = () => {
   useEffect(() => {
     if (selectedTurma) {
       fetchStatements(selectedTurma);
+      fetchWeights(selectedTurma);
     }
-  }, [selectedTurma, fetchStatements]);
+  }, [selectedTurma, fetchStatements, fetchWeights]);
 
   const saveStatement = async (text: string) => {
     const updatedStatements = { ...statements, [`q${currentQ}`]: text };
     try {
       await api.saveStatements(selectedTurma, updatedStatements);
       setStatements(updatedStatements);
-      toast.success('Enunciado salvo com sucesso');
+      toast.success(t.statementSaveSuccess);
     } catch {
-      toast.error('Falha ao salvar enunciado');
+      toast.error(t.statementSaveError);
+    }
+  };
+
+  const saveWeights = async (newWeights: Record<string, number>) => {
+    try {
+      await api.saveWeights(selectedTurma, newWeights);
+      setWeights(newWeights);
+      toast.success(t.weightsSaveSuccess);
+      setShowWeightsModal(false);
+    } catch {
+      toast.error(t.weightsSaveError);
     }
   };
 
@@ -416,6 +487,7 @@ const App = () => {
             theme={theme}
             t={t}
             showAIPreviewModal={showAIPreviewModal}
+            onEditWeights={handleOpenWeightsModal}
           />
         ) : (
           <TablePage 
@@ -431,6 +503,7 @@ const App = () => {
             setShowEditStudentModal={setShowEditStudentModal}
             t={t}
             globalAI={globalAI}
+            weights={weights}
           />
         )}
       </main>
@@ -746,6 +819,84 @@ const App = () => {
           theme={theme}
         />
       )}
+
+      {/* Question Weights Modal */}
+      <Modal
+        isOpen={showWeightsModal}
+        onClose={() => setShowWeightsModal(false)}
+        title={t.editWeights}
+        icon={Settings}
+      >
+        <div className="space-y-6">
+          <p className="text-xs text-text-dim italic">
+            {t.weightEditorDesc}
+          </p>
+          
+          <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+            {turmas.length > 0 && selectedTurma && (() => {
+              const currentTotal = Object.values(editingWeights).reduce((acc, val) => acc + val, 0);
+
+              return (
+                <>
+                {Object.entries(editingWeights).sort().map(([qKey, weight]) => {
+                  const qNum = qKey.replace('q', '');
+                  return (
+                    <div key={qKey} className="flex items-center justify-between bg-input p-3 rounded-lg border border-border-main">
+                      <span className="font-bold text-text-bright">{t.question} {qNum}</span>
+                      <div className="flex items-center gap-3">
+                        <input 
+                          type="number" 
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={weight}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            setEditingWeights(prev => ({ ...prev, [qKey]: val }));
+                          }}
+                          className="w-24 bg-app border border-border-main rounded p-2 text-accent font-bold text-center focus:outline-none focus:border-accent transition-all"
+                        />
+                        <span className="text-text-dim font-bold">%</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className={`mt-4 p-4 rounded-xl border flex justify-between items-center ${Math.abs(currentTotal - 100) < 0.1 ? 'bg-accent/10 border-accent/30 text-accent' : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500'}`}>
+                    <span className="text-xs font-black uppercase tracking-widest">{t.totalPercentage.replace('{total}', currentTotal.toFixed(1))}</span>
+                    {Math.abs(currentTotal - 100) > 0.1 && (
+                        <span className="text-[10px] font-bold italic animate-pulse">Soma ideal: 100%</span>
+                    )}
+                </div>
+                </>
+              );
+            })()}
+          </div>
+
+          <div className="flex gap-4 pt-4 border-t border-border-main">
+            <button 
+              onClick={() => setShowWeightsModal(false)}
+              className="flex-1 px-4 py-3 border border-border-main text-text-dim hover:text-text-bright hover:bg-button rounded-lg text-xs font-bold uppercase tracking-widest transition-all"
+            >
+              {t.cancel}
+            </button>
+            <button 
+              onClick={() => {
+                const sum = Object.values(editingWeights).reduce((acc, val) => acc + val, 0);
+                
+                if (Math.abs(sum - 100) > 0.1) {
+                    toast.error(t.percentageError.replace('{current}', sum.toFixed(1)));
+                    return;
+                }
+
+                saveWeights(editingWeights);
+              }}
+              className="flex-1 px-4 py-3 bg-accent text-black font-black uppercase tracking-widest text-xs rounded-lg active:scale-95 transition-all shadow-lg shadow-accent/20"
+            >
+              {t.saveWeights}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <Toaster 
         position="top-center" 
