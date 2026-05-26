@@ -97,7 +97,7 @@ const TablePage: React.FC<TablePageProps> = ({
         'Comentários'
     ];
 
-    const rows = classStudents.map((s, rowIndex) => {
+    const rows = classStudents.map((s) => {
         let cleanId = s.id;
         const numbers = s.id.match(/\d+/g);
         if (numbers && numbers.length > 0) {
@@ -111,14 +111,15 @@ const TablePage: React.FC<TablePageProps> = ({
             'Nome completo': s.name
         };
 
+        let totalScore = 0;
         questionKeys.forEach(k => {
-            studentRow[k.toUpperCase()] = s.questions[k]?.score || 0;
+            const score = s.questions[k]?.score || 0;
+            studentRow[k.toUpperCase()] = score;
+            totalScore += score;
         });
 
-        const startCol = 2; // Col C
-        const endCol = startCol + questionKeys.length - 1;
-        
-        studentRow['Média'] = total;
+        const average = questionKeys.length > 0 ? totalScore / questionKeys.length : 0;
+        studentRow['Média'] = average.toFixed(2);
 
         studentRow['Comentários'] = Object.entries(s.questions)
             .map(([qKey, qData]) => `${qKey.toUpperCase()}: ${qData.comment || ''}`)
