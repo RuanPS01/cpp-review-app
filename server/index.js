@@ -545,6 +545,28 @@ app.post('/api/settings', (req, res) => {
   res.json({ success: true });
 });
 
+function getWeightsPath(turma) {
+  const turmaDir = path.join(DATA_DIR, `turma_${turma}`);
+  if (!fs.existsSync(turmaDir)) fs.mkdirSync(turmaDir, { recursive: true });
+  return path.join(turmaDir, 'weights.json');
+}
+
+app.get('/api/weights', (req, res) => {
+  const { turma } = req.query;
+  const p = getWeightsPath(turma);
+  if (fs.existsSync(p)) {
+    res.json(JSON.parse(fs.readFileSync(p, 'utf8')));
+  } else {
+    res.json({});
+  }
+});
+
+app.post('/api/weights', (req, res) => {
+  const { turma, weights } = req.body;
+  fs.writeFileSync(getWeightsPath(turma), JSON.stringify(weights, null, 2));
+  res.json({ success: true });
+});
+
 app.get('/api/statements', (req, res) => {
   const fp = getStatementsPath(req.query.turma);
   if (fs.existsSync(fp)) res.json(JSON.parse(fs.readFileSync(fp, 'utf8')));

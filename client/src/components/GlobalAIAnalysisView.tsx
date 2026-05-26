@@ -16,6 +16,7 @@ interface GlobalAIAnalysisViewProps {
   onBack: () => void;
   onRetry: (studentId: string, questionNum: number) => void;
   onRetryAllErrors: () => void;
+  onRetryRemaining: () => void;
   onApplyAll: () => void;
   t: any;
 }
@@ -34,6 +35,7 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
   onBack,
   onRetry,
   onRetryAllErrors,
+  onRetryRemaining,
   onApplyAll,
   t
 }) => {
@@ -174,13 +176,22 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
 
                     {!isAnalyzing && (errorCount > 0 || pendingCount > 0) && (
                         <div className="flex gap-3">
+                            {errorCount > 0 && pendingCount > 0 && (
+                                <button
+                                    onClick={onRetryRemaining}
+                                    className="flex items-center gap-2 px-4 py-2 bg-accent/20 border border-accent hover:bg-accent hover:text-black rounded-lg text-accent text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_0_10px_rgba(6,182,212,0.2)]"
+                                >
+                                    <RotateCw size={14} />
+                                    {t.retryRemaining.replace('{count}', (pendingCount + errorCount).toString())}
+                                </button>
+                            )}
                             {pendingCount > 0 && (
                                 <button
                                     onClick={onResume}
                                     className="flex items-center gap-2 px-4 py-2 bg-transparent border border-accent/50 hover:bg-accent hover:text-black rounded-lg text-accent text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_0_10px_rgba(6,182,212,0.1)]"
                                 >
                                     <Play size={14} className="fill-current" />
-                                    Continuar pendentes ({pendingCount})
+                                    {t.continuePending.replace('{count}', pendingCount.toString())}
                                 </button>
                             )}
                             {errorCount > 0 && (
@@ -189,7 +200,7 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
                                     className="flex items-center gap-2 px-4 py-2 bg-transparent border border-yellow-600/50 hover:bg-yellow-600 hover:text-black rounded-lg text-yellow-500 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_0_10px_rgba(202,138,4,0.1)]"
                                 >
                                     <RotateCw size={14} />
-                                    Retentar erros ({errorCount})
+                                    {t.retryErrors.replace('{count}', errorCount.toString())}
                                 </button>
                             )}
                         </div>
@@ -203,11 +214,11 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
                   <thead className="bg-button/30 text-[10px] font-black uppercase tracking-widest text-text-dim border-b border-border-main">
                     <tr>
                       <th className="py-3 px-4 h-12">{t.studentName}</th>
-                      <th className="py-3 px-4 text-center h-12">Questão</th>
+                      <th className="py-3 px-4 text-center h-12">{t.question}</th>
                       <th className="py-3 px-4 h-12">{t.testStatus}</th>
                       <th className="py-3 px-4 text-center h-12">{t.score}</th>
-                      <th className="py-3 px-4 h-12">Comentário</th>
-                      <th className="py-3 px-4 text-center h-12">Ações</th>
+                      <th className="py-3 px-4 h-12">{t.comment}</th>
+                      <th className="py-3 px-4 text-center h-12">{t.actions}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-main/50 text-sm">
@@ -245,7 +256,7 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
                                         onClick={() => onRetry(item.studentId, item.questionNum)}
                                         disabled={isAnalyzing}
                                         className="p-2 hover:bg-accent/20 rounded-lg text-accent transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
-                                        title="Retentar"
+                                        title={t.retry}
                                     >
                                         <RotateCw size={16} />
                                     </button>
@@ -265,8 +276,8 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
         {!showConfirm && (
           <div className="p-6 border-t border-border-main bg-button/30 flex justify-between items-center">
             <div className="text-xs font-medium text-text-dim">
-              <span className="text-green-500 font-bold">{successCount}</span> de {items.length} com sucesso
-              {errorCount > 0 && <span className="text-red-500 ml-2">({errorCount} com erro)</span>}
+              {t.successCount.replace('{count}', successCount.toString()).replace('{total}', items.length.toString())}
+              {errorCount > 0 && <span className="text-red-500 ml-2">({t.errorCount.replace('{count}', errorCount.toString())})</span>}
             </div>
             {actionButtons}
           </div>

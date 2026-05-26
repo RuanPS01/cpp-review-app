@@ -19,6 +19,7 @@ interface TablePageProps {
   setShowEditStudentModal: (show: boolean) => void;
   t: any;
   globalAI: any;
+  weights: Record<string, number>;
 }
 
 const TablePage: React.FC<TablePageProps> = ({ 
@@ -33,13 +34,28 @@ const TablePage: React.FC<TablePageProps> = ({
   setEditingStudent,
   setShowEditStudentModal,
   t,
-  globalAI
+  globalAI,
+  weights
 }) => {
   const safeStudents = Array.isArray(students) ? students : [];
   const classStudents = safeStudents.filter(s => s.turma === selectedTurma);
   const questions = Array.from(new Set(
     classStudents.flatMap(s => Object.keys(s.questions).map(k => parseInt(k.replace('q', ''))))
   )).sort((a, b) => a - b);
+
+  // Helper to get weight percentage for a question
+  const getWeightLabel = (qNum: number) => {
+    const qKey = `q${qNum}`;
+    const weight = weights[qKey];
+    if (weight === undefined || weight === null) return `Q${qNum}`;
+    
+    // Calculate total weight to show percentage
+    const totalWeight = Object.values(weights).reduce((acc, w) => acc + w, 0);
+    if (totalWeight === 0) return `Q${qNum}`;
+    
+    const percentage = ((weight / totalWeight) * 100).toFixed(0);
+    return `Q${qNum} (${percentage}%)`;
+  };
 
   if (globalAI.isActive) {
     return (
@@ -57,6 +73,7 @@ const TablePage: React.FC<TablePageProps> = ({
             onBack={() => globalAI.setIsActive(false)}
             onRetry={globalAI.retryItem}
             onRetryAllErrors={globalAI.retryAllErrors}
+            onRetryRemaining={globalAI.retryAllRemaining}
             onApplyAll={globalAI.applyAll}
             t={t}
         />
@@ -80,7 +97,7 @@ const TablePage: React.FC<TablePageProps> = ({
         'Comentários'
     ];
 
-    const rows = classStudents.map((s, rowIndex) => {
+    const rows = classStudents.map((s) => {
         let cleanId = s.id;
         const numbers = s.id.match(/\d+/g);
         if (numbers && numbers.length > 0) {
@@ -94,16 +111,15 @@ const TablePage: React.FC<TablePageProps> = ({
             'Nome completo': s.name
         };
 
+        let totalScore = 0;
         questionKeys.forEach(k => {
-            studentRow[k.toUpperCase()] = s.questions[k]?.score || 0;
+            const score = s.questions[k]?.score || 0;
+            studentRow[k.toUpperCase()] = score;
+            totalScore += score;
         });
 
-        const startCol = 2; // Col C
-        const endCol = startCol + questionKeys.length - 1;
-        const startRef = XLSX.utils.encode_col(startCol) + (rowIndex + 2);
-        const endRef = XLSX.utils.encode_col(endCol) + (rowIndex + 2);
-        
-        studentRow['Média'] = { f: `AVERAGE(${startRef}:${endRef})` };
+        const average = questionKeys.length > 0 ? totalScore / questionKeys.length : 0;
+        studentRow['Média'] = average.toFixed(2);
 
         studentRow['Comentários'] = Object.entries(s.questions)
             .map(([qKey, qData]) => `${qKey.toUpperCase()}: ${qData.comment || ''}`)
@@ -222,7 +238,9 @@ const TablePage: React.FC<TablePageProps> = ({
                 <th className="py-1 px-2 text-xs font-bold uppercase tracking-wider text-text-dim text-center w-10"></th>
                 <th className="py-1 px-4 text-xs font-bold uppercase tracking-wider text-text-dim">{t.studentName}</th>
                 {questions.map(q => (
-                  <th key={q} className="py-1 px-2 text-xs font-bold uppercase tracking-wider text-text-dim text-center border-l border-border-main/50">Q{q}</th>
+                  <th key={q} className="py-1 px-2 text-xs font-bold uppercase tracking-wider text-text-dim text-center border-l border-border-main/50">
+                    {getWeightLabel(q)}
+                  </th>
                 ))}
                 <th className="py-1 px-2 text-xs font-bold uppercase tracking-wider text-accent text-center border-l border-border-main">{t.total}</th>
               </tr>
