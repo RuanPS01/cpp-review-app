@@ -54,6 +54,7 @@ const TablePage: React.FC<TablePageProps> = ({
             onStart={globalAI.startAnalysis}
             onBack={() => globalAI.setIsActive(false)}
             onRetry={globalAI.retryItem}
+            onRetryAllErrors={globalAI.retryAllErrors}
             onApplyAll={globalAI.applyAll}
             t={t}
         />

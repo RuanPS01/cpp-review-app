@@ -13,8 +13,8 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
 
   useEffect(() => {
     if (items.length > 0) {
-      const completed = items.filter(it => it.status === 'success').length;
-      setProgress(Math.round((completed / items.length) * 100));
+      const done = items.filter(it => it.status === 'success' || it.status === 'error').length;
+      setProgress(Math.round((done / items.length) * 100));
     }
   }, [items]);
 
@@ -99,6 +99,18 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
     setIsAnalyzing(false);
   };
 
+  const retryAllErrors = async () => {
+    const errorItems = items.map((it, idx) => ({ it, idx })).filter(x => x.it.status === 'error');
+    if (errorItems.length === 0) return;
+
+    setIsAnalyzing(true);
+    for (const { it, idx } of errorItems) {
+      await runSingleAnalysis(it, idx);
+    }
+    setIsAnalyzing(false);
+    toast.success(t.analysisComplete);
+  };
+
   const applyAll = async () => {
     const successItems = items.filter(it => it.status === 'success' && it.result);
     if (successItems.length === 0) return;
@@ -140,6 +152,7 @@ export const useGlobalAI = (selectedTurma: string, t: any, onComplete: () => Pro
     initAnalysis,
     startAnalysis,
     retryItem,
+    retryAllErrors,
     applyAll
   };
 };

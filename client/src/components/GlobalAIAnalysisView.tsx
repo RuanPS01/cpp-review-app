@@ -13,6 +13,7 @@ interface GlobalAIAnalysisViewProps {
   onStart: () => void;
   onBack: () => void;
   onRetry: (studentId: string, questionNum: number) => void;
+  onRetryAllErrors: () => void;
   onApplyAll: () => void;
   t: any;
 }
@@ -28,9 +29,35 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
   onStart,
   onBack,
   onRetry,
+  onRetryAllErrors,
   onApplyAll,
   t
 }) => {
+  const successCount = items.filter(it => it.status === 'success').length;
+  const errorCount = items.filter(it => it.status === 'error').length;
+  const showApply = !isAnalyzing && successCount > 0;
+
+  const actionButtons = (
+    <div className="flex gap-4">
+        <button
+          onClick={onBack}
+          disabled={isAnalyzing}
+          className="px-6 py-2 rounded-lg border border-border-main text-text-dim font-bold uppercase text-[10px] tracking-widest hover:bg-white/5 transition-all disabled:opacity-50"
+        >
+          {t.cancel}
+        </button>
+        {showApply && (
+          <button
+            onClick={onApplyAll}
+            className="px-8 py-2 rounded-lg bg-green-600 text-white font-black uppercase text-[10px] tracking-widest hover:bg-green-500 active:scale-95 transition-all shadow-lg flex items-center gap-2 animate-in zoom-in duration-300"
+          >
+            <Save size={14} />
+            {t.applyAllResults}
+          </button>
+        )}
+      </div>
+  );
+
   return (
     <div className="bg-panel-dark border border-border-main rounded-2xl w-full min-h-[calc(100vh-140px)] flex flex-col shadow-2xl overflow-hidden shadow-accent/10 animate-in fade-in slide-in-from-left-4 duration-300">
         {/* Header */}
@@ -55,6 +82,7 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
                 </div>
             </div>
           </div>
+          {!showConfirm && actionButtons}
         </div>
 
         {/* Content */}
@@ -108,21 +136,35 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Progress Bar */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs font-bold uppercase tracking-widest">
-                  <span className={isAnalyzing ? "text-accent animate-pulse" : "text-text-dim"}>
-                    {isAnalyzing ? t.statusAnalyzing : t.analysisComplete}
-                  </span>
-                  <span className="text-accent">{progress}%</span>
-                </div>
-                <div className="h-3 bg-button rounded-full overflow-hidden border border-border-main">
-                  <div 
-                    className="h-full bg-accent transition-all duration-500 relative"
-                    style={{ width: `${progress}%` }}
-                  >
-                    <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
-                  </div>
+              {/* Progress Bar & Retry All */}
+              <div className="space-y-4 bg-button/10 p-4 rounded-xl border border-border-main">
+                <div className="flex justify-between items-center">
+                    <div className="space-y-1">
+                        <div className="flex justify-between text-xs font-bold uppercase tracking-widest w-64">
+                            <span className={isAnalyzing ? "text-accent animate-pulse" : "text-text-dim"}>
+                                {isAnalyzing ? t.statusAnalyzing : t.analysisComplete}
+                            </span>
+                            <span className="text-accent">{progress}%</span>
+                        </div>
+                        <div className="h-2 w-64 bg-button rounded-full overflow-hidden border border-border-main">
+                            <div 
+                                className="h-full bg-accent transition-all duration-500 relative"
+                                style={{ width: `${progress}%` }}
+                            >
+                                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {!isAnalyzing && errorCount > 0 && (
+                        <button
+                            onClick={onRetryAllErrors}
+                            className="flex items-center gap-2 px-4 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/50 rounded-lg text-yellow-500 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
+                        >
+                            <RotateCw size={14} />
+                            Retentar todos com erro ({errorCount})
+                        </button>
+                    )}
                 </div>
               </div>
 
@@ -192,26 +234,10 @@ const GlobalAIAnalysisView: React.FC<GlobalAIAnalysisViewProps> = ({
         {!showConfirm && (
           <div className="p-6 border-t border-border-main bg-button/30 flex justify-between items-center">
             <div className="text-xs font-medium text-text-dim">
-              {items.filter(it => it.status === 'success').length} de {items.length} com sucesso
+              <span className="text-green-500 font-bold">{successCount}</span> de {items.length} com sucesso
+              {errorCount > 0 && <span className="text-red-500 ml-2">({errorCount} com erro)</span>}
             </div>
-            <div className="flex gap-4">
-              <button
-                onClick={onBack}
-                disabled={isAnalyzing}
-                className="px-6 py-2 rounded-lg border border-border-main text-text-dim font-bold uppercase text-[10px] tracking-widest hover:bg-white/5 transition-all disabled:opacity-50"
-              >
-                {t.cancel}
-              </button>
-              {!isAnalyzing && progress === 100 && (
-                <button
-                  onClick={onApplyAll}
-                  className="px-8 py-2 rounded-lg bg-green-600 text-white font-black uppercase text-[10px] tracking-widest hover:bg-green-500 active:scale-95 transition-all shadow-lg flex items-center gap-2"
-                >
-                  <Save size={14} />
-                  {t.applyAllResults}
-                </button>
-              )}
-            </div>
+            {actionButtons}
           </div>
         )}
     </div>
