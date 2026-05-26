@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { FileText, Download, Upload, Info, Pencil, CheckCircle2, Sparkles } from 'lucide-react';
 import type { Student } from '../types';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
-import GlobalAIAnalysisModal from '../components/GlobalAIAnalysisModal';
+import GlobalAIAnalysisView from '../components/GlobalAIAnalysisView';
 
 interface TablePageProps {
   students: Student[];
@@ -18,6 +18,7 @@ interface TablePageProps {
   setEditingStudent: (student: Student) => void;
   setShowEditStudentModal: (show: boolean) => void;
   t: any;
+  globalAI: any;
 }
 
 const TablePage: React.FC<TablePageProps> = ({ 
@@ -31,17 +32,35 @@ const TablePage: React.FC<TablePageProps> = ({
   setShowJsonHelp,
   setEditingStudent,
   setShowEditStudentModal,
-  t 
+  t,
+  globalAI
 }) => {
-  const [showGlobalAIModal, setShowGlobalAIModal] = useState(false);
   const safeStudents = Array.isArray(students) ? students : [];
   const classStudents = safeStudents.filter(s => s.turma === selectedTurma);
   const questions = Array.from(new Set(
     classStudents.flatMap(s => Object.keys(s.questions).map(k => parseInt(k.replace('q', ''))))
   )).sort((a, b) => a - b);
 
+  if (globalAI.isActive) {
+    return (
+        <GlobalAIAnalysisView 
+            items={globalAI.items}
+            isAnalyzing={globalAI.isAnalyzing}
+            progress={globalAI.progress}
+            onlyUnreviewed={globalAI.onlyUnreviewed}
+            setOnlyUnreviewed={globalAI.setOnlyUnreviewed}
+            showConfirm={globalAI.showConfirm}
+            selectedTurma={selectedTurma}
+            onStart={globalAI.startAnalysis}
+            onBack={() => globalAI.setIsActive(false)}
+            onRetry={globalAI.retryItem}
+            onApplyAll={globalAI.applyAll}
+            t={t}
+        />
+    );
+  }
+
   const handleExportExcel = () => {
-    // Determine all question keys present in the class
     const questionKeys = Array.from(new Set(
       classStudents.flatMap(s => Object.keys(s.questions))
     )).sort((a, b) => {
@@ -76,10 +95,6 @@ const TablePage: React.FC<TablePageProps> = ({
             studentRow[k.toUpperCase()] = s.questions[k]?.score || 0;
         });
 
-        // Calculate Average using Formula
-        // ID is Col A (index 0), Name is Col B (index 1)
-        // Questions start at Col C (index 2)
-        // Average will be at the next column after questions
         const startCol = 2; // Col C
         const endCol = startCol + questionKeys.length - 1;
         const startRef = XLSX.utils.encode_col(startCol) + (rowIndex + 2);
@@ -97,7 +112,6 @@ const TablePage: React.FC<TablePageProps> = ({
 
     const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers });
 
-    // Apply some basic formatting if possible (widths)
     const wscols = [
         { wch: 15 }, // ID
         { wch: 40 }, // Name
@@ -149,14 +163,14 @@ const TablePage: React.FC<TablePageProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 animate-in fade-in duration-300">
       <div className="flex justify-between items-center px-2">
           <div className="text-[10px] font-bold uppercase tracking-widest text-text-dim">
               {t.activeClass}: <span className="text-accent">{selectedTurma}</span> • <span className="text-text-bright">{classStudents.length}</span> {t.studentsCount} • {t.classAverage}: <span className="text-accent drop-shadow-[0_0_5px_var(--accent-glow)]">{calculateClassAverage()}</span>
           </div>
           <div className="flex gap-2">
               <button 
-                  onClick={() => setShowGlobalAIModal(true)}
+                  onClick={() => globalAI.initAnalysis(students)}
                   className="flex items-center gap-2 bg-accent/10 hover:bg-accent/20 border border-accent/30 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] text-accent transition-all active:scale-95 shadow-lg group"
               >
                   <Sparkles size={14} className="group-hover:rotate-12 transition-transform fill-current" />
@@ -268,15 +282,6 @@ const TablePage: React.FC<TablePageProps> = ({
           </table>
         </div>
       </div>
-
-      <GlobalAIAnalysisModal
-        isOpen={showGlobalAIModal}
-        onClose={() => setShowGlobalAIModal(false)}
-        students={students}
-        selectedTurma={selectedTurma}
-        onAnalysisComplete={fetchStudents}
-        t={t}
-      />
     </div>
   );
 };

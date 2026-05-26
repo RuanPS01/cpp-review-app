@@ -41,3 +41,13 @@ export interface PendingChanges {
     };
   };
 }
+
+export interface AnalysisItem {
+  studentId: string;
+  studentName: string;
+  questionNum: number;
+  path: string;
+  status: 'pending' | 'analyzing' | 'success' | 'error';
+  result?: { score: number; comment: string };
+  error?: string;
+}
