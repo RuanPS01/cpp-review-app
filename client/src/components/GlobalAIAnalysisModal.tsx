@@ -131,7 +131,7 @@ const GlobalAIAnalysisModal: React.FC<GlobalAIAnalysisModalProps> = ({
       toast.success(t.allGradesSaved);
       await onAnalysisComplete();
       onClose();
-    } catch (err) {
+    } catch {
       toast.error('Error applying results');
     } finally {
       setIsAnalyzing(false);
@@ -244,7 +244,7 @@ const GlobalAIAnalysisModal: React.FC<GlobalAIAnalysisModalProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-main/50 text-sm">
-                    {items.map((item, idx) => (
+                    {items.map((item) => (
                       <tr key={`${item.studentId}-${item.questionNum}`} className="hover:bg-white/5 transition-colors">
                         <td className="py-3 px-4 font-bold text-text-main">{item.studentName}</td>
                         <td className="py-3 px-4 text-center font-mono text-accent">Q{item.questionNum}</td>
