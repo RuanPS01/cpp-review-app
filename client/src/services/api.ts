@@ -50,6 +50,6 @@ export const api = {
   importGrades: (turma: string, grades: any) => axios.post(`${API_BASE}/import-grades`, { turma, grades }),
   exportGrades: (turma: string) => axios.get(`${API_BASE}/export-grades/${turma}`),
   getTestCases: (turma: string) => axios.get<Record<string, any[]>>(`${API_BASE}/testcases`, { params: { turma } }),
-  runTests: (data: { turma: string; studentId: string; questionNum: string | number; filePath: string }) => 
+  runTests: (data: { turma: string; studentId: string; questionNum: string | number; filePath: string; code?: string }) => 
     axios.post(`${API_BASE}/run-tests`, data),
 };
