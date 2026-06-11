@@ -1,0 +1,93 @@
+<svg width="100%" viewBox="0 0 680 430" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>Colab Arena — Paleta Monocromática</title>
+<desc>Paleta de cores monocromática com temas claro e escuro, indicadores de status e raios de borda.</desc>
+<style>
+.adapt{fill:#1f2937}
+.dim{fill:#64748b}
+@media (prefers-color-scheme:dark){.adapt{fill:#e5e7eb}.dim{fill:#94a3b8}}
+.title{font-size:18px;font-weight:500}
+.sec{font-size:14px;font-weight:500}
+.name{font-size:12px;font-weight:500}
+.hex{font-size:11px;font-family:monospace}
+.foot{font-size:11px;font-family:monospace}
+</style>
+
+<text x="20" y="28" class="title adapt">Colab Arena — Paleta Monocromática</text>
+
+<text x="20" y="60" class="sec adapt">Tema Claro</text>
+
+<rect x="20" y="72" width="80" height="62" rx="10" fill="#fafafa" stroke="#e2e2e2" stroke-width="1"/>
+<text x="20" y="152" class="name adapt">background</text>
+<text x="20" y="168" class="hex dim">#fafafa</text>
+
+<rect x="112" y="72" width="80" height="62" rx="10" fill="#ffffff" stroke="#e2e2e2" stroke-width="1"/>
+<text x="112" y="152" class="name adapt">card</text>
+<text x="112" y="168" class="hex dim">#ffffff</text>
+
+<rect x="204" y="72" width="80" height="62" rx="10" fill="#e5e5e5" stroke="#dadada" stroke-width="1"/>
+<text x="204" y="152" class="name adapt">muted</text>
+<text x="204" y="168" class="hex dim">#e5e5e5</text>
+
+<rect x="296" y="72" width="80" height="62" rx="10" fill="#242424"/>
+<text x="296" y="152" class="name adapt">accent</text>
+<text x="296" y="168" class="hex dim">#242424</text>
+
+<rect x="388" y="72" width="80" height="62" rx="10" fill="#171717"/>
+<text x="388" y="152" class="name adapt">primary</text>
+<text x="388" y="168" class="hex dim">#171717</text>
+
+<rect x="480" y="72" width="80" height="62" rx="10" fill="#121212"/>
+<text x="480" y="152" class="name adapt">foreground</text>
+<text x="480" y="168" class="hex dim">#121212</text>
+
+<rect x="572" y="72" width="80" height="62" rx="10" fill="#dc2626"/>
+<text x="572" y="152" class="name adapt">destructive</text>
+<text x="572" y="168" class="hex dim">#dc2626</text>
+
+<rect x="20" y="190" width="632" height="132" rx="14" fill="#0a0a0a" stroke="#222222" stroke-width="1"/>
+<text x="38" y="218" class="sec" fill="#f5f5f5">Tema Escuro</text>
+
+<rect x="38" y="232" width="82" height="72" rx="8" fill="#0a0a0a" stroke="#2a2a2a" stroke-width="1"/>
+<text x="50" y="258" class="name" fill="#e5e7eb">background</text>
+<text x="50" y="292" class="hex" fill="#9ca3af">#0a0a0a</text>
+
+<rect x="126" y="232" width="82" height="72" rx="8" fill="#121212" stroke="#262626" stroke-width="1"/>
+<text x="138" y="258" class="name" fill="#e5e7eb">card</text>
+<text x="138" y="292" class="hex" fill="#9ca3af">#121212</text>
+
+<rect x="214" y="232" width="82" height="72" rx="8" fill="#212121"/>
+<text x="226" y="258" class="name" fill="#e5e7eb">muted</text>
+<text x="226" y="292" class="hex" fill="#9ca3af">#212121</text>
+
+<rect x="302" y="232" width="82" height="72" rx="8" fill="#2e2e2e"/>
+<text x="314" y="258" class="name" fill="#e5e7eb">accent</text>
+<text x="314" y="292" class="hex" fill="#9ca3af">#2e2e2e</text>
+
+<rect x="390" y="232" width="82" height="72" rx="8" fill="#ededed"/>
+<text x="402" y="258" class="name" fill="#1f2937">primary</text>
+<text x="402" y="292" class="hex" fill="#4b5563">#ededed</text>
+
+<rect x="478" y="232" width="82" height="72" rx="8" fill="#9e2f2f"/>
+<text x="490" y="258" class="name" fill="#fde8e8">destructive</text>
+<text x="490" y="292" class="hex" fill="#e9b9b9">#9e2f2f</text>
+
+<rect x="566" y="232" width="82" height="72" rx="8" fill="#161616" stroke="#8c8c8c" stroke-width="1.5"/>
+<text x="578" y="258" class="name" fill="#e5e7eb">ring</text>
+<text x="578" y="292" class="hex" fill="#9ca3af">#8c8c8c</text>
+
+<text x="20" y="354" class="sec adapt">Indicadores de status</text>
+
+<circle cx="28" cy="376" r="7" fill="#22c55e"/>
+<text x="42" y="380" class="name adapt">online</text>
+
+<circle cx="132" cy="376" r="7" fill="#f59e0b"/>
+<text x="146" y="380" class="name adapt">away</text>
+
+<circle cx="232" cy="376" r="7" fill="#ef4444"/>
+<text x="246" y="380" class="name adapt">busy</text>
+
+<circle cx="328" cy="376" r="7" fill="#9ca3af"/>
+<text x="342" y="380" class="name adapt">offline</text>
+
+<text x="20" y="412" class="foot dim">Raio de borda: lg 9px · md 6px · sm 3px  (--radius base: 0.75rem)</text>
+</svg>
