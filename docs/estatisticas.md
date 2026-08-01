@@ -17,7 +17,7 @@ sequenceDiagram
     participant S as Servidor (:3001)
     participant D as data/statistics/
 
-    U->>W: login + curso + seção + opções
+    U->>W: login + curso + seções + opções
     W->>M: login/token.php → token
     W->>E: captureCookie (janela de login)
     E-->>W: MoodleSession + user agent
@@ -33,6 +33,8 @@ sequenceDiagram
 ```
 
 O cliente coleta o que o **Web Service** permite; o servidor espelha as **páginas HTML do VPL** com a sessão do navegador. Cada fonte é opcional: se uma falhar, a importação continua e o motivo entra em `warnings`, exibido na tela.
+
+**Várias seções por importação.** É possível marcar quantas seções do curso quiser: elas viram um único dataset, com as questões numeradas continuamente (`q1..qn`) e cada uma guardando de qual seção veio (campo `section`, exibido na aba Questões). O nome da turma é sugerido a partir da seleção (`Curso - P1 + P2`) e pode ser editado antes de importar. O formato antigo, de seção única, continua aceito pelo endpoint.
 
 ---
 

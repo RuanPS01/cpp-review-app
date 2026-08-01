@@ -46,6 +46,8 @@ export interface QuestionMetrics {
   key: string;
   cmid: number;
   name: string;
+  /** Seção do Moodle de onde a questão veio (null em importações antigas). */
+  section: string | null;
   maxGrade: number;
   startDate: number | null;
   dueDate: number | null;
@@ -174,6 +176,8 @@ export interface StatisticsMetrics {
   sectionName: string;
   importedAt: number;
   sources: Record<string, boolean>;
+  /** Uma entrada por seção importada. */
+  sections?: string[];
   warnings: string[];
   overview: OverviewMetrics;
   questions: QuestionMetrics[];

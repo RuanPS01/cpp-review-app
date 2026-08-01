@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, CalendarClock, FlaskConical, Percent, Send, Sigma } from 'lucide-react';
+import { AlertTriangle, CalendarClock, FlaskConical, Layers, Percent, Send, Sigma } from 'lucide-react';
 import type { AIReport, StatisticsMetrics } from '../../types/statistics';
 import ChartCard from './charts/ChartCard';
 import BarChart from './charts/BarChart';
@@ -92,6 +92,11 @@ const QuestionsPanel: React.FC<QuestionsPanelProps> = ({ metrics, reports, onRep
       </div>
 
       <div className="flex flex-wrap items-center gap-4 rounded-xl border border-border-main bg-panel p-4 text-[10px] font-bold uppercase tracking-widest text-text-dim">
+        {question.section && (metrics.sections?.length ?? 0) > 1 && (
+          <span className="flex items-center gap-2">
+            <Layers size={12} className="text-accent" /> {question.section}
+          </span>
+        )}
         <span className="flex items-center gap-2">
           <CalendarClock size={12} className="text-accent" /> {t.statsQuestionDue}: {formatDateTime(question.dueDate, lang)}
         </span>

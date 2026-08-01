@@ -8,24 +8,30 @@ import type {
   SubmissionCode
 } from '../types/statistics';
 
+export interface StatisticsImportQuestion {
+  cmid: number;
+  instanceId?: number | null;
+  name: string;
+  sectionName?: string;
+  statement?: string | null;
+  testCases?: unknown[];
+  startDate?: number | null;
+  dueDate?: number | null;
+  maxGrade?: number | null;
+}
+
 export interface StatisticsImportPayload {
   courseId: number;
   courseName: string;
+  /** Rótulo legível das seções escolhidas (mantido por compatibilidade). */
   sectionName: string;
+  /** Nome final da turma, editável pelo professor no assistente. */
+  turmaName: string;
   baseUrl: string;
   cookie: string;
   userAgent: string;
   folderTemplate: string;
-  questions: {
-    cmid: number;
-    instanceId?: number | null;
-    name: string;
-    statement?: string | null;
-    testCases?: unknown[];
-    startDate?: number | null;
-    dueDate?: number | null;
-    maxGrade?: number | null;
-  }[];
+  sections: { name: string; questions: StatisticsImportQuestion[] }[];
   enrolledStudents: Record<string, unknown>[];
   vplResults: Record<string, Record<string, { grade?: string; evaluation?: string; compilation?: string }>>;
   gradebook: Record<string, Record<string, { grade: number | null; gradeMax: number | null }>>;

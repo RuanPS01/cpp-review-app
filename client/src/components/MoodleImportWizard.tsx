@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-    Search, Server, Key, ChevronRight, ChevronLeft, 
-    Download, Loader2, CheckCircle2, AlertCircle, Users, Cookie
+import {
+    Search, Server, Key, ChevronRight, ChevronLeft,
+    Download, Loader2, CheckCircle2, AlertCircle, Users, Cookie, Check
 } from 'lucide-react';
 import * as moodle from '../services/moodle';
 import { api } from '../services/api';
@@ -50,6 +50,9 @@ const MoodleImportWizard: React.FC<MoodleImportWizardProps> = ({ t, onSuccess, o
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCourse, setSelectedCourse] = useState<any>(null);
     const [sections, setSections] = useState<any[]>([]);
+    const [selectedSectionIds, setSelectedSectionIds] = useState<number[]>([]);
+    const [turmaName, setTurmaName] = useState('');
+    const [turmaNameEdited, setTurmaNameEdited] = useState(false);
     
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState({ current: 0, total: 0, status: '' });
@@ -103,12 +106,32 @@ const MoodleImportWizard: React.FC<MoodleImportWizardProps> = ({ t, onSuccess, o
             const res = await moodle.getCourseContents(config.url, config.token, course.id);
             const vplSections = res.filter((s: any) => s.modules.some((m: any) => m.modname === 'vpl'));
             setSections(vplSections);
+            setSelectedSectionIds([]);
+            setTurmaName('');
+            setTurmaNameEdited(false);
             setStep('SECTION');
         } catch (err: any) {
             toast.error(err.message);
         } finally {
             setLoading(false);
         }
+    };
+
+    const chosenSections = sections.filter(s => selectedSectionIds.includes(s.id));
+    const totalVplCount = chosenSections.reduce(
+        (acc, s) => acc + s.modules.filter((m: any) => m.modname === 'vpl').length,
+        0
+    );
+    // O nome sugerido acompanha a seleção até o professor digitar o dele.
+    const suggestedTurmaName = chosenSections.length && selectedCourse
+        ? `${selectedCourse.fullname} - ${chosenSections.map(s => s.name).join(' + ')}`
+        : '';
+    const effectiveTurmaName = turmaNameEdited ? turmaName : suggestedTurmaName;
+
+    const toggleSection = (section: any) => {
+        setSelectedSectionIds(previous => previous.includes(section.id)
+            ? previous.filter(id => id !== section.id)
+            : [...previous, section.id]);
     };
 
     const autoCaptureCookie = async () => {
@@ -132,16 +155,19 @@ const MoodleImportWizard: React.FC<MoodleImportWizardProps> = ({ t, onSuccess, o
         return null;
     };
 
-    const runCookieImport = async (cookie: string, section: any, uaOverride?: string, retryCount = 0) => {
-        const vplModules = section.modules.filter((m: any) => m.modname === 'vpl');
-        const questionsForCookie = vplModules.map((m: any) => ({
-            id: m.id,
-            name: m.name
-        }));
+    const runCookieImport = async (cookie: string, sectionsToImport: any[], uaOverride?: string, retryCount = 0) => {
         const payload = {
             courseName: selectedCourse.fullname,
-            sectionName: section.name,
-            questions: questionsForCookie,
+            // Enviado como lista; o servidor numera as questões de forma
+            // contínua entre as seções escolhidas.
+            sections: sectionsToImport.map((section: any) => ({
+                name: section.name,
+                questions: section.modules
+                    .filter((m: any) => m.modname === 'vpl')
+                    .map((m: any) => ({ id: m.id, name: m.name }))
+            })),
+            sectionName: sectionsToImport.map((s: any) => s.name).join(' + '),
+            turmaName: effectiveTurmaName,
             cookie: cookie,
             baseUrl: config.url,
             userAgent: uaOverride || userAgent,
@@ -158,18 +184,21 @@ const MoodleImportWizard: React.FC<MoodleImportWizardProps> = ({ t, onSuccess, o
                 console.log('[DEBUG] Import failed, retrying in 2s...');
                 setProgress(p => ({ ...p, status: 'Falha inicial. Tentando novamente em 2s...' }));
                 await new Promise(r => setTimeout(r, 2000));
-                return runCookieImport(cookie, section, uaOverride, retryCount + 1);
+                return runCookieImport(cookie, sectionsToImport, uaOverride, retryCount + 1);
             }
             throw err;
         }
     };
 
-    const startImport = async (section: any) => {
+    const startImport = async (sectionsToImport: any[]) => {
         setStep('PROGRESS');
         setLoading(true);
 
-        const vplModules = section.modules.filter((m: any) => m.modname === 'vpl');
-        if (vplModules.length === 0) {
+        const vplCount = sectionsToImport.reduce(
+            (acc, section) => acc + section.modules.filter((m: any) => m.modname === 'vpl').length,
+            0
+        );
+        if (vplCount === 0) {
             toast.error(t.noVplsFound);
             setStep('SECTION');
             setLoading(false);
@@ -195,7 +224,7 @@ const MoodleImportWizard: React.FC<MoodleImportWizardProps> = ({ t, onSuccess, o
             }
 
             setProgress({ current: 0, total: 0, status: t.importingMoodle });
-            await runCookieImport(session, section, ua);
+            await runCookieImport(session, sectionsToImport, ua);
         } catch (err: any) {
             console.error('Import error:', err);
             toast.error(t.testError + ': ' + err.message);
@@ -356,7 +385,7 @@ const MoodleImportWizard: React.FC<MoodleImportWizardProps> = ({ t, onSuccess, o
 
                     {step === 'SECTION' && (
                         <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-4 p-4 pt-6">
-                            <h3 className="text-[10px] font-black text-text-dim uppercase tracking-widest">{t.selectSection} em <span className="text-accent">{selectedCourse?.fullname}</span></h3>
+                            <h3 className="text-[10px] font-black text-text-dim uppercase tracking-widest">{t.selectSections} em <span className="text-accent">{selectedCourse?.fullname}</span></h3>
                             
                             <div className="bg-panel border border-border-main p-4 rounded-lg space-y-2 mb-4">
                                 <label className="text-[9px] font-black text-text-dim uppercase tracking-widest flex justify-between">
@@ -404,25 +433,58 @@ const MoodleImportWizard: React.FC<MoodleImportWizardProps> = ({ t, onSuccess, o
 
                             <div className="border border-border-main rounded-lg divide-y divide-border-main bg-input">
                                 {sections.length > 0 ? (
-                                    sections.map(section => (
-                                        <button 
-                                            key={section.id}
-                                            onClick={() => startImport(section)}
-                                            className="w-full text-left p-4 hover:bg-panel transition-colors flex items-center justify-between group"
-                                        >
-                                            <div>
-                                                <div className="text-sm font-bold text-text-bright group-hover:text-accent transition-colors">{section.name}</div>
-                                                <div className="text-[10px] text-text-dim font-black uppercase tracking-tighter">
-                                                    {t.vplCount.replace('{count}', section.modules.filter((m: any) => m.modname === 'vpl').length.toString())}
+                                    sections.map(section => {
+                                        const isSelected = selectedSectionIds.includes(section.id);
+                                        return (
+                                            <button
+                                                key={section.id}
+                                                onClick={() => toggleSection(section)}
+                                                className={`w-full text-left p-4 transition-colors flex items-center gap-4 group ${isSelected ? 'bg-accent/10' : 'hover:bg-panel'}`}
+                                            >
+                                                <span className={`w-5 h-5 shrink-0 rounded border-2 flex items-center justify-center transition-all ${
+                                                    isSelected ? 'bg-accent border-accent' : 'border-border-main group-hover:border-accent/50'
+                                                }`}>
+                                                    {isSelected && <Check size={12} className="text-black" strokeWidth={4} />}
+                                                </span>
+                                                <div className="flex-1">
+                                                    <div className={`text-sm font-bold transition-colors ${isSelected ? 'text-accent' : 'text-text-bright group-hover:text-accent'}`}>
+                                                        {section.name}
+                                                    </div>
+                                                    <div className="text-[10px] text-text-dim font-black uppercase tracking-tighter">
+                                                        {t.vplCount.replace('{count}', section.modules.filter((m: any) => m.modname === 'vpl').length.toString())}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <Download size={18} className="text-text-dim group-hover:text-accent transition-all" />
-                                        </button>
-                                    ))
+                                            </button>
+                                        );
+                                    })
                                 ) : (
                                     <div className="p-10 text-center text-text-dim italic text-sm">{t.noSectionsFound}</div>
                                 )}
                             </div>
+
+                            {chosenSections.length > 0 && (
+                                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                    <div className="space-y-2">
+                                        <label className="text-[9px] font-black text-text-dim uppercase tracking-widest">{t.className}</label>
+                                        <input
+                                            type="text"
+                                            value={effectiveTurmaName}
+                                            onChange={(e) => { setTurmaNameEdited(true); setTurmaName(e.target.value); }}
+                                            className="w-full bg-input border border-border-main rounded p-2 text-xs text-text-main focus:outline-none focus:border-accent"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => startImport(chosenSections)}
+                                        disabled={!totalVplCount || !effectiveTurmaName.trim()}
+                                        className="w-full bg-accent hover:bg-accent/80 text-black py-4 rounded-lg font-black uppercase tracking-widest flex items-center justify-center gap-3 transition-all active:scale-95 shadow-lg shadow-accent/20 disabled:opacity-40"
+                                    >
+                                        <Download size={18} />
+                                        {t.importSelectedSections
+                                            .replace('{sections}', String(chosenSections.length))
+                                            .replace('{questions}', String(totalVplCount))}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 

@@ -150,19 +150,31 @@ function readSubmissionsZip(buffer) {
 
 exports.importMoodle = async (req, res) => {
   const {
-    courseId, courseName, sectionName, baseUrl, cookie, userAgent,
+    courseId, courseName, sectionName, sections, turmaName, baseUrl, cookie, userAgent,
     folderTemplate, questions = [], enrolledStudents = [],
     vplResults = {}, gradebook = {}, deepHistory = false, sources = {}
   } = req.body;
 
-  const turma = sanitizeTurma(`${courseName} - ${sectionName}`);
+  // Formato multi-seção, com o formato antigo de seção única como fallback.
+  const sectionList = Array.isArray(sections) && sections.length
+    ? sections
+    : [{ name: sectionName, questions }];
+
+  // Numeração contínua entre seções: as chaves `q{n}` identificam a questão no
+  // dataset inteiro, então não podem reiniciar a cada seção.
+  const allQuestions = sectionList.flatMap(section =>
+    (section.questions || []).map(question => ({ ...question, sectionName: section.name }))
+  );
+
+  const sectionLabel = sectionList.map(s => s.name).join(' + ');
+  const turma = sanitizeTurma(turmaName || `${courseName} - ${sectionLabel}`);
   const warnings = [];
   const { fetchPage } = harvester.createSession({ baseUrl, cookie, userAgent });
 
   const progress = (message, current, total) => emitProgress(PROGRESS_EVENT, { turma, message, current, total });
 
   try {
-    if (!questions.length) throw new Error('Nenhuma atividade VPL informada para importação.');
+    if (!allQuestions.length) throw new Error('Nenhuma atividade VPL informada para importação.');
 
     const index = buildStudentIndex(enrolledStudents);
     const students = new Map();
@@ -214,13 +226,13 @@ exports.importMoodle = async (req, res) => {
       warnings.push('Lista de matriculados indisponível: alunos sem nenhuma submissão não aparecem nas estatísticas.');
     }
 
-    const totalSteps = questions.length;
+    const totalSteps = allQuestions.length;
     const normalizedQuestions = [];
 
     await fetchPage(baseUrl);
 
-    for (let i = 0; i < questions.length; i++) {
-      const question = questions[i];
+    for (let i = 0; i < allQuestions.length; i++) {
+      const question = allQuestions[i];
       const key = `q${i + 1}`;
       const viewUrl = `${baseUrl}/mod/vpl/view.php?id=${question.cmid}`;
       const listUrl = `${baseUrl}/mod/vpl/views/submissionslist.php?id=${question.cmid}&showgrades=1&group=-1&tilast&tifirst&tperpage=5000&thiddenfields`;
@@ -251,6 +263,7 @@ exports.importMoodle = async (req, res) => {
         cmid: question.cmid,
         instanceId: question.instanceId ?? null,
         name: question.name,
+        section: question.sectionName ?? null,
         statement,
         testCases,
         startDate,
@@ -393,7 +406,8 @@ exports.importMoodle = async (req, res) => {
       turma,
       courseId: courseId ?? null,
       courseName,
-      sectionName,
+      sectionName: sectionLabel,
+      sections: sectionList.map(s => s.name),
       baseUrl,
       importedAt: Date.now(),
       deepHistory: Boolean(deepHistory),

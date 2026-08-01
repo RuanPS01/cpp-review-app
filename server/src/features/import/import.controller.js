@@ -91,10 +91,25 @@ exports.importMoodle = (req, res) => {
 };
 
 exports.importMoodleCookies = async (req, res) => {
-  const { courseName, sectionName, questions, cookie, baseUrl, userAgent, folderTemplate } = req.body;
-  const turma = `${courseName} - ${sectionName}`.replace(/[\\/:*?"<>|]/g, '_');
+  const { courseName, sectionName, sections, questions, cookie, baseUrl, userAgent, folderTemplate, turmaName } = req.body;
+
+  // Aceita tanto o formato multi-seção (`sections`) quanto o antigo de seção
+  // única (`sectionName` + `questions`), para não quebrar chamadas existentes.
+  const sectionList = Array.isArray(sections) && sections.length
+    ? sections
+    : [{ name: sectionName, questions: questions || [] }];
+
+  // Numeração contínua entre as seções: Q1..Qn no conjunto todo, e não
+  // reiniciando a cada seção, senão as chaves `q{n}` colidiriam.
+  const isMultiSection = sectionList.length > 1;
+  const allQuestions = sectionList.flatMap(section =>
+    (section.questions || []).map(question => ({ ...question, sectionName: section.name }))
+  );
+
+  const defaultTurma = `${courseName} - ${sectionList.map(s => s.name).join(' + ')}`;
+  const turma = String(turmaName || defaultTurma).replace(/[\\/:*?"<>|]/g, '_').trim();
   const extractPath = path.join(DATA_DIR, `turma_${turma}`);
-  
+
   let currentCookie = String(cookie || '');
   const UA = userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -146,9 +161,12 @@ exports.importMoodleCookies = async (req, res) => {
     if (!fs.existsSync(extractPath)) fs.mkdirSync(extractPath, { recursive: true });
     const studentsMap = new Map(), statements = {}, testCases = {};
     await smartFetch(baseUrl);
-    for (let i = 0; i < questions.length; i++) {
-      const q = questions[i], qNum = i + 1;
-      const qFolderName = `Q${qNum} - ${q.name}`.replace(/[\\/:*?"<>|]/g, '_');
+    for (let i = 0; i < allQuestions.length; i++) {
+      const q = allQuestions[i], qNum = i + 1;
+      // Com várias seções o nome da seção entra no rótulo: sem isso, duas
+      // questões homônimas de provas diferentes ficam indistinguíveis na tela.
+      const qLabel = isMultiSection ? `${q.sectionName} - ${q.name}` : q.name;
+      const qFolderName = `Q${qNum} - ${qLabel}`.replace(/[\\/:*?"<>|]/g, '_');
       const qPath = path.join(extractPath, qFolderName);
       if (!fs.existsSync(qPath)) fs.mkdirSync(qPath, { recursive: true });
       const viewUrl = `${baseUrl}/mod/vpl/view.php?id=${q.id}`;
