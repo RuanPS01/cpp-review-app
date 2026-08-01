@@ -2,7 +2,7 @@
 
 Ferramenta pedagógica desktop para **revisão e correção de código C++** de submissões de alunos, com análise assistida por IA, terminal integrado, execução de casos de teste (estilo VPL) e importação direta do Moodle.
 
-> **Versão:** 2.2.1 · **Plataforma:** Electron (Windows/Linux/macOS) · **Autor:** RuanPS01
+> **Versão:** 2.3.0 · **Plataforma:** Electron (Windows/Linux/macOS) · **Autor:** RuanPS01
 
 ---
 
