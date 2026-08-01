@@ -174,3 +174,12 @@ export async function getStudentSubmission(baseUrl: string, token: string, cmid:
 export async function getStudentResult(baseUrl: string, token: string, cmid: number, userId: number) {
   return moodleCall(baseUrl, token, "mod_vpl_get_result", { id: cmid, userid: userId });
 }
+
+/**
+ * Notas do livro de notas do curso. Serve de fallback quando as funções
+ * `mod_vpl_*` não estão habilitadas no serviço externo — o gradebook costuma
+ * estar liberado mesmo quando o VPL não está.
+ */
+export async function getCourseGradeItems(baseUrl: string, token: string, courseId: number) {
+  return moodleCall(baseUrl, token, "gradereport_user_get_grade_items", { courseid: courseId, userid: 0 });
+}

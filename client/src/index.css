@@ -17,6 +17,35 @@
   
   --accent: #06b2d2;
   --accent-glow: rgba(6, 182, 212, 0.4);
+
+  /* ----------------------------------------------------------------------
+   * Paleta de visualização de dados (tela de Estatísticas) — passo escuro.
+   * Validada para a superfície #171717: banda de luminosidade, piso de croma,
+   * separação para daltonismo e contraste >= 3:1. Não trocar os valores sem
+   * revalidar: a ordem dos slots é o mecanismo de segurança para CVD.
+   * -------------------------------------------------------------------- */
+  --viz-surface: #171717;
+  --viz-series-1: #3987e5;
+  --viz-series-2: #d95926;
+  --viz-series-3: #199e70;
+
+  /* Cores de estado — fixas nos dois temas, sempre acompanhadas de rótulo. */
+  --viz-good: #0ca30c;
+  --viz-warning: #fab219;
+  --viz-serious: #ec835a;
+  --viz-critical: #d03b3b;
+
+  /* Rampa sequencial (uma única matiz). No tema escuro cresce do escuro para
+   * o claro, para que "mais valor" continue significando "mais tinta". */
+  --viz-seq-1: #0d366b;
+  --viz-seq-2: #184f95;
+  --viz-seq-3: #256abf;
+  --viz-seq-4: #3987e5;
+  --viz-seq-5: #86b6ef;
+
+  --viz-grid: #2c2c2a;
+  --viz-axis: #383835;
+  --viz-muted: #898781;
 }
 
 :root.light {
@@ -36,6 +65,28 @@
   
   --accent: #0891b2;
   --accent-glow: rgba(8, 145, 178, 0.2);
+
+  /* Passo claro da paleta de visualização — validado para a superfície #ffffff.
+   * São as mesmas matizes, re-escalonadas: não é uma inversão automática. */
+  --viz-surface: #ffffff;
+  --viz-series-1: #2a78d6;
+  --viz-series-2: #eb6834;
+  --viz-series-3: #1baf7a;
+
+  --viz-good: #0ca30c;
+  --viz-warning: #fab219;
+  --viz-serious: #ec835a;
+  --viz-critical: #d03b3b;
+
+  --viz-seq-1: #cde2fb;
+  --viz-seq-2: #9ec5f4;
+  --viz-seq-3: #5598e7;
+  --viz-seq-4: #2a78d6;
+  --viz-seq-5: #1c5cab;
+
+  --viz-grid: #e1e0d9;
+  --viz-axis: #c3c2b7;
+  --viz-muted: #898781;
 }
 
 @theme {

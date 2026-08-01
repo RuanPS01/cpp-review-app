@@ -8,6 +8,7 @@ A professional pedagogical tool for interactive code review and grading. Designe
 - **Dynamic Imports**: Upload student submissions via ZIP. The system automatically identifies folder structures and student metadata.
 - **AI-Powered Analysis**: Integration with local models (Ollama) and cloud services (Gemini, Claude, GPT) for automated score proposals and detailed feedback.
 - **Integrated Terminal**: Execute and interact with C++ code in real-time within the application environment.
+- **Class Statistics**: A dedicated Moodle import that builds an analytics dashboard — engagement evidence, accuracy and difficulty per question, at-risk student alerts with explained scores, and AI-written pedagogical reports.
 - **Data Portability**: Comprehensive import and export functionality for grading data using JSON and Excel formats.
 - **Configurable Criteria**: Customizable evaluation standards to align with specific pedagogical requirements.
 

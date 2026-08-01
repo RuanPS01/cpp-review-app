@@ -9,6 +9,7 @@ const studentsRoutes = require('./features/students/students.routes');
 const gradesRoutes = require('./features/grades/grades.routes');
 const testsRoutes = require('./features/tests/tests.routes');
 const aiRoutes = require('./features/ai/ai.routes');
+const statisticsRoutes = require('./features/statistics/statistics.routes');
 
 const app = express();
 
@@ -23,5 +24,6 @@ app.use('/api', studentsRoutes);
 app.use('/api', gradesRoutes);
 app.use('/api', testsRoutes);
 app.use('/api', aiRoutes);
+app.use('/api', statisticsRoutes);
 
 module.exports = app;

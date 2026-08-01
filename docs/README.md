@@ -27,6 +27,7 @@ Ferramenta pedagógica desktop para **revisão e correção de código C++** de 
 | [Identidade Visual e Estilos](identidade-visual-estilos.md) | Paleta de cores, tipografia, temas, efeitos visuais |
 | [Editor de Código](implementacao-editor-codigo.md) | Implementação do Monaco Editor |
 | [Markdown e HTML](implementacao-markdown-html.md) | Renderização de enunciados |
+| [Estatísticas da Turma](estatisticas.md) | Importação analítica do Moodle, métricas de engajamento e acerto, score de risco, relatórios de IA e gráficos |
 | [Integração Moodle/VPL](moodle-vpl-integration-guide.md) | Guia de integração com Moodle VPL |
 | [Prompt de Importação Moodle](prompt-importacao-moodle-vpl.md) | Referência do prompt/fluxo de importação |
 
