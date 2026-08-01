@@ -13,7 +13,7 @@ const getApiBase = () => {
   return 'http://localhost:3001/api';
 };
 
-const API_BASE = getApiBase();
+export const API_BASE = getApiBase();
 
 export const api = {
   getStudents: () => axios.get<Student[]>(`${API_BASE}/students`),

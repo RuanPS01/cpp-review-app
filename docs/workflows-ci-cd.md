@@ -15,7 +15,7 @@ O projeto possui dois workflows do **GitHub Actions** em `.github/workflows/`, r
 graph TD
     subgraph dev["Desenvolvimento"]
         PR["Abrir / atualizar PR → main"]
-        TAG["Push de tag v* (ex: v2.2.1)"]
+        TAG["Push de tag v* (ex: v2.3.0)"]
     end
 
     PR -->|aciona| TB["Test Build (PR)"]
@@ -107,7 +107,7 @@ on:
     tags:
       - 'v*'
 ```
-Dispara **somente** quando uma tag iniciada por `v` é enviada (ex: `v2.2.1`). É o mecanismo oficial de publicação de versões.
+Dispara **somente** quando uma tag iniciada por `v` é enviada (ex: `v2.3.0`). É o mecanismo oficial de publicação de versões.
 
 ### Permissões
 ```yaml
@@ -142,8 +142,8 @@ sequenceDiagram
 
     Dev->>Dev: atualiza version nos package.json
     Dev->>Git: commit + merge na main
-    Dev->>Git: git tag v2.2.1
-    Dev->>Git: git push origin v2.2.1
+    Dev->>Git: git tag v2.3.0
+    Dev->>Git: git push origin v2.3.0
     Git->>CI: dispara "Build and Release"
     CI->>CI: build (Node 20, client, electron)
     CI->>CI: empacota .exe e gera .zip
@@ -153,12 +153,12 @@ sequenceDiagram
 
 Passos práticos:
 
-1. Atualize o campo `version` nos `package.json` (raiz, `client` e `server` devem ficar sincronizados — atualmente `2.2.1`).
+1. Atualize o campo `version` nos `package.json` (raiz, `client` e `server` devem ficar sincronizados — atualmente `2.3.0`).
 2. Faça o merge das alterações na `main`.
 3. Crie e envie a tag correspondente:
    ```bash
-   git tag v2.2.1
-   git push origin v2.2.1
+   git tag v2.3.0
+   git push origin v2.3.0
    ```
 4. O workflow **Build and Release** roda automaticamente e publica o instalador na aba *Releases*.
 

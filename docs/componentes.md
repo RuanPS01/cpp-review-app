@@ -76,13 +76,17 @@ Assistente multi-etapas para importar atividades do Moodle/VPL.
 ```mermaid
 graph LR
     CONFIG["CONFIG<br/>URL + login/token"] --> COURSE["COURSE<br/>buscar curso"]
-    COURSE --> SECTION["SECTION<br/>selecionar seção VPL"]
+    COURSE --> SECTION["SECTION<br/>selecionar seções VPL"]
     SECTION --> PROGRESS["PROGRESS<br/>download"]
     PROGRESS --> DONE["DONE<br/>resumo + confirmar"]
 ```
 
 Características:
 - Autenticação por token **ou** fallback por cookie (captura via IPC do Electron).
+- **Seleção múltipla de seções**: várias seções do mesmo curso viram uma única
+  turma, com as questões numeradas continuamente (`q1..qn`) e o nome da seção no
+  rótulo de cada questão para desambiguar homônimas. O nome da turma é sugerido
+  a partir da seleção e pode ser editado.
 - `folderTemplate` para nomear pastas dos alunos.
 - Acompanhamento de progresso com mensagens de status.
 - Limpeza de importações não confirmadas (apaga a turma).

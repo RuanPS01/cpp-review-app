@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  Sun, Moon, FileText, Table as TableIcon, Plus, Settings, Trash2, 
+import {
+  Sun, Moon, FileText, Table as TableIcon, Plus, Settings, Trash2,
   Loader2, CheckCircle2, Sparkles, BookOpen, Info, Copy,
-  Terminal, Monitor, Cpu, Folder
+  Terminal, Monitor, Cpu, Folder, BarChart3
 } from 'lucide-react';
 import TerminalPanel from './components/TerminalPanel';
 import Modal from './components/Modal';
@@ -17,6 +17,7 @@ import SettingsPage from './pages/SettingsPage';
 import ImportPage from './pages/ImportPage';
 import TablePage from './pages/TablePage';
 import ReviewPage from './pages/ReviewPage';
+import StatisticsPage from './pages/StatisticsPage';
 import MoodleImportWizard from './components/MoodleImportWizard';
 
 const App = () => {
@@ -220,7 +221,9 @@ const App = () => {
         setCurrentIndex(0);
       }
     } else if (!loading) {
-      setView('import');
+      // Sem turmas de correção só faz sentido redirecionar quem está numa aba
+      // que depende delas; Estatísticas e Configurações vivem por conta própria.
+      setView(current => (current === 'review' || current === 'table' ? 'import' : current));
       setSelectedTurma('');
       setCurrentIndex(0);
     }
@@ -437,11 +440,17 @@ const App = () => {
           >
             <Plus size={18} /> {t.import}
           </button>
-          <button 
+          <button
             onClick={() => setView('settings')}
             className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 ${view === 'settings' ? 'bg-accent !border-accent text-black font-bold shadow-[0_0_15px_var(--accent-glow)]' : 'bg-button text-text-dim border-border-main hover:border-accent/50 hover:text-accent'}`}
           >
             <Settings size={18} /> {t.settings}
+          </button>
+          <button
+            onClick={() => setView('statistics')}
+            className={`flex items-center gap-2 px-4 py-2 rounded border border-transparent transition-all duration-200 active:scale-95 ${view === 'statistics' ? 'bg-accent !border-accent text-black font-bold shadow-[0_0_15px_var(--accent-glow)]' : 'bg-button text-text-dim border-border-main hover:border-accent/50 hover:text-accent'}`}
+          >
+            <BarChart3 size={18} /> {t.statistics}
           </button>
         </div>
       </header>
@@ -455,6 +464,8 @@ const App = () => {
             t={t} 
             isGlobalAnalyzing={globalAI.isAnalyzing}
           />
+        ) : view === 'statistics' ? (
+          <StatisticsPage t={t} lang={lang} />
         ) : view === 'import' ? (
           <ImportPage 
             t={t} 

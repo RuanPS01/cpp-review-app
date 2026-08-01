@@ -3,6 +3,7 @@ const pty = require('node-pty');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { setIo } = require('./progress');
 
 function initSocket(server) {
   const io = new Server(server, {
@@ -11,6 +12,8 @@ function initSocket(server) {
       methods: ["GET", "POST"]
     }
   });
+
+  setIo(io);
 
   io.on('connection', (socket) => {
     let ptyProcess = null;

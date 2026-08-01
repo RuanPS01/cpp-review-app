@@ -31,9 +31,15 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
+const STATS_DIR = path.join(DATA_DIR, 'statistics');
+if (!fs.existsSync(STATS_DIR)) {
+  fs.mkdirSync(STATS_DIR, { recursive: true });
+}
+
 module.exports = {
   DATA_DIR,
   SETTINGS_FILE,
   DEFAULT_SETTINGS,
-  UPLOADS_DIR
+  UPLOADS_DIR,
+  STATS_DIR
 };

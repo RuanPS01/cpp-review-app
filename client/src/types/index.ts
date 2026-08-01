@@ -26,7 +26,7 @@ export interface AISettings {
   evaluationCriteria: string;
 }
 
-export type View = 'review' | 'table' | 'import' | 'settings';
+export type View = 'review' | 'table' | 'import' | 'settings' | 'statistics';
 
 export interface AIResult {
   score: number;

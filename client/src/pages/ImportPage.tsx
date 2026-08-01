@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { Upload, Info, CheckCircle2, Loader2, Globe } from 'lucide-react';
 import { api } from '../services/api';
+import type { View } from '../types';
 import toast from 'react-hot-toast';
 
 interface ImportPageProps {
   t: any;
   setShowZipHelp: (show: boolean) => void;
   onImportSuccess: () => Promise<void>;
-  setView: (view: 'review' | 'table' | 'import' | 'settings') => void;
+  setView: (view: View) => void;
   setShowMoodleModal: (show: boolean) => void;
 }
 
