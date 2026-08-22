@@ -73,6 +73,6 @@ Exemplo de template: `[NAME] [ID] [EMAIL]` ou `[EMAIL] [NAME] [ID]`.
 
 ## Versionamento
 
-- Versão única e sincronizada entre raiz, `client` e `server` no `package.json` (atualmente **2.3.0**).
+- Versão única e sincronizada entre raiz, `client` e `server` no `package.json` (atualmente **2.3.1**).
 - Branches de trabalho seguem `feature/...` e `fix/...` (ex: `feature/backend-reorganization`).
 - Commits seguem **Conventional Commits** (`feat:`, `fix:`, `refactor:`).
