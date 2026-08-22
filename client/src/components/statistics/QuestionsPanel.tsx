@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, CalendarClock, FlaskConical, Layers, Percent, Send, Sigma } from 'lucide-react';
 import type { AIReport, StatisticsMetrics } from '../../types/statistics';
+import { reportKey, scopeOf } from '../../services/statistics';
 import ChartCard from './charts/ChartCard';
 import BarChart from './charts/BarChart';
 import StatCard from './StatCard';
@@ -51,7 +52,12 @@ const QuestionsPanel: React.FC<QuestionsPanelProps> = ({ metrics, reports, onRep
                 className="inline-block h-2 w-2 rounded-full"
                 style={{ background: difficulty >= 60 ? VIZ.critical : difficulty >= 40 ? VIZ.warning : VIZ.good }}
               />
-              {item.name.length > 26 ? `${item.name.slice(0, 25)}…` : item.name}
+              <span className="flex flex-col items-start leading-tight">
+                {metrics.combined && (
+                  <span className="text-[8px] font-black uppercase tracking-widest opacity-70">{item.turma}</span>
+                )}
+                {item.name.length > 26 ? `${item.name.slice(0, 25)}…` : item.name}
+              </span>
             </button>
           );
         })}
@@ -92,6 +98,11 @@ const QuestionsPanel: React.FC<QuestionsPanelProps> = ({ metrics, reports, onRep
       </div>
 
       <div className="flex flex-wrap items-center gap-4 rounded-xl border border-border-main bg-panel p-4 text-[10px] font-bold uppercase tracking-widest text-text-dim">
+        {metrics.combined && (
+          <span className="flex items-center gap-2" style={{ color: VIZ.series1 }}>
+            <Layers size={12} /> {question.turma}
+          </span>
+        )}
         {question.section && (metrics.sections?.length ?? 0) > 1 && (
           <span className="flex items-center gap-2">
             <Layers size={12} className="text-accent" /> {question.section}
@@ -183,12 +194,12 @@ const QuestionsPanel: React.FC<QuestionsPanelProps> = ({ metrics, reports, onRep
       <AIReportCard
         t={t}
         lang={lang}
-        turma={metrics.turma}
+        scope={scopeOf(metrics)}
         kind="question"
         targetId={question.key}
         title={`${t.statsAIQuestion} — ${question.name}`}
         description={t.statsAIQuestionDesc}
-        report={reports[`question:${question.key}`]}
+        report={reports[reportKey(metrics.turmas, 'question', question.key)]}
         onGenerated={onReportGenerated}
       />
     </div>

@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AIReport, RiskLevel, StatisticsMetrics, StudentMetrics, SubmissionCode } from '../../types/statistics';
-import { statisticsApi } from '../../services/statistics';
+import { reportKey, scopeOf, statisticsApi } from '../../services/statistics';
 import ChartCard from './charts/ChartCard';
 import BarChart from './charts/BarChart';
 import StatCard from './StatCard';
@@ -69,7 +69,7 @@ const StudentsPanel: React.FC<StudentsPanelProps> = ({
     setLoadingCode(true);
     try {
       const response = await statisticsApi.getSubmissionCode(
-        metrics.turma,
+        scopeOf(metrics),
         student.userId ?? student.folderName ?? '',
         questionKey
       );
@@ -94,7 +94,12 @@ const StudentsPanel: React.FC<StudentsPanelProps> = ({
             </button>
             <div>
               <h3 className="text-lg font-black tracking-tight text-text-bright">{selected.name}</h3>
-              <p className="text-[11px] text-text-dim">{selected.email || selected.username || selected.folderName}</p>
+              <p className="text-[11px] text-text-dim">
+                {selected.email || selected.username || selected.folderName}
+                {metrics.combined && selected.turmas.length > 0 && (
+                  <span className="ml-2 text-accent">{selected.turmas.join(' · ')}</span>
+                )}
+              </p>
             </div>
           </div>
           <RiskBadge level={selected.risk.level} label={riskLabels[selected.risk.level]} score={selected.risk.score} />
@@ -177,7 +182,12 @@ const StudentsPanel: React.FC<StudentsPanelProps> = ({
             <tbody className="divide-y divide-border-main/50">
               {selected.questions.map(question => (
                 <tr key={question.key} className="transition-colors hover:bg-white/5">
-                  <td className="px-4 py-3 font-bold text-text-main">{question.name}</td>
+                  <td className="px-4 py-3 font-bold text-text-main">
+                    {question.name}
+                    {metrics.combined && (
+                      <div className="text-[9px] font-black uppercase tracking-widest text-text-dim">{question.turma}</div>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-center">
                     <span
                       className="text-[10px] font-black uppercase tracking-widest"
@@ -254,12 +264,12 @@ const StudentsPanel: React.FC<StudentsPanelProps> = ({
         <AIReportCard
           t={t}
           lang={lang}
-          turma={metrics.turma}
+          scope={scopeOf(metrics)}
           kind="student"
           targetId={String(selected.userId ?? '')}
           title={`${t.statsAIStudent} — ${selected.name}`}
           description={t.statsAIStudentDesc}
-          report={reports[`student:${selected.userId}`]}
+          report={reports[reportKey(metrics.turmas, 'student', String(selected.userId ?? ''))]}
           onGenerated={onReportGenerated}
         />
       </div>
@@ -324,6 +334,7 @@ const StudentsPanel: React.FC<StudentsPanelProps> = ({
             <thead className="border-b border-border-main bg-button/30 text-[10px] font-black uppercase tracking-widest text-text-dim">
               <tr>
                 <th className="px-4 py-3">{t.studentName}</th>
+                {metrics.combined && <th className="px-4 py-3">{t.statsColumnTurma}</th>}
                 <th className="px-4 py-3 text-center">{t.statsQuestionSubmissions}</th>
                 <th className="px-4 py-3 text-right">{t.statsLabelAverage}</th>
                 <th className="px-4 py-3 text-right">{t.statsLabelAttempts}</th>
@@ -343,6 +354,9 @@ const StudentsPanel: React.FC<StudentsPanelProps> = ({
                     <div className="font-bold text-text-main">{student.name}</div>
                     <div className="text-[10px] text-text-dim">{student.email || student.username || '—'}</div>
                   </td>
+                  {metrics.combined && (
+                    <td className="px-4 py-3 text-[10px] text-text-dim">{student.turmas.join(' · ')}</td>
+                  )}
                   <td className="px-4 py-3 text-center">
                     <span className="tabular-nums text-text-main">{student.submittedCount}/{student.questionCount}</span>
                     <div className="mx-auto mt-1 h-1 w-16 overflow-hidden rounded-full" style={{ background: 'var(--viz-grid)' }}>

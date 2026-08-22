@@ -2,14 +2,15 @@ import React, { useState } from 'react';
 import { Copy, Loader2, RotateCw, Sparkles } from 'lucide-react';
 import { marked } from 'marked';
 import toast from 'react-hot-toast';
-import type { AIReport, ReportKind } from '../../types/statistics';
+import type { AIReport, ReportKind, StatisticsScope } from '../../types/statistics';
 import { statisticsApi } from '../../services/statistics';
 import { formatDateTime } from './charts/chartTheme';
 
 interface AIReportCardProps {
   t: Record<string, string>;
   lang: string;
-  turma: string;
+  /** Recorte analisado: as turmas selecionadas e o filtro de alunos vazios. */
+  scope: StatisticsScope;
   kind: ReportKind;
   targetId?: string | null;
   title: string;
@@ -25,14 +26,14 @@ interface AIReportCardProps {
  * de modelo local) a cada visita à aba.
  */
 const AIReportCard: React.FC<AIReportCardProps> = ({
-  t, lang, turma, kind, targetId, title, description, report, onGenerated, compact
+  t, lang, scope, kind, targetId, title, description, report, onGenerated, compact
 }) => {
   const [generating, setGenerating] = useState(false);
 
   const generate = async () => {
     setGenerating(true);
     try {
-      const response = await statisticsApi.generateReport({ turma, kind, targetId: targetId ?? null, lang });
+      const response = await statisticsApi.generateReport({ scope, kind, targetId: targetId ?? null, lang });
       onGenerated(response.data);
     } catch (err: any) {
       toast.error(`${t.statsAIError}: ${err.response?.data?.error || err.message}`);
@@ -51,6 +52,11 @@ const AIReportCard: React.FC<AIReportCardProps> = ({
           <div>
             <h3 className="text-xs font-black uppercase tracking-widest text-text-bright">{title}</h3>
             <p className="mt-1 max-w-xl text-[11px] leading-tight text-text-dim">{description}</p>
+            {scope.turmas.length > 1 && (
+              <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-accent">
+                {t.statsAIScopeCombined.replace('{count}', String(scope.turmas.length))}
+              </p>
+            )}
           </div>
         </div>
 

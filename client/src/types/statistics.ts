@@ -46,6 +46,10 @@ export interface QuestionMetrics {
   key: string;
   cmid: number;
   name: string;
+  /** Chave original dentro da importação (q1, q2...). */
+  sourceKey: string;
+  /** Importação (turma) de origem. */
+  turma: string;
   /** Seção do Moodle de onde a questão veio (null em importações antigas). */
   section: string | null;
   maxGrade: number;
@@ -81,6 +85,8 @@ export interface QuestionMetrics {
 
 export interface StudentQuestionMetrics {
   key: string;
+  sourceKey: string;
+  turma: string;
   name: string;
   submitted: boolean;
   submittedAt: number | null;
@@ -100,7 +106,13 @@ export interface StudentMetrics {
   name: string;
   email: string | null;
   username: string | null;
+  idNumber: string | null;
   groups: string[];
+  /** Turmas em que o aluno aparece dentro da seleção atual. */
+  turmas: string[];
+  enrolled: boolean;
+  /** Falso quando o cadastro não tem entrega, nota, tentativa nem código. */
+  hasRecords: boolean;
   lastAccess: number | null;
   lastCourseAccess: number | null;
   submittedCount: number;
@@ -140,8 +152,11 @@ export interface EngagementMetrics {
 export interface OverviewMetrics {
   totalStudents: number;
   totalQuestions: number;
+  totalTurmas: number;
   activeStudents: number;
   inactiveStudents: number;
+  /** Alunos descartados pelo filtro de "sem histórico". */
+  excludedStudents: number;
   expectedSubmissions: number;
   actualSubmissions: number;
   submissionRate: number;
@@ -163,19 +178,63 @@ export interface OverviewMetrics {
   passThreshold: number;
 }
 
+export interface ProfessorComparisonRow {
+  userId: number | null;
+  name: string;
+  turma?: string | null;
+  professorAvg: number;
+  automaticAvg: number;
+  delta: number;
+}
+
 export interface ProfessorComparison {
   matchedStudents: number;
   avgDelta: number | null;
-  biggestDivergences: { userId: number | null; name: string; professorAvg: number; automaticAvg: number; delta: number }[];
-  rows: { userId: number | null; name: string; professorAvg: number; automaticAvg: number; delta: number }[];
+  biggestDivergences: ProfessorComparisonRow[];
+  rows: ProfessorComparisonRow[];
+}
+
+/** Visão geral de uma turma calculada isoladamente dentro de uma seleção. */
+export interface TurmaBreakdown {
+  turma: string;
+  importedAt: number | null;
+  questionCount: number;
+  overview: OverviewMetrics;
+}
+
+export interface DatasetInfo {
+  turma: string;
+  courseName: string | null;
+  sectionName: string | null;
+  importedAt: number | null;
+  studentCount: number;
+  questionCount: number;
+}
+
+export interface ExcludedStudent {
+  name: string;
+  email: string | null;
+  turmas: string[];
+  lastCourseAccess: number | null;
 }
 
 export interface StatisticsMetrics {
+  /** Rótulo do recorte: o nome da turma, ou os nomes unidos por " + ". */
   turma: string;
+  /** Uma entrada por importação selecionada. */
+  turmas: string[];
+  /** Verdadeiro quando mais de uma importação está sendo vista junto. */
+  combined: boolean;
+  datasets: DatasetInfo[];
+  byTurma: TurmaBreakdown[];
   courseName: string;
   sectionName: string;
   importedAt: number;
   sources: Record<string, boolean>;
+  /** Fontes disponíveis em parte das turmas selecionadas. */
+  sourcesPartial: Record<string, boolean>;
+  ignoreEmptyStudents: boolean;
+  excludedStudents: ExcludedStudent[];
   /** Uma entrada por seção importada. */
   sections?: string[];
   warnings: string[];
@@ -193,9 +252,18 @@ export interface StatisticsDatasetSummary {
   turma: string;
   courseName: string;
   sectionName: string;
+  sections?: string[];
   importedAt: number;
   studentCount: number;
   questionCount: number;
+  /** Cadastros sem nenhum histórico de exercícios nesta importação. */
+  emptyStudentCount?: number;
+}
+
+/** Recorte ativo: quais importações e se os cadastros vazios entram na conta. */
+export interface StatisticsScope {
+  turmas: string[];
+  ignoreEmptyStudents: boolean;
 }
 
 export type ReportKind = 'overview' | 'question' | 'student' | 'alerts';
@@ -203,6 +271,10 @@ export type ReportKind = 'overview' | 'question' | 'student' | 'alerts';
 export interface AIReport {
   kind: ReportKind;
   targetId: string | null;
+  /** Turmas que compuseram o relatório. */
+  turmas?: string[];
+  scope?: string;
+  cacheKey?: string;
   markdown: string;
   generatedAt: number;
   provider: string;
@@ -235,4 +307,34 @@ export interface ImportProgress {
   current?: number;
   total?: number;
   error?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Exportação em CSV
+// ---------------------------------------------------------------------------
+
+export type ExportGroup = 'cross' | 'timeseries' | 'unified';
+
+export interface ExportTableInfo {
+  id: string;
+  group: ExportGroup;
+  groupLabel: string;
+  file: string;
+  title: string;
+  description: string;
+  tip: string | null;
+  rowCount: number;
+  columnCount: number;
+}
+
+export interface ExportManifest {
+  turmas: string[];
+  ignoreEmptyStudents: boolean;
+  studentCount: number;
+  excludedStudentCount: number;
+  questionCount: number;
+  /** Envios no eixo temporal — quantas linhas as séries temporais terão. */
+  eventCount: number;
+  groups: Record<ExportGroup, string>;
+  tables: ExportTableInfo[];
 }

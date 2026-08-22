@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import type { StatisticsMetrics } from '../../types/statistics';
 import StatCard from './StatCard';
+import TurmaComparison from './TurmaComparison';
 import ChartCard from './charts/ChartCard';
 import BarChart from './charts/BarChart';
 import DonutChart from './charts/DonutChart';
@@ -86,6 +87,8 @@ const OverviewPanel: React.FC<OverviewPanelProps> = ({ metrics, t }) => {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <TurmaComparison metrics={metrics} t={t} />
+
         <ChartCard
           title={t.statsChartGradeDistribution}
           subtitle={t.statsChartGradeDistributionSub}
@@ -234,14 +237,17 @@ const OverviewPanel: React.FC<OverviewPanelProps> = ({ metrics, t }) => {
           { key: 'submissionHistory', label: t.statsSourceSubmissionHistory }
         ].map(source => {
           const available = Boolean(metrics.sources[source.key]);
+          const partial = Boolean(metrics.sourcesPartial?.[source.key]);
+          const tone = available ? VIZ.good : partial ? VIZ.warning : VIZ.muted;
+          const status = available ? t.statsSourceAvailable : partial ? t.statsSourcePartial : t.statsSourceUnavailable;
           return (
             <span
               key={source.key}
               className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-widest"
-              style={{ color: available ? VIZ.good : VIZ.muted, borderColor: available ? VIZ.good : 'var(--border-main)' }}
+              style={{ color: tone, borderColor: available || partial ? tone : 'var(--border-main)' }}
             >
               {available ? <CheckCircle2 size={10} /> : <FileWarning size={10} />}
-              {source.label} · {available ? t.statsSourceAvailable : t.statsSourceUnavailable}
+              {source.label} · {status}
             </span>
           );
         })}

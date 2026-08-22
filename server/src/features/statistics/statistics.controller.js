@@ -6,7 +6,8 @@ const { parseFolderWithTemplate } = require('../../utils/fileHelpers');
 const { emitProgress } = require('../../core/progress');
 const harvester = require('./moodleHarvester');
 const { analyzeCode } = require('./codeMetrics');
-const { computeMetrics } = require('./statistics.service');
+const { computeMetrics, mergeDatasets, hasAnyRecord, studentKey } = require('./statistics.service');
+const statisticsExport = require('./statistics.export');
 const { buildPrompt, REPORT_KINDS } = require('./statistics.prompts');
 const { runPrompt, readSettings } = require('../ai/ai.service');
 
@@ -446,6 +447,79 @@ exports.importMoodle = async (req, res) => {
 };
 
 // ---------------------------------------------------------------------------
+// Seleção de importações
+// ---------------------------------------------------------------------------
+
+/**
+ * Lê a seleção de turmas de uma query ou de um corpo de requisição. Aceita um
+ * array (corpo JSON), um JSON serializado (`["A","B"]`, usado nos GETs) ou um
+ * nome único. Nomes de turma podem conter vírgula, então não há separador
+ * implícito — a lista sempre chega explícita.
+ */
+function parseTurmas(source) {
+  const raw = source?.turmas ?? source?.turma;
+  if (raw === undefined || raw === null || raw === '') return [];
+
+  let list;
+  if (Array.isArray(raw)) {
+    list = raw;
+  } else {
+    const text = String(raw).trim();
+    if (text.startsWith('[')) {
+      try { list = JSON.parse(text); } catch (err) { list = [text]; }
+    } else {
+      list = [text];
+    }
+  }
+
+  return [...new Set((Array.isArray(list) ? list : [list]).map(value => String(value).trim()).filter(Boolean))];
+}
+
+const parseFlag = (value) => value === true || value === 'true' || value === '1';
+
+/** Ids de tabela são slugs, então aqui a vírgula é um separador seguro. */
+const parseIdList = (value) => String(value || '')
+  .split(',')
+  .map(item => item.trim())
+  .filter(Boolean);
+
+function loadDatasets(turmas) {
+  const datasets = [];
+  const missing = [];
+  turmas.forEach(turma => {
+    const dataset = readDataset(turma);
+    if (dataset) datasets.push(dataset);
+    else missing.push(turma);
+  });
+  return { datasets, missing };
+}
+
+/**
+ * Resolve a seleção de uma requisição em datasets carregados. Devolve `null`
+ * (já tendo respondido o erro) quando não há nada para calcular.
+ */
+function resolveSelection(req, res, source) {
+  const turmas = parseTurmas(source);
+  if (!turmas.length) {
+    res.status(400).json({ error: 'Informe ao menos uma importação de estatísticas.' });
+    return null;
+  }
+
+  const { datasets, missing } = loadDatasets(turmas);
+  if (!datasets.length) {
+    res.status(404).json({ error: `Importação não encontrada: ${missing.join(', ')}` });
+    return null;
+  }
+
+  return {
+    turmas: datasets.map(dataset => dataset.turma),
+    datasets,
+    missing,
+    options: { ignoreEmptyStudents: parseFlag(source.ignoreEmpty) }
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Consulta
 // ---------------------------------------------------------------------------
 
@@ -457,13 +531,18 @@ exports.listDatasets = (req, res) => {
     const datasets = files.map(file => {
       try {
         const data = JSON.parse(fs.readFileSync(path.join(STATS_DIR, file), 'utf8'));
+        // Contamos aqui os cadastros sem histórico para que o seletor de turmas
+        // possa avisar quantos alunos o filtro descartaria.
+        const merged = mergeDatasets([data]);
         return {
           turma: data.turma,
           courseName: data.courseName,
           sectionName: data.sectionName,
+          sections: data.sections || (data.sectionName ? [data.sectionName] : []),
           importedAt: data.importedAt,
-          studentCount: (data.students || []).length,
-          questionCount: (data.questions || []).length
+          studentCount: merged.students.length,
+          questionCount: (data.questions || []).length,
+          emptyStudentCount: merged.students.filter(student => !hasAnyRecord(merged, student)).length
         };
       } catch (err) {
         return null;
@@ -477,10 +556,15 @@ exports.listDatasets = (req, res) => {
 };
 
 exports.getDataset = (req, res) => {
-  const dataset = readDataset(req.query.turma);
-  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
+  const selection = resolveSelection(req, res, req.query);
+  if (!selection) return;
+
   try {
-    res.json(computeMetrics(dataset));
+    const metrics = computeMetrics(selection.datasets, selection.options);
+    selection.missing.forEach(turma => {
+      metrics.warnings.push(`Importação "${turma}" não foi encontrada e ficou fora deste cálculo.`);
+    });
+    res.json(metrics);
   } catch (err) {
     console.error('[statistics] Metrics failed:', err);
     res.status(500).json({ error: `Falha ao calcular métricas: ${err.message}` });
@@ -488,11 +572,16 @@ exports.getDataset = (req, res) => {
 };
 
 exports.getSubmissionCode = (req, res) => {
-  const { turma, userId, question } = req.query;
-  const dataset = readDataset(turma);
-  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
+  const selection = resolveSelection(req, res, req.query);
+  if (!selection) return;
 
-  const student = (dataset.students || []).find(s => String(s.userId) === String(userId) || s.folderName === userId);
+  const { userId, question } = req.query;
+  const merged = mergeDatasets(selection.datasets);
+  const student = merged.students.find(candidate =>
+    String(candidate.userId) === String(userId)
+    || candidate.folderName === userId
+    || studentKey(candidate) === String(userId));
+
   const submission = student?.questions?.[question];
   if (!submission) return res.status(404).json({ error: 'Submissão não encontrada.' });
 
@@ -520,28 +609,118 @@ exports.deleteDataset = (req, res) => {
 };
 
 // ---------------------------------------------------------------------------
+// Exportação em CSV
+// ---------------------------------------------------------------------------
+
+exports.exportManifest = (req, res) => {
+  const selection = resolveSelection(req, res, req.query);
+  if (!selection) return;
+
+  try {
+    const context = statisticsExport.buildContext(selection.datasets, selection.options);
+    res.json({
+      turmas: selection.turmas,
+      ignoreEmptyStudents: selection.options.ignoreEmptyStudents,
+      studentCount: context.metrics.overview.totalStudents,
+      excludedStudentCount: context.metrics.overview.excludedStudents,
+      questionCount: context.metrics.overview.totalQuestions,
+      eventCount: context.events.length,
+      groups: statisticsExport.GROUP_LABELS,
+      tables: statisticsExport.buildManifest(context)
+    });
+  } catch (err) {
+    console.error('[statistics] Export manifest failed:', err);
+    res.status(500).json({ error: `Falha ao montar o catálogo de exportação: ${err.message}` });
+  }
+};
+
+exports.exportData = (req, res) => {
+  const selection = resolveSelection(req, res, req.query);
+  if (!selection) return;
+
+  const tables = parseIdList(req.query.tables);
+  const bundle = req.query.bundle === 'csv' ? 'csv' : 'zip';
+  const includeDocs = !['0', 'false'].includes(String(req.query.docs));
+
+  try {
+    const context = statisticsExport.buildContext(selection.datasets, selection.options);
+
+    // O nome do arquivo é útil no cliente (que não conhece o recorte exportado)
+    // e, numa resposta de outra origem, só chega se for explicitamente exposto.
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+
+    if (bundle === 'csv') {
+      if (tables.length !== 1) {
+        return res.status(400).json({ error: 'A exportação de um único CSV exige exatamente uma tabela.' });
+      }
+      const { fileName, content } = statisticsExport.buildSingleCsv(context, tables[0]);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      return res.send(content);
+    }
+
+    const { fileName, buffer } = statisticsExport.buildZipBundle(context, tables, { includeDocs });
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Length', buffer.length);
+    return res.send(buffer);
+  } catch (err) {
+    console.error('[statistics] Export failed:', err);
+    return res.status(500).json({ error: `Falha ao gerar a exportação: ${err.message}` });
+  }
+};
+
+// ---------------------------------------------------------------------------
 // Relatórios de IA
 // ---------------------------------------------------------------------------
 
+/**
+ * Identificador do recorte analisado. Um relatório gerado sobre duas turmas não
+ * é o mesmo relatório de cada uma delas, então o escopo entra na chave do cache.
+ * Cliente e servidor derivam a chave pela mesma regra.
+ */
+const scopeId = (turmas) => [...turmas].sort().join(' + ');
+
+const reportCacheKey = (turmas, kind, targetId) =>
+  `${scopeId(turmas)}##${kind}${targetId ? `:${targetId}` : ''}`;
+
+/**
+ * Junta os relatórios de todas as turmas selecionadas em um mapa único. Chaves
+ * antigas (sem escopo) pertencem à turma do próprio arquivo — é o que mantém
+ * visíveis os relatórios gerados antes desta versão.
+ */
+function readAllReports(turmas) {
+  const reports = {};
+  turmas.forEach(turma => {
+    Object.entries(readReports(turma)).forEach(([key, report]) => {
+      reports[key.includes('##') ? key : `${turma}##${key}`] = report;
+    });
+  });
+  return reports;
+}
+
 exports.getReports = (req, res) => {
-  res.json(readReports(req.query.turma));
+  const turmas = parseTurmas(req.query);
+  if (!turmas.length) return res.json({});
+  res.json(readAllReports(turmas));
 };
 
 exports.generateReport = async (req, res) => {
-  const { turma, kind, targetId, lang = 'pt-BR' } = req.body;
+  const { kind, targetId, lang = 'pt-BR' } = req.body;
 
   if (!REPORT_KINDS.includes(kind)) {
     return res.status(400).json({ error: `Tipo de relatório inválido: ${kind}` });
   }
 
-  const dataset = readDataset(turma);
-  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
+  const selection = resolveSelection(req, res, req.body);
+  if (!selection) return;
 
   try {
-    const metrics = computeMetrics(dataset);
+    const metrics = computeMetrics(selection.datasets, selection.options);
+    const merged = mergeDatasets(selection.datasets);
     const { systemPrompt, userPrompt } = buildPrompt(kind, {
       metrics,
-      dataset,
+      dataset: merged,
       lang,
       questionKey: targetId,
       userId: targetId
@@ -550,18 +729,25 @@ exports.generateReport = async (req, res) => {
     const settings = readSettings();
     const markdown = await runPrompt({ settings, systemPrompt, userPrompt, maxTokens: 3000 });
 
+    const cacheKey = reportCacheKey(selection.turmas, kind, targetId);
     const report = {
       kind,
       targetId: targetId ?? null,
+      turmas: selection.turmas,
+      scope: scopeId(selection.turmas),
+      cacheKey,
       markdown: String(markdown || '').trim(),
       generatedAt: Date.now(),
       provider: settings.provider,
       model: settings.provider === 'ollama' ? settings.ollamaModel : settings.cloudModel
     };
 
-    const reports = readReports(turma);
-    reports[targetId ? `${kind}:${targetId}` : kind] = report;
-    fs.writeFileSync(reportsPath(turma), JSON.stringify(reports, null, 2));
+    // O relatório de um recorte combinado fica guardado no arquivo da primeira
+    // turma em ordem alfabética; a chave é que carrega o escopo inteiro.
+    const ownerTurma = [...selection.turmas].sort()[0];
+    const reports = readReports(ownerTurma);
+    reports[cacheKey] = report;
+    fs.writeFileSync(reportsPath(ownerTurma), JSON.stringify(reports, null, 2));
 
     res.json(report);
   } catch (err) {

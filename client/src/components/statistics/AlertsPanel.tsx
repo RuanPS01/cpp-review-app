@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChevronRight, ShieldCheck } from 'lucide-react';
 import type { AIReport, RiskLevel, StatisticsMetrics } from '../../types/statistics';
+import { reportKey, scopeOf } from '../../services/statistics';
 import RiskBadge from './RiskBadge';
 import AIReportCard from './AIReportCard';
 import { RISK_COLORS, formatDateTime, formatNumber, formatPercent } from './charts/chartTheme';
@@ -55,7 +56,12 @@ const AlertsPanel: React.FC<AlertsPanelProps> = ({
                     <span className="font-bold text-text-bright transition-colors group-hover:text-accent">{student.name}</span>
                     <RiskBadge level={student.risk.level} label={riskLabels[student.risk.level]} score={student.risk.score} compact />
                   </div>
-                  <div className="mt-1 text-[10px] text-text-dim">{student.email || student.username || '—'}</div>
+                  <div className="mt-1 text-[10px] text-text-dim">
+                    {student.email || student.username || '—'}
+                    {metrics.combined && student.turmas.length > 0 && (
+                      <span className="ml-2 text-accent">{student.turmas.join(' · ')}</span>
+                    )}
+                  </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {student.risk.reasons.map(reason => (
                       <span
@@ -97,11 +103,11 @@ const AlertsPanel: React.FC<AlertsPanelProps> = ({
       <AIReportCard
         t={t}
         lang={lang}
-        turma={metrics.turma}
+        scope={scopeOf(metrics)}
         kind="alerts"
         title={t.statsAIAlerts}
         description={t.statsAIAlertsDesc}
-        report={reports.alerts}
+        report={reports[reportKey(metrics.turmas, 'alerts')]}
         onGenerated={onReportGenerated}
       />
     </div>
