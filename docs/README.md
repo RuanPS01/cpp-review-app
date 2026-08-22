@@ -28,7 +28,8 @@ Ferramenta pedagógica desktop para **revisão e correção de código C++** de 
 | [Editor de Código](implementacao-editor-codigo.md) | Implementação do Monaco Editor |
 | [Markdown e HTML](implementacao-markdown-html.md) | Renderização de enunciados |
 | [Estatísticas da Turma](estatisticas.md) | Importação analítica do Moodle, várias turmas na mesma visão, métricas de engajamento e acerto, score de risco, relatórios de IA, gráficos e exportação em CSV |
-| [Integração Moodle/VPL](moodle-vpl-integration-guide.md) | Guia de integração com Moodle VPL |
+| [Integração Moodle/VPL](moodle-vpl-integration-guide.md) | Guia de integração com Moodle VPL: configuração, token, funções usadas |
+| [**Extração de dados do Moodle**](moodle/README.md) | Análise consolidada de **todos** os caminhos de extração: OpenAPI de cada rota, Web Services função a função, extração por sessão, por arquivos exportados e por acesso direto, limites e privacidade |
 | [Prompt de Importação Moodle](prompt-importacao-moodle-vpl.md) | Referência do prompt/fluxo de importação |
 
 ---
