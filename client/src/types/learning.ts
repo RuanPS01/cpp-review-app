@@ -119,3 +119,107 @@ export interface MasteryResult {
     unmappedQuestions: { key: string; name: string }[];
   } | null;
 }
+
+// ---------------------------------------------------------------------------
+// Fase 2 — indicadores e padrões
+// ---------------------------------------------------------------------------
+
+/**
+ * Toda medida do submódulo carrega o `n` e, quando falta, o motivo. Ausência
+ * de medida nunca é zero: `value: null` com `reason` preenchido.
+ */
+export interface Indicator {
+  value: number | null;
+  n: number;
+  available: boolean;
+  reason: string | null;
+}
+
+export type DimensionKey = 'engagement' | 'regularity' | 'persistence' | 'learning' | 'selfRegulation';
+
+export interface DimensionScore {
+  value: number | null;
+  n: number;
+  available: boolean;
+}
+
+export interface Trajectory {
+  key: string;
+  name: string;
+  attempts: number;
+  first: number;
+  last: number;
+  best: number;
+  gain: number;
+  passed: boolean;
+  attemptsToPass: number | null;
+  stalled: boolean;
+  percents: number[];
+}
+
+export interface StudentIndicators {
+  userId: number | null;
+  folderName: string | null;
+  name: string;
+  email: string | null;
+  dimensions: Record<DimensionKey, Record<string, Indicator>>;
+  scores: Record<DimensionKey, DimensionScore>;
+  trajectories: Trajectory[];
+}
+
+export interface IndicatorsResult {
+  dimensions: DimensionKey[];
+  thresholds: { pass: number };
+  sources: { logs: boolean; participation: boolean; history: boolean; taxonomy: boolean };
+  period: { start: number; end: number } | null;
+  students: StudentIndicators[];
+}
+
+export type PatternCode =
+  | 'lowEngagementEarly'
+  | 'irregularPlusConceptGap'
+  | 'procrastination'
+  | 'bruteForce'
+  | 'recurringConceptError'
+  | 'productivePersistence'
+  | 'earlyAbandonment';
+
+export interface PatternMatch {
+  userId: number | null;
+  name: string;
+  evidence: Record<string, any>;
+}
+
+export interface PatternResult {
+  code: PatternCode;
+  /** Padrão que reconhece um comportamento desejável, e não um risco. */
+  positive: boolean;
+  students: PatternMatch[];
+  count: number;
+  rate: number;
+}
+
+export interface PatternsResult {
+  patterns: PatternResult[];
+  thresholds: {
+    gainThreshold: number | null;
+    minAttemptsForTrend: number;
+    procrastinationHours: number;
+    silenceCutDays: number | null;
+    passThreshold: number;
+    earlyWeeks: number;
+  };
+  availability: { history: boolean; taxonomy: boolean; logs: boolean; period: boolean };
+  totalStudents: number;
+}
+
+export interface ActivitySummary {
+  collected: boolean;
+  baseUrl: string | null;
+  courseId: number | null;
+  collectedAt?: number;
+  sources?: { logs: boolean; participation: boolean };
+  logRows?: number;
+  warnings?: string[];
+  studentsWithActivity?: number;
+}

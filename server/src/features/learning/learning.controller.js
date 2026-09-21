@@ -1,9 +1,12 @@
-const { readDataset } = require('../statistics/statistics.paths');
+const { readDataset, statisticsPaths, readJsonFile, writeJsonFile } = require('../statistics/statistics.paths');
 const { computeMetrics } = require('../statistics/statistics.service');
 const { runPrompt, readSettings, extractJson } = require('../ai/ai.service');
 const taxonomyService = require('./taxonomy.service');
 const { computeMastery } = require('./topics.service');
 const { buildTaxonomySuggestionPrompt } = require('./learning.prompts');
+const { collectActivity } = require('./moodleActivity');
+const { computeIndicators } = require('./indicators.service');
+const { detectPatterns } = require('./patterns.service');
 
 // ---------------------------------------------------------------------------
 // Taxonomias globais
@@ -204,5 +207,110 @@ exports.getMastery = (req, res) => {
   } catch (err) {
     console.error('[learning] Mastery failed:', err);
     res.status(500).json({ error: `Falha ao calcular o domínio conceitual: ${err.message}` });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Atividade (logs do Moodle)
+// ---------------------------------------------------------------------------
+
+/** Carrega o que as três camadas precisam: dataset, domínio e atividade. */
+function loadContext(turma) {
+  const dataset = readDataset(turma);
+  if (!dataset) return null;
+
+  const stored = taxonomyService.readMapping(turma);
+  const taxonomy = stored.taxonomyId ? taxonomyService.getTaxonomy(stored.taxonomyId) : null;
+  const mastery = taxonomy
+    ? { bound: true, ...computeMastery(dataset, taxonomy, stored.mapping) }
+    : { bound: false, topics: [], students: [] };
+
+  const activity = readJsonFile(statisticsPaths(turma).activity, null);
+  return { dataset, mastery, activity };
+}
+
+exports.getActivity = (req, res) => {
+  const { turma } = req.query;
+  const dataset = readDataset(turma);
+  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
+
+  // A tela precisa do endereço e do id do curso para abrir o login do Moodle
+  // sem pedir de novo o que a importação já guardou.
+  const origin = { baseUrl: dataset.baseUrl || null, courseId: dataset.courseId ?? null };
+
+  const activity = readJsonFile(statisticsPaths(turma).activity, null);
+  if (!activity) return res.json({ collected: false, ...origin });
+  res.json({
+    collected: true,
+    ...origin,
+    collectedAt: activity.collectedAt,
+    sources: activity.sources,
+    logRows: activity.logRows,
+    warnings: activity.warnings || [],
+    studentsWithActivity: Object.keys(activity.byStudent || {}).length
+  });
+};
+
+exports.collectActivity = async (req, res) => {
+  const { turma, cookie, userAgent, baseUrl, courseId } = req.body;
+  const dataset = readDataset(turma);
+  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
+  if (!cookie) return res.status(400).json({ error: 'Sessão do Moodle não capturada.' });
+
+  const resolvedCourseId = courseId ?? dataset.courseId;
+  if (!resolvedCourseId) {
+    return res.status(400).json({ error: 'Esta importação não guardou o id do curso; reimporte para coletar logs.' });
+  }
+
+  try {
+    const activity = await collectActivity({
+      turma,
+      baseUrl: baseUrl || dataset.baseUrl,
+      cookie,
+      userAgent,
+      courseId: resolvedCourseId,
+      dataset
+    });
+    writeJsonFile(statisticsPaths(turma).activity, activity);
+    res.json({
+      success: true,
+      collectedAt: activity.collectedAt,
+      sources: activity.sources,
+      logRows: activity.logRows,
+      warnings: activity.warnings,
+      studentsWithActivity: Object.keys(activity.byStudent).length
+    });
+  } catch (err) {
+    console.error('[learning] Activity collection failed:', err);
+    res.status(500).json({ error: `Falha ao coletar a atividade: ${err.message}` });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Indicadores e padrões
+// ---------------------------------------------------------------------------
+
+exports.getIndicators = (req, res) => {
+  const context = loadContext(req.query.turma);
+  if (!context) return res.status(404).json({ error: 'Importação não encontrada.' });
+
+  try {
+    res.json(computeIndicators(context.dataset, context.activity, context.mastery));
+  } catch (err) {
+    console.error('[learning] Indicators failed:', err);
+    res.status(500).json({ error: `Falha ao calcular os indicadores: ${err.message}` });
+  }
+};
+
+exports.getPatterns = (req, res) => {
+  const context = loadContext(req.query.turma);
+  if (!context) return res.status(404).json({ error: 'Importação não encontrada.' });
+
+  try {
+    const indicators = computeIndicators(context.dataset, context.activity, context.mastery);
+    res.json(detectPatterns(context.dataset, indicators, context.mastery, context.activity));
+  } catch (err) {
+    console.error('[learning] Patterns failed:', err);
+    res.status(500).json({ error: `Falha ao detectar os padrões: ${err.message}` });
   }
 };

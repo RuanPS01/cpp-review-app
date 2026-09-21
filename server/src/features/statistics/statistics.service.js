@@ -180,11 +180,44 @@ function buildQuestionMetrics(dataset) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Ganho, em pontos percentuais, a partir do qual a insistência conta como
+ * progresso.
+ *
+ * Sem um piso, qualquer ganho positivo vira "está melhorando": um aluno que
+ * submeteu cinco vezes e foi de 20% a 30% sem nunca passar seria lido como
+ * persistente produtivo, que é o contrário do que aconteceu. O corte é
+ * arbitrário como todo corte, mas fica declarado e aparece na tela.
+ */
+const RELEVANT_GAIN = 20;
+
+/**
+ * O aluno melhora ao longo das tentativas?
+ *
+ * Exige pelo menos 3 tentativas numa questão: com dois pontos não há
+ * tendência. Devolve `null` quando a turma foi importada sem o histórico de
+ * tentativas — a ausência do dado não é um "não melhora".
+ */
+function computeImproving(student, questionByKey) {
+  const paths = Object.entries(student.questions || {})
+    .map(([key, submission]) => {
+      const history = (submission?.history || []).filter(entry => typeof entry.grade === 'number');
+      if (history.length < 3) return null;
+      const max = questionMaxGrade(questionByKey.get(key) || {});
+      const toPercent = (grade) => Math.max(0, Math.min(100, (grade / max) * 100));
+      return toPercent(history[history.length - 1].grade) - toPercent(history[0].grade);
+    })
+    .filter(value => value !== null);
+
+  if (!paths.length) return null;
+  return mean(paths) >= RELEVANT_GAIN;
+}
+
+/**
  * Combina entrega, desempenho, atraso e esforço em um único score 0–100.
  * Cada parcela devolve também o motivo em texto, para que o alerta na tela
  * explique *por que* o aluno foi sinalizado em vez de mostrar só um número.
  */
-function computeRisk({ missingRatio, avgPercent, submittedCount, lateRatio, attempts, questionCount }) {
+function computeRisk({ missingRatio, avgPercent, submittedCount, lateRatio, attempts, questionCount, improving }) {
   const reasons = [];
   let score = 0;
 
@@ -210,9 +243,12 @@ function computeRisk({ missingRatio, avgPercent, submittedCount, lateRatio, atte
     reasons.push({ code: 'lateSubmissions', weight: points, value: round(lateRatio * 100, 0) });
   }
 
-  // Muitas tentativas com nota baixa indica esforço sem progresso — sinal
-  // pedagógico diferente de simplesmente não entregar.
-  if (attempts >= 8 && avgPercent !== null && avgPercent < PASS_THRESHOLD) {
+  // Muitas tentativas com nota baixa só é risco quando NÃO há progresso.
+  // Insistir e melhorar é persistência produtiva e não deve acionar alerta —
+  // é o comportamento que queremos reconhecer, não penalizar.
+  // `improving === null` significa turma sem histórico de tentativas: aí não
+  // há como distinguir, e a regra antiga continua valendo.
+  if (attempts >= 8 && avgPercent !== null && avgPercent < PASS_THRESHOLD && improving !== true) {
     score += 8;
     reasons.push({ code: 'strugglingEffort', weight: 8, value: attempts });
   }
@@ -255,13 +291,18 @@ function buildStudentMetrics(dataset) {
     const missingRatio = questions.length ? (questions.length - submitted.length) / questions.length : 0;
     const avgPercent = mean(percentages);
 
+    // Melhora entre a primeira e a última tentativa, quando há histórico.
+    // `null` = turma importada sem o histórico; o risco mantém a regra antiga.
+    const improving = computeImproving(student, questionByKey);
+
     const risk = computeRisk({
       missingRatio,
       avgPercent: avgPercent ?? null,
       submittedCount: submitted.length,
       lateRatio: submitted.length ? lateCount / submitted.length : 0,
       attempts: attemptsTotal,
-      questionCount: questions.length
+      questionCount: questions.length,
+      improving
     });
 
     const conceptsUsed = {};
@@ -290,6 +331,8 @@ function buildStudentMetrics(dataset) {
       firstSubmissionAt: submissionTimes.length ? Math.min(...submissionTimes) : null,
       lastSubmissionAt: submissionTimes.length ? Math.max(...submissionTimes) : null,
       totalCodeLines: submitted.reduce((acc, q) => acc + (q.codeLines || 0), 0),
+      // Reconhecimento, não risco: fica fora de `risk.reasons` de propósito.
+      productivePersistence: improving === true && attemptsTotal >= 8,
       risk,
       questions: perQuestion,
       concepts: conceptsUsed,
@@ -574,5 +617,6 @@ module.exports = {
   median,
   stdDev,
   rate,
-  round
+  round,
+  RELEVANT_GAIN
 };

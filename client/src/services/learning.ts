@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { API_BASE } from './api';
 import type {
-  MappingRecord, MasteryResult, QuestionMapping, SuggestionResult, Taxonomy, TaxonomyFile
+  ActivitySummary, IndicatorsResult, MappingRecord, MasteryResult, PatternsResult,
+  QuestionMapping, SuggestionResult, Taxonomy, TaxonomyFile
 } from '../types/learning';
 
 export const learningApi = {
@@ -21,5 +22,15 @@ export const learningApi = {
     axios.post<SuggestionResult>(`${API_BASE}/learning/taxonomy/suggest`, { turma, taxonomyId }),
 
   getMastery: (turma: string) =>
-    axios.get<MasteryResult>(`${API_BASE}/learning/mastery`, { params: { turma } })
+    axios.get<MasteryResult>(`${API_BASE}/learning/mastery`, { params: { turma } }),
+
+  getActivity: (turma: string) =>
+    axios.get<ActivitySummary>(`${API_BASE}/learning/activity`, { params: { turma } }),
+  collectActivity: (data: { turma: string; cookie: string; userAgent?: string; baseUrl?: string; courseId?: number }) =>
+    axios.post(`${API_BASE}/learning/activity/collect`, data),
+
+  getIndicators: (turma: string) =>
+    axios.get<IndicatorsResult>(`${API_BASE}/learning/indicators`, { params: { turma } }),
+  getPatterns: (turma: string) =>
+    axios.get<PatternsResult>(`${API_BASE}/learning/patterns`, { params: { turma } })
 };

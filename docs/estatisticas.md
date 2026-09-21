@@ -114,6 +114,18 @@ Os prompts usam o provedor definido em **Configurações** (Ollama, OpenAI, Gemi
 | `statistics.prompts.js` | Montagem dos prompts pedagógicos |
 | `moodleHarvester.js` | Sessão HTTP autenticada e parsers das páginas do VPL |
 | `codeMetrics.js` | Métricas estáticas do código C++ |
+| `statistics.paths.js` | Caminhos da turma e a lista de arquivos-irmão |
+
+### Backend — `server/src/features/learning/`
+| Arquivo | Responsabilidade |
+|---------|------------------|
+| `learning.routes.js` / `learning.controller.js` | Rotas e handlers do submódulo |
+| `taxonomy.service.js` | Taxonomias globais, vínculo por turma e herança por `cmid` |
+| `topics.service.js` | Domínio conceitual por aluno e por conceito |
+| `moodleActivity.js` | Coleta e agregação dos relatórios de log e participação |
+| `indicators.service.js` | As cinco dimensões, com `n` e motivo de ausência |
+| `patterns.service.js` | Os sete padrões de comportamento |
+| `learning.prompts.js` | Prompt da sugestão de mapeamento |
 
 ### Rotas
 | Método | Rota | Função |
@@ -129,18 +141,28 @@ Os prompts usam o provedor definido em **Configurações** (Ollama, OpenAI, Gemi
 ### Frontend
 | Arquivo | Responsabilidade |
 |---------|------------------|
-| `pages/StatisticsPage.tsx` | Orquestra as seis sub-abas |
+| `pages/StatisticsPage.tsx` | Orquestra os dois grupos e suas sub-abas |
 | `hooks/useStatistics.ts` | Estado: datasets, métricas e relatórios |
 | `components/statistics/StatisticsImportWizard.tsx` | Assistente de importação com log da coleta |
 | `components/statistics/{Overview,Engagement,Questions,Students,Alerts,AIInsights}Panel.tsx` | Sub-abas |
 | `components/statistics/charts/` | Gráficos SVG próprios (sem biblioteca externa) |
 | `services/statistics.ts` | Cliente REST |
+| `components/learning/ConceptsPanel.tsx` | Sub-aba Conceitos, com o mapeamento questão→conceito |
+| `components/learning/IndicatorsPanel.tsx` | Sub-aba Indicadores: dimensões, indicadores crus e curva de aprendizagem |
+| `components/learning/PatternsPanel.tsx` | Sub-aba Padrões: um cartão por padrão, com interpretação e intervenção |
+| `components/learning/LearningSourcesBar.tsx` | O que está medido e o botão de coleta de logs |
+| `hooks/useLearning.ts` · `hooks/useLearningInsights.ts` | Estado do submódulo |
+| `services/learning.ts` | Cliente REST do submódulo |
 
 ### Dados em disco
 ```
-data/statistics/
-├── stats_{turma}.json           # dataset bruto (alunos, questões, código, métricas)
-└── stats_{turma}.reports.json   # relatórios de IA em cache
+data/
+├── taxonomy.json                     # taxonomias de conceitos, reutilizáveis entre turmas
+└── statistics/
+    ├── stats_{turma}.json            # dataset bruto (alunos, questões, código, métricas)
+    ├── stats_{turma}.reports.json    # relatórios de IA em cache
+    ├── stats_{turma}.taxonomy.json   # vínculo e mapeamento questão→conceito
+    └── stats_{turma}.activity.json   # atividade agregada por aluno e dia
 ```
 
 ---
@@ -169,6 +191,8 @@ Regras aplicadas em todos os gráficos:
 A aba Estatísticas tem dois níveis: **Dados** (as seis sub-abas descritas acima) e **Aprendizado**, que une as propostas institucionais de analytics do Moodle, de tutoria socrática por LLM e de base longitudinal para predição.
 
 A Fase 1 entrega a sub-aba **Conceitos**: sem mapear questão a conceito, os dados por questão produzem notas; com o mapeamento, produzem um perfil de domínio conceitual — que é o que torna o alerta acionável.
+
+A Fase 2 entrega as sub-abas **Indicadores** e **Padrões**, mais a coleta dos logs do Moodle: o domínio conceitual diz *em qual conceito* o aluno tem lacuna, e os indicadores dizem *como ele estuda*.
 
 ### Taxonomia: global, mapeamento por turma
 
@@ -207,6 +231,63 @@ Com 2–4 questões por conceito o número é grosseiro, então o cálculo se re
 
 `POST /api/learning/taxonomy/suggest` envia por questão o enunciado, os casos de teste e as construções que os alunos realmente usaram (o `conceptUsage` que as estatísticas já calculam) e devolve uma proposta de mapeamento. A sugestão **não é persistida**: volta para a tela de revisão, cada vínculo com a justificativa da IA ao lado, e só entra quando o professor aceita. JSON inválido do modelo vira mensagem de erro, não fallback silencioso.
 
+### Coleta de atividade (logs do Moodle)
+
+O VPL diz o que o aluno entregou; os logs dizem se ele apareceu. Sem eles, engajamento e regularidade viram proxy de entrega — que é outra coisa. A coleta é uma **ação avulsa** no cabeçalho do grupo Aprendizado (funciona em turmas já importadas), usando a mesma sessão por cookie do espelhamento do VPL.
+
+Duas fontes, ambas opcionais e tolerantes a falha:
+
+- `/report/log/index.php?…&download=csv` — o relatório de logs, lido por um parser de CSV próprio (aspas, vírgula e ponto e vírgula dentro de campo, cabeçalho em português ou inglês). Cabeçalho irreconhecível, HTML no lugar do CSV, arquivo vazio ou 403 viram **aviso**, nunca exceção.
+- `/report/participation/index.php` — quais alunos abriram cada VPL. Recusa em todas as atividades vira um aviso único, porque "participação: não" sem motivo é pior que o erro.
+
+**Agrega na coleta, nunca guarda o evento bruto.** O relatório de uma turma tem dezenas de milhares de linhas; o que se persiste é `aluno × dia → contagem`, mais primeiro e último acesso e as atividades vistas. No dataset de teste, 180 linhas de log viraram 1,7 KB.
+
+> **"Tempo de estudo" não existe.** O Moodle registra eventos com carimbo de hora, não duração de sessão. A interface fala em *dias com atividade* e *eventos*, que é o que o dado sustenta.
+
+### Cinco dimensões, e o que significa um indicador ausente
+
+| Dimensão | Indicadores | Depende de |
+|---|---|---|
+| **Engajamento** | dias com atividade · eventos por semana · atividades acessadas · taxa de entrega | logs (os três primeiros) |
+| **Regularidade** | intervalo mediano entre dias ativos · maior período de silêncio · semanas com atividade | logs, com recuo para as datas de entrega |
+| **Persistência** | tentativas até passar · ganho da primeira à última tentativa · recuperação · questões abandonadas | `history[]` (só com histórico profundo) |
+| **Aprendizagem** | domínio médio nos conceitos · conceitos em lacuna · acerto na primeira tentativa | taxonomia da Fase 1 |
+| **Autorregulação** | antecedência mediana ao prazo · entregas na última hora · prática fora da véspera | prazos cadastrados |
+
+Cada indicador carrega `value`, `n`, `available` e o `reason` quando falta. **Ausência de medida nunca vira zero**: aluno sem entrega não tem antecedência nem ganho — isso é `null`, e dimensão sem nenhum indicador disponível fica indisponível, não zerada.
+
+O `reason` **sobrevive ao valor presente** quando a medida veio de uma fonte mais pobre. "Dias com atividade" tirado das datas de entrega, porque não há logs, aparece com a ressalva ao lado do rótulo: o número existe, mas não é o número que o rótulo promete.
+
+**Mediana, não média**, para intervalos e antecedência: um aluno que sumiu 40 dias destrói a média e não move a mediana.
+
+**O score por dimensão é posição relativa na turma**, não nota absoluta — cada indicador vira percentil e a dimensão é a média dos disponíveis. A tela diz isso, e a barra usa **cor única**: verde/âmbar/vermelho sobre um percentil pintaria o aluno mediano de "atenção" e criaria um penhasco entre o 34 e o 32, quando o que a barra mostra é ordenação.
+
+### Sete padrões de comportamento
+
+| Código | Regra |
+|---|---|
+| `lowEngagementEarly` | nenhuma atividade nas duas primeiras semanas do período |
+| `irregularPlusConceptGap` | silêncio longo (quartil superior da turma) **e** ao menos um conceito em lacuna |
+| `procrastination` | antecedência mediana abaixo de 6 h, em duas ou mais entregas |
+| `bruteForce` | 3+ tentativas, ganho abaixo do limiar, nunca passou |
+| `recurringConceptError` | mesmo conceito em lacuna em 2+ questões, ou o mesmo caso de teste reprovado repetidamente |
+| `productivePersistence` | 3+ tentativas **com** ganho acima do limiar — **não é risco, é reconhecimento** |
+| `earlyAbandonment` | 2+ questões com poucas tentativas, abandonadas sem passar |
+
+**Mínimo de 3 tentativas para classificar trajetória.** Com dois pontos não há tendência, há um segmento de reta. E nada de regressão linear sobre 3 pontos: as quantidades são primeira nota, última nota, ganho e "chegou a passar", que são interpretáveis.
+
+**O limiar de ganho relevante sai da mediana da própria turma**, com piso de 20 p.p., e aparece na tela. O piso não é decoração: com a mediana de uma turma estagnada em 10 p.p., um aluno que foi de 20% a 30% em cinco tentativas sem nunca passar seria lido como persistente produtivo — o contrário do que aconteceu.
+
+Padrão cuja fonte está ausente aparece como **"não avaliável"**, nomeando o que falta — nunca como "nenhum aluno", que afirmaria algo não medido.
+
+### A correção do score de risco
+
+O `computeRisk` somava 8 pontos para "8+ tentativas com média baixa". A proposta de analytics diz o oposto: muitas tentativas **com melhoria** é persistência produtiva. O app penalizava exatamente o aluno que estava fazendo a coisa certa.
+
+A parcela agora só soma quando `improving !== true`, e `improving` usa o mesmo piso de 20 p.p. do detector de padrões — se os dois discordassem, a tela marcaria "persistência produtiva" num aluno que a lista de alertas ainda penaliza.
+
+Com `improving === null` (turma sem histórico profundo) **a regra anterior continua valendo**: nenhuma importação existente muda de comportamento. `productivePersistence` é um campo próprio do aluno, exibido como reconhecimento; não entra em `risk.reasons`, que é lista de motivos de risco.
+
 ### Rotas
 
 | Método | Rota | Função |
@@ -219,10 +300,14 @@ Com 2–4 questões por conceito o número é grosseiro, então o cálculo se re
 | POST | `/api/learning/taxonomy/bind` | Vincula a taxonomia e herda o mapeamento por `cmid` |
 | POST | `/api/learning/taxonomy/suggest` | Sugestão por IA (não persiste) |
 | GET | `/api/learning/mastery?turma=` | Domínio conceitual calculado |
+| GET | `/api/learning/activity?turma=` | Resumo do que foi coletado (e a origem para reabrir o Moodle) |
+| POST | `/api/learning/activity/collect` | Coleta logs e participação (progresso via Socket.IO) |
+| GET | `/api/learning/indicators?turma=` | Cinco dimensões por aluno |
+| GET | `/api/learning/patterns?turma=` | Padrões detectados, com os limiares em uso |
 
 ### Arquivos-irmão do dataset
 
-`statistics.paths.js` centraliza os caminhos de uma turma e a lista `SIDECAR_SUFFIXES`. **Quem criar um arquivo-irmão novo precisa registrá-lo ali** — é o que impede dois erros: o arquivo aparecer na listagem como se fosse uma importação, e sobrar órfão quando a turma é apagada.
+`statistics.paths.js` centraliza os caminhos de uma turma e a lista `SIDECAR_SUFFIXES` (hoje `.reports.json`, `.taxonomy.json` e `.activity.json`). **Quem criar um arquivo-irmão novo precisa registrá-lo ali** — é o que impede dois erros: o arquivo aparecer na listagem como se fosse uma importação, e sobrar órfão quando a turma é apagada.
 
 ### Nomenclatura
 

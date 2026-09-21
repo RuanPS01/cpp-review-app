@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
-  AlertTriangle, BarChart3, Activity, FileQuestion, Loader2, Plus, RefreshCw,
-  Sparkles, Target, Trash2, Users
+  AlertTriangle, BarChart3, Activity, FileQuestion, Fingerprint, Gauge, Loader2, Plus,
+  RefreshCw, Sparkles, Target, Trash2, Users
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useStatistics } from '../hooks/useStatistics';
@@ -14,9 +14,13 @@ import StudentsPanel from '../components/statistics/StudentsPanel';
 import AlertsPanel from '../components/statistics/AlertsPanel';
 import AIInsightsPanel from '../components/statistics/AIInsightsPanel';
 import ConceptsPanel from '../components/learning/ConceptsPanel';
+import IndicatorsPanel from '../components/learning/IndicatorsPanel';
+import PatternsPanel from '../components/learning/PatternsPanel';
 import { VIZ, formatDateTime } from '../components/statistics/charts/chartTheme';
 
-type StatsTab = 'overview' | 'engagement' | 'questions' | 'students' | 'alerts' | 'ai' | 'concepts';
+type StatsTab =
+  | 'overview' | 'engagement' | 'questions' | 'students' | 'alerts' | 'ai'
+  | 'concepts' | 'indicators' | 'patterns';
 /** Dados = o que aconteceu; Aprendizado = o que isso diz sobre a aprendizagem. */
 type StatsGroup = 'data' | 'learning';
 
@@ -44,7 +48,9 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
       { key: 'ai', label: t.statsTabAI, icon: Sparkles }
     ],
     learning: [
-      { key: 'concepts', label: t.learnTabConcepts, icon: Target }
+      { key: 'concepts', label: t.learnTabConcepts, icon: Target },
+      { key: 'indicators', label: t.learnTabIndicators, icon: Gauge },
+      { key: 'patterns', label: t.learnTabPatterns, icon: Fingerprint }
     ]
   };
   const tabs = TABS_BY_GROUP[group];
@@ -304,6 +310,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
             <AIInsightsPanel metrics={metrics} reports={reports} onReportGenerated={saveReport} t={t} lang={lang} />
           )}
           {tab === 'concepts' && <ConceptsPanel metrics={metrics} t={t} />}
+          {tab === 'indicators' && <IndicatorsPanel metrics={metrics} t={t} lang={lang} />}
+          {tab === 'patterns' && <PatternsPanel metrics={metrics} t={t} lang={lang} />}
         </div>
       )}
 

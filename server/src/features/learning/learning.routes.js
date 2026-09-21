@@ -13,4 +13,9 @@ router.post('/learning/taxonomy/suggest', learningController.suggestMapping);
 
 router.get('/learning/mastery', learningController.getMastery);
 
+router.get('/learning/activity', learningController.getActivity);
+router.post('/learning/activity/collect', learningController.collectActivity);
+router.get('/learning/indicators', learningController.getIndicators);
+router.get('/learning/patterns', learningController.getPatterns);
+
 module.exports = router;

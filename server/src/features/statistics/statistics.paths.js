@@ -20,7 +20,7 @@ function sanitizeTurma(turma) {
  * **precisa** registrá-lo aqui — é o que mantém `listDatasets` e
  * `deleteDataset` corretos sem que eles conheçam cada feature.
  */
-const SIDECAR_SUFFIXES = ['.reports.json', '.taxonomy.json'];
+const SIDECAR_SUFFIXES = ['.reports.json', '.taxonomy.json', '.activity.json'];
 
 /** Todos os caminhos de uma turma, incluindo o dataset principal. */
 function statisticsPaths(turma) {
@@ -28,7 +28,8 @@ function statisticsPaths(turma) {
   return {
     dataset: `${base}.json`,
     reports: `${base}.reports.json`,
-    taxonomy: `${base}.taxonomy.json`
+    taxonomy: `${base}.taxonomy.json`,
+    activity: `${base}.activity.json`
   };
 }
 
