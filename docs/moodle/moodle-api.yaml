@@ -1,0 +1,1827 @@
+openapi: 3.1.0
+
+info:
+  title: Extração de dados do Moodle + VPL
+  version: 1.0.0
+  summary: Rotas HTTP usadas (e utilizáveis) para extrair dados pedagógicos de uma instância Moodle com o plugin VPL.
+  description: |
+    Consolidação de **todas as rotas de comunicação** que o CPP Review App usa contra o
+    Moodle, mais as que são conhecidas e utilizáveis mas que o projeto ainda não usa.
+
+    ## Como ler esta especificação
+
+    O Moodle multiplexa **todo** o Web Service em um único endpoint
+    (`/webservice/rest/server.php`), escolhendo a operação pelo parâmetro
+    `wsfunction`. A OpenAPI 3.1 proíbe query string na chave de um path
+    (`Path Item Object`), então não é possível declarar `?wsfunction=X` como
+    rotas separadas sem produzir um documento inválido.
+
+    A solução adotada aqui: **uma operação** para o gateway, com
+
+    - `wsfunction` declarado como `enum` de todas as funções cobertas;
+    - um `oneOf` de esquemas de parâmetros (`Params<Função>`);
+    - um `oneOf` de esquemas de resposta (`Res<Função>`);
+    - **um `example` nomeado por função**, tanto no request quanto na resposta.
+
+    No Swagger UI, escolher o exemplo pelo nome da função mostra a requisição e a
+    resposta exatas daquela chamada. O detalhamento campo a campo em prosa está em
+    [`web-services.md`](web-services.md).
+
+    ## Níveis de confiança
+
+    Cada operação e cada função carrega um marcador no início da descrição:
+
+    - **[USADA]** — o projeto chama esta rota hoje. Os campos documentados foram
+      lidos do código que os consome, então são verdade para esta instância.
+    - **[CERTA]** — integração conhecida e estável no Moodle/VPL, não usada pelo
+      projeto. Parâmetros são confiáveis; do retorno são descritos os campos
+      principais, não a lista exaustiva.
+    - **[CONFIRMAR]** — o caminho existe, mas o nome exato de parâmetro ou de
+      campo varia com a versão/tema. Inspecione o formulário ou a resposta na sua
+      instância antes de automatizar.
+
+    ## Dois modelos de autenticação, não intercambiáveis
+
+    | Modelo | Como | Alcança |
+    |--------|------|---------|
+    | **Token de Web Service** (`wstoken`) | `/login/token.php` ou token fixo no perfil | Só as funções habilitadas no serviço externo |
+    | **Sessão do navegador** (cookie `MoodleSession`) | Login no formulário HTML | Tudo que o professor vê na interface, inclusive páginas e ZIPs sem WS |
+
+    O projeto usa **os dois ao mesmo tempo**: o token para dados estruturados e a
+    sessão para o que o Web Service não expõe. Ver
+    [`extracao-por-sessao.md`](extracao-por-sessao.md).
+
+    ## Aviso sobre dados pessoais
+
+    Praticamente toda rota aqui devolve dados pessoais de alunos identificados
+    (nome, e-mail, matrícula, código-fonte, horários de acesso). Ver
+    [`limites-permissoes-e-privacidade.md`](limites-permissoes-e-privacidade.md).
+  license:
+    name: Documentação interna do projeto
+    identifier: ISC
+
+externalDocs:
+  description: Guia de configuração e integração do Moodle/VPL neste projeto
+  url: ../moodle-vpl-integration-guide.md
+
+servers:
+  - url: https://{host}
+    description: Instância Moodle
+    variables:
+      host:
+        default: moodle-teste.inatel.br
+        description: Host da instância (sem barra final).
+
+tags:
+  - name: Autenticação
+    description: Obtenção de token de Web Service e de sessão de navegador.
+  - name: Web Service (gateway)
+    description: |
+      Endpoint único do Web Service REST. A função é escolhida por `wsfunction`;
+      cada função tem esquema e exemplo próprios.
+  - name: Arquivos
+    description: Download de arquivos anexados (por token ou por sessão).
+  - name: Páginas VPL (sessão)
+    description: |
+      Páginas HTML e downloads do plugin VPL. É o caminho quando as funções
+      `mod_vpl_*` não estão habilitadas no serviço externo.
+  - name: Relatórios e exportações (sessão)
+    description: Exportações prontas do Moodle (notas, tentativas, logs, backup).
+  - name: API interna (sessão)
+    description: Endpoint AJAX que a própria interface do Moodle consome.
+
+security:
+  - wstoken: []
+
+paths:
+  # ==========================================================================
+  # Autenticação
+  # ==========================================================================
+  /login/token.php:
+    post:
+      tags: [Autenticação]
+      operationId: getWebServiceToken
+      summary: Emite um token de Web Service a partir de usuário e senha
+      description: |
+        **[USADA]** — `client/src/services/moodle.ts` → `getToken()`.
+
+        Requer que o serviço esteja habilitado em *Administração do site → Servidor →
+        Serviços Web → Gerenciar tokens/serviços* e que o usuário tenha a capacidade
+        `moodle/webservice:createtoken`.
+
+        O serviço `moodle_mobile_app` é o atalho usado pelo projeto porque vem
+        habilitado por padrão em muitas instâncias — mas ele expõe **apenas as
+        funções que o administrador adicionou ao serviço**. É exatamente por isso
+        que `mod_vpl_*` costuma falhar com `accessexception` mesmo com token válido.
+
+        Falha **200 OK com corpo de erro**: esta rota devolve `{"error": "..."}` com
+        status 200. Não confie no código HTTP; verifique o campo `error`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [username, password, service]
+              properties:
+                username:
+                  type: string
+                  description: Login do usuário no Moodle.
+                password:
+                  type: string
+                  format: password
+                service:
+                  type: string
+                  default: moodle_mobile_app
+                  description: |
+                    Shortname do serviço externo. O projeto usa `moodle_mobile_app`;
+                    um serviço dedicado (ex.: `cpp_review_app`) é preferível em
+                    produção, por permitir listar só as funções necessárias.
+            examples:
+              projeto:
+                summary: Chamada feita pelo projeto
+                value:
+                  username: professor.exemplo
+                  password: "••••••••"
+                  service: moodle_mobile_app
+      responses:
+        "200":
+          description: |
+            Token emitido **ou** erro de autenticação (ambos com status 200).
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/TokenOk"
+                  - $ref: "#/components/schemas/TokenErro"
+              examples:
+                sucesso:
+                  summary: Token emitido
+                  value:
+                    token: 4a1b2c3d4e5f60718293a4b5c6d7e8f9
+                    privatetoken: null
+                servicoDesabilitado:
+                  summary: Serviço não habilitado para o usuário
+                  value:
+                    error: "O serviço solicitado não está disponível."
+                    errorcode: enabledpolicyservicerequired
+                senhaInvalida:
+                  summary: Credenciais inválidas
+                  value:
+                    error: "Nome de usuário ou senha inválidos"
+
+  /login/index.php:
+    get:
+      tags: [Autenticação]
+      operationId: getLoginForm
+      summary: Formulário de login (início da sessão de navegador)
+      description: |
+        **[USADA]** — `electron-main.js`, handler IPC `open-moodle-login`.
+
+        O app abre esta página em uma `BrowserWindow`, preenche `#username` e
+        `#password` quando as credenciais foram informadas, e aguarda o cookie
+        `MoodleSession` aparecer **e** a URL deixar de ser `login/index.php`. É o
+        que permite conviver com SSO, 2FA e captcha: quem resolve o desafio é o
+        professor, na janela real.
+
+        O cookie capturado é então enviado ao servidor Node, que espelha as páginas
+        do VPL com ele. Ver [`extracao-por-sessao.md`](extracao-por-sessao.md).
+      security: []
+      responses:
+        "200":
+          description: HTML do formulário de login.
+          content:
+            text/html:
+              schema:
+                type: string
+    post:
+      tags: [Autenticação]
+      operationId: submitLogin
+      summary: Envia credenciais e recebe o cookie de sessão
+      description: |
+        **[CONFIRMAR]** — o projeto **não** faz este POST diretamente; ele automatiza
+        o formulário na janela do navegador.
+
+        Fazer o POST na mão exige ler o `logintoken` (campo oculto anti-CSRF)
+        da resposta do `GET` e reenviá-lo. Instâncias com SSO, 2FA ou captcha
+        quebram esse caminho — motivo pelo qual o projeto escolheu a janela real.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string, format: password }
+                logintoken:
+                  type: string
+                  description: Token anti-CSRF lido do formulário (campo oculto `logintoken`).
+                anchor: { type: string }
+      responses:
+        "303":
+          description: |
+            Redireciona para a página inicial com `Set-Cookie: MoodleSession=...`.
+            Permanecer em `login/index.php` significa falha de autenticação.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+
+  # ==========================================================================
+  # Web Service — gateway único
+  # ==========================================================================
+  /webservice/rest/server.php:
+    post:
+      tags: [Web Service (gateway)]
+      operationId: callWebServiceFunction
+      summary: Executa qualquer função de Web Service habilitada
+      description: |
+        **[USADA]** — `client/src/services/moodle.ts` → `moodleCall()`.
+
+        Endpoint único de todo o Web Service REST. Selecione a função em
+        `wsfunction` e os parâmetros correspondentes; use o seletor de **exemplos**
+        para ver cada chamada concreta.
+
+        ### Envelope
+
+        - `wstoken` — token de Web Service (o projeto envia no corpo do formulário;
+          Moodle também aceita na query).
+        - `wsfunction` — nome da função.
+        - `moodlewsrestformat` — `json` (o padrão histórico é XML; sempre envie `json`).
+
+        ### Parâmetros compostos
+
+        Arrays e objetos viajam com a notação de colchetes do PHP, achatada no
+        `application/x-www-form-urlencoded`:
+
+        ```
+        courseids[0]=42&courseids[1]=43
+        options[0][name]=onlyactive&options[0][value]=1
+        ```
+
+        O helper `moodleCall()` do projeto faz `String(v)` em cada valor, ou seja,
+        **só suporta parâmetros escalares**. Para funções que exigem array (como
+        `mod_assign_get_assignments`) é preciso montar as chaves manualmente.
+
+        ### Erros vêm com status 200
+
+        Uma falha devolve `{exception, errorcode, message}` **com HTTP 200**. Todo
+        consumidor precisa checar `data.exception` — é o que `moodleCall()` faz.
+        Os códigos que mais aparecem estão em
+        [`web-services.md`](web-services.md#erros-e-diagn%C3%B3stico).
+      parameters:
+        - name: moodlewsrestformat
+          in: query
+          required: false
+          description: Alternativa a enviar o formato no corpo.
+          schema:
+            type: string
+            enum: [json, xml]
+            default: json
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            encoding:
+              wsfunction:
+                style: form
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/WsEnvelope"
+                - oneOf:
+                    - $ref: "#/components/schemas/ParamsCoreWebserviceGetSiteInfo"
+                    - $ref: "#/components/schemas/ParamsCoreCourseSearchCourses"
+                    - $ref: "#/components/schemas/ParamsCoreCourseGetContents"
+                    - $ref: "#/components/schemas/ParamsCoreCourseGetCoursesByField"
+                    - $ref: "#/components/schemas/ParamsCoreCourseGetCourseModule"
+                    - $ref: "#/components/schemas/ParamsCoreEnrolGetEnrolledUsers"
+                    - $ref: "#/components/schemas/ParamsCoreEnrolGetUsersCourses"
+                    - $ref: "#/components/schemas/ParamsCoreUserGetUsersByField"
+                    - $ref: "#/components/schemas/ParamsCoreGroupGetCourseGroups"
+                    - $ref: "#/components/schemas/ParamsCoreGroupGetCourseUserGroups"
+                    - $ref: "#/components/schemas/ParamsCoreCompletionGetActivitiesCompletionStatus"
+                    - $ref: "#/components/schemas/ParamsGradereportUserGetGradeItems"
+                    - $ref: "#/components/schemas/ParamsGradereportUserGetGradesTable"
+                    - $ref: "#/components/schemas/ParamsCoreFilesGetFiles"
+                    - $ref: "#/components/schemas/ParamsModVplInfo"
+                    - $ref: "#/components/schemas/ParamsModVplOpen"
+                    - $ref: "#/components/schemas/ParamsModVplGetResult"
+                    - $ref: "#/components/schemas/ParamsModVplEvaluate"
+                    - $ref: "#/components/schemas/ParamsModVplSave"
+                    - $ref: "#/components/schemas/ParamsModAssignGetAssignments"
+                    - $ref: "#/components/schemas/ParamsModAssignGetSubmissions"
+                    - $ref: "#/components/schemas/ParamsModAssignGetGrades"
+                    - $ref: "#/components/schemas/ParamsModQuizGetQuizzesByCourses"
+                    - $ref: "#/components/schemas/ParamsModQuizGetUserAttempts"
+                    - $ref: "#/components/schemas/ParamsModQuizGetAttemptReview"
+                    - $ref: "#/components/schemas/ParamsModForumGetForumsByCourses"
+            examples:
+              core_webservice_get_site_info:
+                summary: "[CERTA] Diagnóstico: quem sou eu e quais funções tenho"
+                description: |
+                  Primeira chamada recomendada de qualquer integração: valida o token e
+                  devolve em `functions[]` **exatamente** o que o serviço externo libera.
+                  É o teste que evita descobrir a função faltando no meio da importação.
+                value:
+                  wstoken: "{token}"
+                  wsfunction: core_webservice_get_site_info
+                  moodlewsrestformat: json
+              core_course_search_courses:
+                summary: "[USADA] Busca cursos por texto"
+                description: "`searchCourses()`. Também usada com `criteriavalue` vazio só para validar o token."
+                value:
+                  wstoken: "{token}"
+                  wsfunction: core_course_search_courses
+                  moodlewsrestformat: json
+                  criterianame: search
+                  criteriavalue: algoritmos
+              core_course_get_contents:
+                summary: "[USADA] Seções e atividades do curso"
+                description: |
+                  `getCourseContents()`. O projeto filtra `modules[].modname === 'vpl'`
+                  e lê `dates[]` para o prazo de cada atividade.
+                value:
+                  wstoken: "{token}"
+                  wsfunction: core_course_get_contents
+                  moodlewsrestformat: json
+                  courseid: 42
+              core_enrol_get_enrolled_users:
+                summary: "[USADA] Matriculados no curso"
+                description: |
+                  `getEnrolledStudents()`. O filtro por papel é feito **no cliente**
+                  (`roles[].shortname === 'student'`), então a resposta traz também
+                  professores e tutores.
+                value:
+                  wstoken: "{token}"
+                  wsfunction: core_enrol_get_enrolled_users
+                  moodlewsrestformat: json
+                  courseid: 42
+              gradereport_user_get_grade_items:
+                summary: "[USADA] Livro de notas do curso inteiro"
+                description: |
+                  `getCourseGradeItems()` com `userid=0` = todos os alunos. É o fallback
+                  de nota quando `mod_vpl_*` está bloqueado; a ligação com a atividade
+                  vem de `gradeitems[].cmid`.
+                value:
+                  wstoken: "{token}"
+                  wsfunction: gradereport_user_get_grade_items
+                  moodlewsrestformat: json
+                  courseid: 42
+                  userid: 0
+              mod_vpl_info:
+                summary: "[USADA] Enunciado, nota máxima, datas e casos de teste"
+                description: |
+                  `getVplInfo()`. `id` é o **cmid** (course module id), não o id da
+                  instância VPL. Os casos de teste vêm dentro de
+                  `executionfiles[]` no arquivo `vpl_evaluate.cases`.
+                value:
+                  wstoken: "{token}"
+                  wsfunction: mod_vpl_info
+                  moodlewsrestformat: json
+                  id: 1234
+              mod_vpl_open:
+                summary: "[USADA] Arquivos submetidos por um aluno"
+                value:
+                  wstoken: "{token}"
+                  wsfunction: mod_vpl_open
+                  moodlewsrestformat: json
+                  id: 1234
+                  userid: 987
+              mod_vpl_get_result:
+                summary: "[USADA] Resultado da avaliação automática de um aluno"
+                description: |
+                  A fonte mais rica (casos reprovados e erros de compilação), e a mais
+                  cara: **uma chamada por aluno × atividade**. O assistente de
+                  estatísticas aborta a varredura se a primeira chamada falhar.
+                value:
+                  wstoken: "{token}"
+                  wsfunction: mod_vpl_get_result
+                  moodlewsrestformat: json
+                  id: 1234
+                  userid: 987
+              mod_vpl_evaluate:
+                summary: "[CERTA] Dispara a avaliação automática (escrita)"
+                description: |
+                  Enfileira a execução no jail do VPL. **Efeito colateral no Moodle** —
+                  gera carga de execução e pode sobrescrever a avaliação anterior.
+                value:
+                  wstoken: "{token}"
+                  wsfunction: mod_vpl_evaluate
+                  moodlewsrestformat: json
+                  id: 1234
+                  userid: 987
+              mod_vpl_save:
+                summary: "[CERTA] Grava uma submissão (escrita)"
+                description: |
+                  Cria uma submissão em nome do aluno. Fora do escopo de extração;
+                  documentada para que ninguém a chame por engano ao explorar a API.
+                value:
+                  wstoken: "{token}"
+                  wsfunction: mod_vpl_save
+                  moodlewsrestformat: json
+                  id: 1234
+                  userid: 987
+                  "files[0][name]": main.cpp
+                  "files[0][data]": "int main(){}"
+                  "files[0][encoding]": 0
+              mod_assign_get_assignments:
+                summary: "[CERTA] Tarefas (mod_assign) de um ou mais cursos"
+                description: "Note a notação de array: `courseids[0]`, `courseids[1]`…"
+                value:
+                  wstoken: "{token}"
+                  wsfunction: mod_assign_get_assignments
+                  moodlewsrestformat: json
+                  "courseids[0]": 42
+              mod_quiz_get_user_attempts:
+                summary: "[CERTA] Tentativas de questionário de um aluno"
+                value:
+                  wstoken: "{token}"
+                  wsfunction: mod_quiz_get_user_attempts
+                  moodlewsrestformat: json
+                  quizid: 55
+                  userid: 987
+                  status: all
+              core_completion_get_activities_completion_status:
+                summary: "[CERTA] Conclusão de atividades por aluno"
+                value:
+                  wstoken: "{token}"
+                  wsfunction: core_completion_get_activities_completion_status
+                  moodlewsrestformat: json
+                  courseid: 42
+                  userid: 987
+      responses:
+        "200":
+          description: |
+            Resultado da função **ou** exceção — sempre com status 200.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/WsErro"
+                  - $ref: "#/components/schemas/ResCoreWebserviceGetSiteInfo"
+                  - $ref: "#/components/schemas/ResCoreCourseSearchCourses"
+                  - $ref: "#/components/schemas/ResCoreCourseGetContents"
+                  - $ref: "#/components/schemas/ResCoreEnrolGetEnrolledUsers"
+                  - $ref: "#/components/schemas/ResGradereportUserGetGradeItems"
+                  - $ref: "#/components/schemas/ResModVplInfo"
+                  - $ref: "#/components/schemas/ResModVplOpen"
+                  - $ref: "#/components/schemas/ResModVplGetResult"
+              examples:
+                core_course_get_contents:
+                  summary: "[USADA] Seções com atividades VPL"
+                  value:
+                    - id: 101
+                      name: "Prova 1 - P1"
+                      section: 1
+                      visible: 1
+                      summary: ""
+                      modules:
+                        - id: 1234
+                          name: "Q1 - Soma de vetor"
+                          modname: vpl
+                          instance: 77
+                          visible: 1
+                          url: "https://moodle.exemplo/mod/vpl/view.php?id=1234"
+                          dates:
+                            - label: "Abre em:"
+                              timestamp: 1772539200
+                            - label: "Prazo:"
+                              timestamp: 1773144000
+                core_enrol_get_enrolled_users:
+                  summary: "[USADA] Matriculados (professores incluídos)"
+                  value:
+                    - id: 987
+                      username: aluno.exemplo
+                      fullname: "Ana Souza"
+                      firstname: Ana
+                      lastname: Souza
+                      email: ana.souza@exemplo.br
+                      idnumber: "GES1234"
+                      lastaccess: 1772800000
+                      lastcourseaccess: 1772790000
+                      groups:
+                        - id: 5
+                          name: "Turma A"
+                      roles:
+                        - roleid: 5
+                          shortname: student
+                          name: Estudante
+                gradereport_user_get_grade_items:
+                  summary: "[USADA] Livro de notas por aluno e item"
+                  value:
+                    usergrades:
+                      - courseid: 42
+                        userid: 987
+                        userfullname: "Ana Souza"
+                        gradeitems:
+                          - id: 3001
+                            itemname: "Q1 - Soma de vetor"
+                            itemmodule: vpl
+                            cmid: 1234
+                            graderaw: 9
+                            gradeformatted: "9,00"
+                            grademin: 0
+                            grademax: 10
+                            percentageformatted: "90,00 %"
+                    warnings: []
+                mod_vpl_info:
+                  summary: "[USADA] Metadados da atividade VPL"
+                  value:
+                    name: "Q1 - Soma de vetor"
+                    intro: "<p>Leia N inteiros e imprima a soma.</p>"
+                    grade: 10
+                    startdate: 1772539200
+                    duedate: 1773144000
+                    reductionbyevaluation: "0"
+                    executionfiles:
+                      - name: vpl_evaluate.cases
+                        encoding: 0
+                        data: "Case = Caso 1\nInput = 3\n1 2 3\nOutput = 6\n"
+                mod_vpl_get_result:
+                  summary: "[USADA] Avaliação automática de um aluno"
+                  value:
+                    grade: "9.00"
+                    compilation: ""
+                    evaluation: "- Caso 2 (FAILED)\nGrade :=>> 9.00"
+                    execution: ""
+                erro_funcao_nao_habilitada:
+                  summary: "Função fora do serviço externo (o caso mais comum)"
+                  value:
+                    exception: webservice_access_exception
+                    errorcode: accessexception
+                    message: "Acesso ao serviço web negado"
+                erro_token_invalido:
+                  summary: Token inválido ou expirado
+                  value:
+                    exception: moodle_exception
+                    errorcode: invalidtoken
+                    message: "Token de serviço web inválido"
+    get:
+      tags: [Web Service (gateway)]
+      operationId: callWebServiceFunctionGet
+      summary: Mesma chamada por GET (útil para depurar no navegador)
+      description: |
+        **[CERTA]** — o Moodle aceita os mesmos parâmetros na query string. Prático
+        para testar uma função no navegador, **ruim em produção**: o token vai para
+        o log de acesso do servidor e para o histórico do navegador.
+      parameters:
+        - name: wstoken
+          in: query
+          required: true
+          schema: { type: string }
+        - name: wsfunction
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/WsFunctionName" }
+        - name: moodlewsrestformat
+          in: query
+          required: true
+          schema: { type: string, enum: [json, xml], default: json }
+      responses:
+        "200":
+          description: Igual à variante POST.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  # ==========================================================================
+  # Arquivos
+  # ==========================================================================
+  /webservice/pluginfile.php/{contextid}/{component}/{filearea}/{itemid}/{filename}:
+    get:
+      tags: [Arquivos]
+      operationId: downloadPluginFileWithToken
+      summary: Baixa um arquivo autenticando por token
+      description: |
+        **[CERTA]** — não usada pelo projeto: os arquivos do VPL chegam **embutidos
+        em base64** nas respostas de `mod_vpl_info` e `mod_vpl_open`, o que dispensa
+        esta rota.
+
+        É o caminho para anexos de outros módulos (tarefas, fóruns, recursos). Os
+        cinco componentes do caminho vêm da própria resposta que citou o arquivo
+        (campo `fileurl`), e o token vai na query.
+      security: []
+      parameters:
+        - name: contextid
+          in: path
+          required: true
+          schema: { type: integer }
+          description: Contexto do Moodle que contém o arquivo.
+        - name: component
+          in: path
+          required: true
+          schema: { type: string }
+          example: mod_assign
+        - name: filearea
+          in: path
+          required: true
+          schema: { type: string }
+          example: submission_files
+        - name: itemid
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: filename
+          in: path
+          required: true
+          schema: { type: string }
+          example: main.cpp
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
+          description: Token de Web Service.
+        - name: forcedownload
+          in: query
+          required: false
+          schema: { type: integer, enum: [0, 1] }
+      responses:
+        "200":
+          description: Conteúdo binário do arquivo.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "403":
+          description: Token sem permissão sobre o contexto do arquivo.
+
+  /pluginfile.php/{contextid}/{component}/{filearea}/{itemid}/{filename}:
+    get:
+      tags: [Arquivos]
+      operationId: downloadPluginFileWithSession
+      summary: Baixa um arquivo autenticando por sessão
+      description: |
+        **[CERTA]** — mesma coisa que a rota anterior, autenticando pelo cookie
+        `MoodleSession` em vez do token. É a URL que aparece no HTML das páginas,
+        então é a que serve quando se está espelhando a interface.
+      security:
+        - moodleSession: []
+      parameters:
+        - name: contextid
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: component
+          in: path
+          required: true
+          schema: { type: string }
+        - name: filearea
+          in: path
+          required: true
+          schema: { type: string }
+        - name: itemid
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: filename
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Conteúdo binário do arquivo.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+
+  # ==========================================================================
+  # Páginas VPL (sessão)
+  # ==========================================================================
+  /mod/vpl/view.php:
+    get:
+      tags: [Páginas VPL (sessão)]
+      operationId: getVplActivityPage
+      summary: Página da atividade VPL (enunciado, casos de teste, datas, nota máxima)
+      description: |
+        **[USADA]** — `moodleHarvester.js`: `parseStatement`, `parseTestCases`,
+        `parseActivityDates`, `parseMaxGrade`.
+
+        Substitui `mod_vpl_info` quando o Web Service está bloqueado. O que o
+        projeto extrai do HTML:
+
+        | Dado | Onde no HTML |
+        |------|--------------|
+        | Enunciado | `div#vpl_intro`, com fallback em `div.box.generalbox > div.no-overflow` |
+        | Casos de teste | `pre#codefileid1` (conteúdo de `vpl_evaluate.cases`) |
+        | Datas | linhas `<tr>` cujo rótulo casa com *entrega/prazo/início/abertura* |
+        | Nota máxima | texto *"nota máxima"* / *"maximum grade"* seguido de número |
+
+        Estes seletores são **acoplados ao tema e ao idioma**. Todo parser devolve
+        `null` em vez de falhar, e o campo é então buscado em outra fonte.
+      security:
+        - moodleSession: []
+      parameters:
+        - $ref: "#/components/parameters/cmid"
+        - name: userid
+          in: query
+          required: false
+          schema: { type: integer }
+          description: "[CONFIRMAR] Exibe a atividade no contexto de outro usuário; requer `mod/vpl:grade`."
+      responses:
+        "200":
+          description: HTML da atividade.
+          content:
+            text/html:
+              schema: { type: string }
+        "303":
+          description: |
+            Redireciona para `login/index.php` quando a sessão expirou. O projeto
+            trata isso como erro explícito ("Sessão inválida").
+
+  /mod/vpl/views/submissionslist.php:
+    get:
+      tags: [Páginas VPL (sessão)]
+      operationId: getVplSubmissionsList
+      summary: Lista de submissões da turma (data, tentativas, nota, avaliação)
+      description: |
+        **[USADA]** — `moodleHarvester.parseSubmissionsList`.
+
+        A tabela mais valiosa do VPL: uma linha por aluno com data do último envio,
+        número de tentativas, nota automática e texto de avaliação. O parser
+        identifica as colunas **pelo cabeçalho** (PT ou EN) e cai em heurísticas
+        quando não reconhece — a célula com link de aluno vira o nome, a primeira
+        data vira a submissão.
+
+        O `userid` de cada linha sai do próprio link (`userid=\d+`), o que dá a
+        chave de junção com `core_enrol_get_enrolled_users`.
+
+        Requer `mod/vpl:grade` — com papel de aluno, a página mostra apenas o
+        próprio histórico.
+      security:
+        - moodleSession: []
+      parameters:
+        - $ref: "#/components/parameters/cmid"
+        - name: showgrades
+          in: query
+          required: false
+          schema: { type: integer, enum: [0, 1] }
+          description: |
+            Inclui as colunas de nota. O projeto usa `1` na importação de
+            estatísticas e `0` na importação de correção (que só precisa dos códigos).
+        - name: group
+          in: query
+          required: false
+          schema: { type: integer, default: -1 }
+          description: "`-1` = todos os grupos."
+        - name: tperpage
+          in: query
+          required: false
+          schema: { type: integer }
+          description: |
+            Linhas por página. O projeto envia `5000` para receber a turma inteira em
+            uma resposta e não precisar paginar.
+        - name: tilast
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filtro por inicial do sobrenome; vazio remove o filtro.
+        - name: tifirst
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filtro por inicial do nome; vazio remove o filtro.
+        - name: thiddenfields
+          in: query
+          required: false
+          schema: { type: string }
+          description: Presente e vazio, revela as colunas que o tema esconde.
+        - name: sort
+          in: query
+          required: false
+          schema: { type: string }
+          description: "[CONFIRMAR] Coluna de ordenação; o nome varia com a versão do plugin."
+      responses:
+        "200":
+          description: HTML com a tabela de submissões.
+          content:
+            text/html:
+              schema: { type: string }
+
+  /mod/vpl/views/downloadallsubmissions.php:
+    get:
+      tags: [Páginas VPL (sessão)]
+      operationId: downloadAllVplSubmissions
+      summary: ZIP com o código-fonte de todos os alunos
+      description: |
+        **[USADA]** — `statistics.controller.js` → `readSubmissionsZip()` e
+        `import.controller.js`.
+
+        A rota mais eficiente de todo o pipeline: **um** request traz o código de
+        toda a turma. Estrutura do ZIP:
+
+        ```
+        {pasta-do-aluno}/{AAAA-MM-DD-HH-MM-SS}/{arquivos}
+        ```
+
+        O nome da pasta interna é o **carimbo exato da submissão** — é dele que sai
+        a linha do tempo de engajamento, com precisão de segundo, sem depender de
+        parsear datas localizadas. O nome da pasta externa segue o template
+        configurado no assistente (`[EMAIL] [NAME] [ID]`).
+
+        **Detecção de sessão perdida:** quando a sessão caiu ou falta permissão, o
+        Moodle responde **200 com HTML** em vez do ZIP. O projeto verifica a
+        assinatura `PK` nos dois primeiros bytes antes de tentar descompactar.
+      security:
+        - moodleSession: []
+      parameters:
+        - $ref: "#/components/parameters/cmid"
+        - name: all
+          in: query
+          required: false
+          schema: { type: integer, enum: [0, 1] }
+          description: "[CONFIRMAR] Em algumas versões alterna entre última submissão e todas."
+      responses:
+        "200":
+          description: |
+            ZIP das submissões — **ou** HTML de erro/login com o mesmo status.
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+            text/html:
+              schema: { type: string }
+
+  /mod/vpl/views/previoussubmissionslist.php:
+    get:
+      tags: [Páginas VPL (sessão)]
+      operationId: getVplPreviousSubmissions
+      summary: Histórico completo de tentativas de um aluno
+      description: |
+        **[USADA]** (opcional) — `moodleHarvester.parsePreviousSubmissions`, ativado
+        pela opção *"Buscar histórico completo de tentativas"*.
+
+        Única fonte de **persistência**: quantas vezes o aluno tentou e como a nota
+        evoluiu entre as tentativas. Cada linha vira um evento na exportação
+        `submission_events.csv`.
+
+        Custo: **uma requisição por aluno × atividade**. Por isso é opcional na
+        interface.
+      security:
+        - moodleSession: []
+      parameters:
+        - $ref: "#/components/parameters/cmid"
+        - name: userid
+          in: query
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: HTML com a tabela de tentativas anteriores.
+          content:
+            text/html:
+              schema: { type: string }
+
+  /mod/vpl/views/submissionview.php:
+    get:
+      tags: [Páginas VPL (sessão)]
+      operationId: getVplSubmissionView
+      summary: Uma submissão específica, com código e avaliação
+      description: |
+        **[CERTA]** — não usada: o projeto obtém o mesmo conteúdo em lote pelo ZIP e
+        pela lista de submissões, o que evita uma requisição por aluno.
+
+        Útil para inspeção pontual (conferir um caso suspeito) e é o link para o
+        qual as linhas de `submissionslist.php` apontam.
+      security:
+        - moodleSession: []
+      parameters:
+        - $ref: "#/components/parameters/cmid"
+        - name: userid
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: subid
+          in: query
+          required: false
+          schema: { type: integer }
+          description: "[CONFIRMAR] Id de uma submissão específica do histórico."
+        - name: inpopup
+          in: query
+          required: false
+          schema: { type: integer, enum: [0, 1] }
+      responses:
+        "200":
+          description: HTML da submissão.
+          content:
+            text/html:
+              schema: { type: string }
+
+  /mod/vpl/views/downloadsubmission.php:
+    get:
+      tags: [Páginas VPL (sessão)]
+      operationId: downloadVplSubmission
+      summary: ZIP com a submissão de um único aluno
+      description: |
+        **[CERTA]** — não usada. Existe para o caso de precisar reobter um aluno
+        específico sem baixar a turma inteira; para importação em lote,
+        `downloadallsubmissions.php` é sempre melhor.
+      security:
+        - moodleSession: []
+      parameters:
+        - $ref: "#/components/parameters/cmid"
+        - name: userid
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: ZIP com os arquivos da submissão.
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+
+  # ==========================================================================
+  # Relatórios e exportações (sessão)
+  # ==========================================================================
+  /grade/export/{formato}/index.php:
+    get:
+      tags: [Relatórios e exportações (sessão)]
+      operationId: getGradeExportForm
+      summary: Formulário de exportação do livro de notas
+      description: |
+        **[CERTA]** o caminho e o parâmetro `id`; **[CONFIRMAR]** os campos do POST
+        que dispara o download.
+
+        Caminho oficial para tirar o livro de notas inteiro em CSV/XLS/ODS/XML sem
+        Web Service e sem N+1. Fluxo: `GET` mostra o formulário de seleção de itens
+        → `POST` (com `sesskey`) devolve o arquivo.
+
+        Os nomes dos campos do formulário mudam entre versões — leia o HTML antes de
+        automatizar. Detalhes e alternativa em
+        [`extracao-por-arquivos.md`](extracao-por-arquivos.md).
+      security:
+        - moodleSession: []
+      parameters:
+        - name: formato
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [txt, xls, ods, xml]
+          description: "`txt` = CSV com separador configurável."
+        - name: id
+          in: query
+          required: true
+          schema: { type: integer }
+          description: Id do curso.
+      responses:
+        "200":
+          description: HTML do formulário de exportação.
+          content:
+            text/html:
+              schema: { type: string }
+
+  /mod/assign/view.php:
+    get:
+      tags: [Relatórios e exportações (sessão)]
+      operationId: getAssignView
+      summary: Tarefa (mod_assign) — tabela de correção ou ZIP de todas as entregas
+      description: |
+        **[CERTA]** — não usada (o projeto é centrado em VPL), mas é o equivalente
+        direto para quem usa Tarefa: `action=downloadall` devolve um ZIP com as
+        entregas de toda a turma, no mesmo espírito de
+        `downloadallsubmissions.php`.
+      security:
+        - moodleSession: []
+      parameters:
+        - $ref: "#/components/parameters/cmid"
+        - name: action
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [view, grading, downloadall, grader]
+          description: |
+            `grading` = tabela de correção (HTML, com uma linha por aluno);
+            `downloadall` = ZIP com todas as entregas.
+      responses:
+        "200":
+          description: HTML ou ZIP, conforme `action`.
+          content:
+            text/html:
+              schema: { type: string }
+            application/zip:
+              schema: { type: string, format: binary }
+
+  /mod/quiz/report.php:
+    get:
+      tags: [Relatórios e exportações (sessão)]
+      operationId: getQuizReport
+      summary: Relatório de questionário, com download em CSV
+      description: |
+        **[CERTA]** o caminho e `mode`; **[CONFIRMAR]** o valor exato de `download`
+        aceito pela sua versão (`csv`, `excel`, `ods`, `json`, `html`).
+
+        `mode=responses` é o mais rico: uma linha por tentativa com a resposta dada
+        em cada questão — o análogo, no mundo dos questionários, do que
+        `submissions.csv` é para o VPL.
+      security:
+        - moodleSession: []
+      parameters:
+        - $ref: "#/components/parameters/cmid"
+        - name: mode
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [overview, responses, statistics, grading]
+        - name: download
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [csv, excel, ods, json, html]
+      responses:
+        "200":
+          description: HTML do relatório ou arquivo, quando `download` está presente.
+          content:
+            text/html:
+              schema: { type: string }
+            text/csv:
+              schema: { type: string }
+
+  /report/log/index.php:
+    get:
+      tags: [Relatórios e exportações (sessão)]
+      operationId: getCourseLogs
+      summary: Log de eventos do curso, com download em CSV
+      description: |
+        **[CERTA]** o caminho e o modelo de filtros; **[CONFIRMAR]** os nomes exatos
+        (`chooselog`, `logreader`, `modid`, `date`) na sua versão.
+
+        **Não existe função de Web Service para o log** no Moodle padrão. Este
+        relatório (ou o banco) é o único caminho para dados de *acesso* — quem abriu
+        o enunciado, quando, quantas vezes. Seria a fonte para separar "não
+        entregou porque não tentou" de "não entregou porque travou", que hoje o app
+        não consegue distinguir.
+      security:
+        - moodleSession: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: { type: integer }
+          description: Id do curso.
+        - name: chooselog
+          in: query
+          required: false
+          schema: { type: integer, enum: [0, 1] }
+          description: "`1` aplica os filtros e exibe a tabela."
+        - name: logreader
+          in: query
+          required: false
+          schema: { type: string, default: logstore_standard }
+        - name: modid
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filtra por atividade (cmid).
+        - name: user
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: date
+          in: query
+          required: false
+          schema: { type: integer }
+          description: Timestamp do dia a filtrar.
+        - name: download
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [csv, excel, ods, json, html, tsv]
+      responses:
+        "200":
+          description: HTML do relatório ou o arquivo pedido.
+          content:
+            text/html:
+              schema: { type: string }
+            text/csv:
+              schema: { type: string }
+
+  # ==========================================================================
+  # API interna
+  # ==========================================================================
+  /lib/ajax/service.php:
+    post:
+      tags: [API interna (sessão)]
+      operationId: callInternalAjaxService
+      summary: Endpoint AJAX interno da interface do Moodle
+      description: |
+        **[CERTA]** — não usada pelo projeto.
+
+        É como a própria interface do Moodle busca dados: JSON, autenticado pela
+        sessão + `sesskey`, aceitando **várias chamadas em um único request**.
+
+        Duas propriedades o tornam interessante: alcança métodos que **não** estão
+        no serviço externo (porque a autorização é a da sessão, não a do token) e
+        permite lote. Duas ressalvas: é **API interna** — sem contrato de
+        estabilidade entre versões — e o `sesskey` precisa ser lido da página
+        (`M.cfg.sesskey`).
+
+        Use quando o Web Service estiver bloqueado e a alternativa for raspar HTML:
+        um JSON instável ainda é melhor que um seletor de CSS.
+      security:
+        - moodleSession: []
+      parameters:
+        - name: sesskey
+          in: query
+          required: true
+          schema: { type: string }
+          description: Token anti-CSRF da sessão, lido de `M.cfg.sesskey` na página.
+        - name: info
+          in: query
+          required: false
+          schema: { type: string }
+          description: Nome do método, repetido aqui apenas para aparecer no log.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required: [index, methodname, args]
+                properties:
+                  index: { type: integer }
+                  methodname: { type: string }
+                  args: { type: object, additionalProperties: true }
+            examples:
+              loteDeDuasChamadas:
+                summary: Duas chamadas em um request
+                value:
+                  - index: 0
+                    methodname: core_course_get_contents
+                    args: { courseid: 42 }
+                  - index: 1
+                    methodname: core_enrol_get_enrolled_users
+                    args: { courseid: 42 }
+      responses:
+        "200":
+          description: |
+            Array com uma entrada por chamada, na mesma ordem do request.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    error:
+                      oneOf:
+                        - type: boolean
+                        - type: string
+                    data: {}
+                    exception:
+                      type: object
+                      additionalProperties: true
+
+components:
+  securitySchemes:
+    wstoken:
+      type: apiKey
+      in: query
+      name: wstoken
+      description: |
+        Token de Web Service. Declarado como parâmetro de query porque a OpenAPI não
+        sabe expressar "campo do corpo do formulário" em um esquema de segurança —
+        o projeto o envia no corpo `x-www-form-urlencoded`, e o Moodle aceita as
+        duas formas. Prefira o corpo: token na query vaza para logs de acesso.
+    moodleSession:
+      type: apiKey
+      in: cookie
+      name: MoodleSession
+      description: |
+        Cookie de sessão capturado no login. Dá acesso a tudo que o professor vê na
+        interface. Expira com a sessão do Moodle; o projeto detecta a expiração pelo
+        redirecionamento para `login/index.php`.
+
+  parameters:
+    cmid:
+      name: id
+      in: query
+      required: true
+      description: |
+        **Course module id** (cmid) — o id da atividade *dentro do curso*, que é o
+        que aparece na URL da atividade. Não confundir com `instance`, o id da
+        instância do módulo (`mdl_vpl.id`). Quase todo erro de "atividade não
+        encontrada" vem de trocar um pelo outro.
+      schema:
+        type: integer
+      example: 1234
+
+  schemas:
+    # --------------------------------------------------------------- envelope
+    WsFunctionName:
+      type: string
+      description: |
+        Funções cobertas por esta documentação. A lista **real** disponível na sua
+        instância vem de `core_webservice_get_site_info` → `functions[]`.
+      enum:
+        - core_webservice_get_site_info
+        - core_course_search_courses
+        - core_course_get_contents
+        - core_course_get_courses_by_field
+        - core_course_get_course_module
+        - core_enrol_get_enrolled_users
+        - core_enrol_get_users_courses
+        - core_user_get_users_by_field
+        - core_group_get_course_groups
+        - core_group_get_course_user_groups
+        - core_completion_get_activities_completion_status
+        - gradereport_user_get_grade_items
+        - gradereport_user_get_grades_table
+        - core_files_get_files
+        - mod_vpl_info
+        - mod_vpl_open
+        - mod_vpl_get_result
+        - mod_vpl_evaluate
+        - mod_vpl_save
+        - mod_assign_get_assignments
+        - mod_assign_get_submissions
+        - mod_assign_get_grades
+        - mod_quiz_get_quizzes_by_courses
+        - mod_quiz_get_user_attempts
+        - mod_quiz_get_attempt_review
+        - mod_forum_get_forums_by_courses
+
+    WsEnvelope:
+      type: object
+      required: [wstoken, wsfunction, moodlewsrestformat]
+      properties:
+        wstoken:
+          type: string
+          description: Token de Web Service.
+        wsfunction:
+          $ref: "#/components/schemas/WsFunctionName"
+        moodlewsrestformat:
+          type: string
+          enum: [json, xml]
+          default: json
+
+    WsErro:
+      type: object
+      description: |
+        Erro de Web Service. **Chega com HTTP 200** — sempre verifique `exception`.
+      required: [exception, message]
+      properties:
+        exception:
+          type: string
+          examples: [webservice_access_exception, moodle_exception, invalid_parameter_exception]
+        errorcode:
+          type: string
+          examples: [accessexception, invalidtoken, invalidrecord, nopermissions]
+        message:
+          type: string
+        debuginfo:
+          type: string
+          description: Só presente com o modo de depuração ligado no Moodle.
+
+    TokenOk:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: Token de Web Service. Trate como credencial.
+        privatetoken:
+          type: [string, "null"]
+
+    TokenErro:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        errorcode:
+          type: string
+        stacktrace:
+          type: [string, "null"]
+
+    # -------------------------------------------------- parâmetros por função
+    ParamsCoreWebserviceGetSiteInfo:
+      title: core_webservice_get_site_info
+      description: "[CERTA] Sem parâmetros. Devolve identidade, versão e funções liberadas."
+      type: object
+
+    ParamsCoreCourseSearchCourses:
+      title: core_course_search_courses
+      description: "[USADA] Busca cursos por texto."
+      type: object
+      required: [criterianame, criteriavalue]
+      properties:
+        criterianame:
+          type: string
+          enum: [search, modulelist, blocklist, tagid]
+          default: search
+        criteriavalue:
+          type: string
+          description: Texto buscado. Vazio devolve os primeiros cursos — o projeto usa isso para validar o token.
+        page:
+          type: integer
+          default: 0
+        perpage:
+          type: integer
+          default: 0
+          description: "`0` usa o padrão do Moodle."
+
+    ParamsCoreCourseGetContents:
+      title: core_course_get_contents
+      description: |
+        [USADA] Seções do curso com suas atividades. Fonte de `cmid`, `modname` e
+        dos prazos (`dates[]`).
+      type: object
+      required: [courseid]
+      properties:
+        courseid:
+          type: integer
+        "options[0][name]":
+          type: string
+          description: "[CERTA] Filtros opcionais: `excludemodules`, `excludecontents`, `sectionid`, `modname`, `modid`."
+        "options[0][value]":
+          type: string
+
+    ParamsCoreCourseGetCoursesByField:
+      title: core_course_get_courses_by_field
+      description: |
+        [CERTA] Busca um curso por campo exato. Mais preciso que
+        `core_course_search_courses` quando já se conhece o id ou o shortname.
+      type: object
+      properties:
+        field:
+          type: string
+          enum: ["", id, ids, shortname, idnumber, category]
+        value:
+          type: string
+
+    ParamsCoreCourseGetCourseModule:
+      title: core_course_get_course_module
+      description: "[CERTA] Metadados de uma atividade a partir do cmid — resolve `cmid → instance`."
+      type: object
+      required: [cmid]
+      properties:
+        cmid:
+          type: integer
+
+    ParamsCoreEnrolGetEnrolledUsers:
+      title: core_enrol_get_enrolled_users
+      description: |
+        [USADA] Matriculados no curso, **com todos os papéis**. O projeto filtra
+        alunos no cliente por `roles[].shortname === 'student'`.
+      type: object
+      required: [courseid]
+      properties:
+        courseid:
+          type: integer
+        "options[0][name]":
+          type: string
+          description: |
+            [CERTA] Opções úteis: `onlyactive` (ignora matrículas suspensas),
+            `userfields`, `limitfrom`, `limitnumber`, `groupid`. Sem `limitnumber` a
+            resposta traz a turma inteira — em cursos grandes, considere paginar.
+        "options[0][value]":
+          type: string
+
+    ParamsCoreEnrolGetUsersCourses:
+      title: core_enrol_get_users_courses
+      description: "[CERTA] Cursos de um usuário — caminho inverso do anterior."
+      type: object
+      required: [userid]
+      properties:
+        userid:
+          type: integer
+
+    ParamsCoreUserGetUsersByField:
+      title: core_user_get_users_by_field
+      description: |
+        [CERTA] Resolve identidade em lote. Útil para casar a matrícula que vem no
+        nome da pasta do ZIP com o `userid` do Moodle — exatamente o problema que o
+        projeto resolve hoje por heurística de nome/e-mail.
+      type: object
+      required: [field]
+      properties:
+        field:
+          type: string
+          enum: [id, idnumber, username, email]
+        "values[0]":
+          type: string
+
+    ParamsCoreGroupGetCourseGroups:
+      title: core_group_get_course_groups
+      description: "[CERTA] Grupos do curso. `core_enrol_get_enrolled_users` já devolve `groups[]` por aluno."
+      type: object
+      required: [courseid]
+      properties:
+        courseid:
+          type: integer
+
+    ParamsCoreGroupGetCourseUserGroups:
+      title: core_group_get_course_user_groups
+      description: "[CERTA] Grupos de um aluno em um curso."
+      type: object
+      required: [courseid]
+      properties:
+        courseid:
+          type: integer
+        userid:
+          type: integer
+        groupingid:
+          type: integer
+
+    ParamsCoreCompletionGetActivitiesCompletionStatus:
+      title: core_completion_get_activities_completion_status
+      description: |
+        [CERTA] Estado de conclusão de cada atividade para um aluno. Só é útil se o
+        curso tiver rastreamento de conclusão configurado.
+      type: object
+      required: [courseid, userid]
+      properties:
+        courseid:
+          type: integer
+        userid:
+          type: integer
+
+    ParamsGradereportUserGetGradeItems:
+      title: gradereport_user_get_grade_items
+      description: |
+        [USADA] Livro de notas estruturado. `userid=0` devolve **todos** os alunos em
+        uma chamada — é o fallback barato quando `mod_vpl_get_result` está bloqueado.
+      type: object
+      required: [courseid]
+      properties:
+        courseid:
+          type: integer
+        userid:
+          type: integer
+          default: 0
+          description: "`0` = todos os alunos (requer `moodle/grade:viewall`)."
+        groupid:
+          type: integer
+
+    ParamsGradereportUserGetGradesTable:
+      title: gradereport_user_get_grades_table
+      description: |
+        [CERTA] Mesma informação em formato de tabela **já renderizada** (HTML nas
+        células). Prefira `gradereport_user_get_grade_items`, que devolve números.
+      type: object
+      required: [courseid]
+      properties:
+        courseid:
+          type: integer
+        userid:
+          type: integer
+
+    ParamsCoreFilesGetFiles:
+      title: core_files_get_files
+      description: "[CERTA] Lista arquivos de uma área. Necessário para descobrir o que baixar via `pluginfile.php`."
+      type: object
+      required: [contextid, component, filearea, itemid, filepath, filename]
+      properties:
+        contextid: { type: integer }
+        component: { type: string }
+        filearea: { type: string }
+        itemid: { type: integer }
+        filepath: { type: string, default: "/" }
+        filename: { type: string }
+
+    ParamsModVplInfo:
+      title: mod_vpl_info
+      description: "[USADA] Enunciado, nota máxima, datas e arquivos de execução (inclui `vpl_evaluate.cases`)."
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: integer
+          description: cmid da atividade VPL.
+
+    ParamsModVplOpen:
+      title: mod_vpl_open
+      description: |
+        [USADA] Arquivos da submissão de um aluno, em base64 ou texto. Sem `userid`,
+        devolve a submissão do dono do token.
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer, description: cmid. }
+        userid:
+          type: integer
+          description: Requer `mod/vpl:grade` para ler a submissão de outro usuário.
+
+    ParamsModVplGetResult:
+      title: mod_vpl_get_result
+      description: |
+        [USADA] Resultado da avaliação automática: nota, saída do compilador e do
+        avaliador. Custo N×M (aluno × atividade).
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer, description: cmid. }
+        userid: { type: integer }
+
+    ParamsModVplEvaluate:
+      title: mod_vpl_evaluate
+      description: |
+        [CERTA] **Escrita.** Dispara a avaliação automática no jail do VPL. Gera
+        carga real de execução e pode sobrescrever a avaliação existente.
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer, description: cmid. }
+        userid: { type: integer }
+
+    ParamsModVplSave:
+      title: mod_vpl_save
+      description: |
+        [CERTA] **Escrita.** Grava uma submissão em nome do aluno. Documentada só
+        para que não seja chamada por engano ao explorar a API.
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer, description: cmid. }
+        userid: { type: integer }
+        "files[0][name]": { type: string }
+        "files[0][data]": { type: string }
+        "files[0][encoding]":
+          type: integer
+          enum: [0, 1]
+          description: "`0` = texto, `1` = base64."
+
+    ParamsModAssignGetAssignments:
+      title: mod_assign_get_assignments
+      description: "[CERTA] Tarefas dos cursos informados, com prazos e configuração."
+      type: object
+      properties:
+        "courseids[0]": { type: integer }
+        "capabilities[0]": { type: string }
+        includenotenrolledcourses: { type: integer, enum: [0, 1] }
+
+    ParamsModAssignGetSubmissions:
+      title: mod_assign_get_submissions
+      description: "[CERTA] Entregas por tarefa, com data e estado."
+      type: object
+      properties:
+        "assignmentids[0]": { type: integer, description: Id da **instância** da tarefa, não o cmid. }
+        status: { type: string }
+        since: { type: integer }
+        before: { type: integer }
+
+    ParamsModAssignGetGrades:
+      title: mod_assign_get_grades
+      description: "[CERTA] Notas por tarefa."
+      type: object
+      properties:
+        "assignmentids[0]": { type: integer }
+        since: { type: integer }
+
+    ParamsModQuizGetQuizzesByCourses:
+      title: mod_quiz_get_quizzes_by_courses
+      description: "[CERTA] Questionários de um ou mais cursos."
+      type: object
+      properties:
+        "courseids[0]": { type: integer }
+
+    ParamsModQuizGetUserAttempts:
+      title: mod_quiz_get_user_attempts
+      description: "[CERTA] Tentativas de questionário de um aluno."
+      type: object
+      required: [quizid]
+      properties:
+        quizid: { type: integer, description: Id da instância do questionário. }
+        userid: { type: integer }
+        status: { type: string, enum: [all, finished, unfinished], default: finished }
+        includepreviews: { type: integer, enum: [0, 1] }
+
+    ParamsModQuizGetAttemptReview:
+      title: mod_quiz_get_attempt_review
+      description: "[CERTA] Revisão de uma tentativa: resposta e nota por questão."
+      type: object
+      required: [attemptid]
+      properties:
+        attemptid: { type: integer }
+        page: { type: integer, default: -1, description: "`-1` = todas as páginas." }
+
+    ParamsModForumGetForumsByCourses:
+      title: mod_forum_get_forums_by_courses
+      description: |
+        [CERTA] Fóruns do curso. Interessante como proxy de engajamento (participação
+        em discussão), dimensão que hoje o app não mede.
+      type: object
+      properties:
+        "courseids[0]": { type: integer }
+
+    # ---------------------------------------------------- respostas (chaves)
+    ResCoreWebserviceGetSiteInfo:
+      title: core_webservice_get_site_info
+      type: object
+      description: "[CERTA] Campos principais."
+      properties:
+        sitename: { type: string }
+        username: { type: string }
+        userid: { type: integer }
+        fullname: { type: string }
+        siteurl: { type: string }
+        release: { type: string, description: "Versão do Moodle, ex.: `4.3.2 (Build: 20240115)`." }
+        version: { type: string }
+        functions:
+          type: array
+          description: "**A lista de funções que o token realmente pode chamar.**"
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              version: { type: string }
+
+    ResCoreCourseSearchCourses:
+      title: core_course_search_courses
+      type: object
+      properties:
+        total: { type: integer }
+        courses:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              fullname: { type: string }
+              shortname: { type: string }
+              categoryid: { type: integer }
+              summary: { type: string }
+        warnings:
+          type: array
+          items: { type: object, additionalProperties: true }
+
+    ResCoreCourseGetContents:
+      title: core_course_get_contents
+      type: array
+      description: "[USADA] Uma entrada por seção do curso."
+      items:
+        type: object
+        properties:
+          id: { type: integer }
+          name: { type: string, description: Nome da seção — vira o rótulo da turma no projeto. }
+          section: { type: integer }
+          visible: { type: integer }
+          summary: { type: string }
+          modules:
+            type: array
+            items:
+              type: object
+              properties:
+                id: { type: integer, description: "**cmid** — a chave usada em todas as rotas do VPL." }
+                instance: { type: integer, description: Id da instância do módulo (`mdl_vpl.id`). }
+                name: { type: string }
+                modname: { type: string, description: "O projeto filtra `vpl`." }
+                visible: { type: integer }
+                url: { type: string }
+                dates:
+                  type: array
+                  description: |
+                    Rótulo + timestamp (segundos). O projeto identifica o prazo pelo
+                    rótulo, que é **traduzido** — daí o fallback de ler a página HTML.
+                  items:
+                    type: object
+                    properties:
+                      label: { type: string }
+                      timestamp: { type: integer }
+
+    ResCoreEnrolGetEnrolledUsers:
+      title: core_enrol_get_enrolled_users
+      type: array
+      description: "[USADA] Campos que o projeto consome."
+      items:
+        type: object
+        properties:
+          id: { type: integer, description: "`userid` — chave de junção com o VPL." }
+          username: { type: string }
+          fullname: { type: string }
+          firstname: { type: string }
+          lastname: { type: string }
+          email: { type: string, description: Pode vir ausente se a política de privacidade do site o esconder. }
+          idnumber: { type: string, description: Matrícula institucional, quando preenchida. }
+          lastaccess: { type: integer, description: Último acesso ao site, em segundos. }
+          lastcourseaccess: { type: integer, description: Último acesso a **este** curso, em segundos. }
+          groups:
+            type: array
+            items:
+              type: object
+              properties:
+                id: { type: integer }
+                name: { type: string }
+          roles:
+            type: array
+            items:
+              type: object
+              properties:
+                roleid: { type: integer }
+                shortname: { type: string, description: "O projeto mantém apenas `student`." }
+                name: { type: string }
+
+    ResGradereportUserGetGradeItems:
+      title: gradereport_user_get_grade_items
+      type: object
+      description: "[USADA] Campos que o projeto consome."
+      properties:
+        usergrades:
+          type: array
+          items:
+            type: object
+            properties:
+              courseid: { type: integer }
+              userid: { type: integer }
+              userfullname: { type: string }
+              gradeitems:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    itemname: { type: string }
+                    itemmodule: { type: string, description: "`vpl`, `assign`, `quiz`, ou vazio em itens calculados." }
+                    cmid:
+                      type: [integer, "null"]
+                      description: |
+                        **A ponte com a atividade.** Ausente em categorias e no total do
+                        curso — o projeto ignora itens sem `cmid`.
+                    graderaw:
+                      type: [number, "null"]
+                      description: Nota numérica crua. `null` = sem nota lançada.
+                    gradeformatted: { type: string }
+                    grademin: { type: number }
+                    grademax: { type: number }
+                    percentageformatted: { type: string }
+        warnings:
+          type: array
+          items: { type: object, additionalProperties: true }
+
+    ResModVplInfo:
+      title: mod_vpl_info
+      type: object
+      description: "[USADA] Campos que o projeto consome."
+      properties:
+        name: { type: string }
+        intro: { type: string, description: Enunciado em HTML. }
+        grade:
+          type: [number, "null"]
+          description: |
+            Nota máxima. Valores negativos representam **escala** em vez de nota
+            numérica; o projeto trata ausência/zero caindo para 10.
+        startdate: { type: [integer, "null"], description: Segundos. O projeto multiplica por 1000. }
+        duedate: { type: [integer, "null"], description: Segundos. }
+        reductionbyevaluation: { type: string }
+        executionfiles:
+          type: array
+          description: |
+            Arquivos de execução da atividade. `vpl_evaluate.cases` contém os casos
+            de teste no formato `Case = / Input = / Output = / Grade reduction =`
+            (parser em `moodle.ts` → `parseCases`).
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              data: { type: string }
+              encoding: { type: integer, enum: [0, 1] }
+
+    ResModVplOpen:
+      title: mod_vpl_open
+      type: object
+      description: "[USADA] Campos que o projeto consome."
+      properties:
+        files:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              data: { type: string, description: Texto ou base64, conforme `encoding`. }
+              encoding: { type: integer, enum: [0, 1] }
+        compilationexecution:
+          type: object
+          additionalProperties: true
+
+    ResModVplGetResult:
+      title: mod_vpl_get_result
+      type: object
+      description: "[USADA] Campos que o projeto consome e como são interpretados."
+      properties:
+        grade:
+          type: string
+          description: |
+            Nota como **texto** (pode vir localizada, com vírgula decimal). O projeto
+            normaliza em `harvester.parseNumber`.
+        compilation:
+          type: string
+          description: |
+            Saída do compilador. `moodleHarvester.parseEvaluation` extrai daqui os
+            erros no padrão `arquivo:linha:coluna: error: mensagem`.
+        evaluation:
+          type: string
+          description: |
+            Saída do avaliador. Duas formas reconhecidas: `Case = Nome (FAILED)` e
+            comentários iniciados por `-`. A nota final aparece como `Grade :=>> 9.00`.
+        execution:
+          type: string

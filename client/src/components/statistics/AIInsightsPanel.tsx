@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AIReport, StatisticsMetrics } from '../../types/statistics';
+import { reportKey, scopeOf } from '../../services/statistics';
 import AIReportCard from './AIReportCard';
 import ChartCard from './charts/ChartCard';
 import BarChart from './charts/BarChart';
@@ -18,11 +19,11 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ metrics, reports, onR
     <AIReportCard
       t={t}
       lang={lang}
-      turma={metrics.turma}
+      scope={scopeOf(metrics)}
       kind="overview"
       title={t.statsAIOverview}
       description={t.statsAIOverviewDesc}
-      report={reports.overview}
+      report={reports[reportKey(metrics.turmas, 'overview')]}
       onGenerated={onReportGenerated}
     />
 
@@ -71,11 +72,11 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ metrics, reports, onR
     <AIReportCard
       t={t}
       lang={lang}
-      turma={metrics.turma}
+      scope={scopeOf(metrics)}
       kind="alerts"
       title={t.statsAIAlerts}
       description={t.statsAIAlertsDesc}
-      report={reports.alerts}
+      report={reports[reportKey(metrics.turmas, 'alerts')]}
       onGenerated={onReportGenerated}
     />
   </div>

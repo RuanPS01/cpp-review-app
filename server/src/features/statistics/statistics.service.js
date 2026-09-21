@@ -1,7 +1,13 @@
-// Motor de métricas: transforma o dataset bruto importado do Moodle em números
-// prontos para a tela de Estatísticas. Nenhuma chamada de rede acontece aqui —
-// é uma função pura sobre o JSON salvo em disco, o que torna o recálculo barato
-// e permite reprocessar importações antigas quando as regras mudam.
+// Motor de métricas: transforma os datasets brutos importados do Moodle em
+// números prontos para a tela de Estatísticas. Nenhuma chamada de rede acontece
+// aqui — é uma função pura sobre os JSON salvos em disco, o que torna o
+// recálculo barato e permite reprocessar importações antigas quando as regras
+// mudam.
+//
+// A entrada pode ser uma importação só ou várias: `mergeDatasets` consolida
+// turmas diferentes em um dataset único, mantendo a origem de cada questão e de
+// cada aluno para que nenhuma métrica cobre de um aluno a questão de uma turma
+// em que ele nunca esteve.
 
 const fs = require('fs');
 const path = require('path');
@@ -98,15 +104,252 @@ function submissionPercent(submission, question) {
   return Math.max(0, Math.min(100, (submission.grade / max) * 100));
 }
 
+/** Identificador estável de um aluno nas métricas e nas exportações. */
+function studentKey(student) {
+  return String(student.userId ?? student.folderName ?? student.name ?? '');
+}
+
+// ---------------------------------------------------------------------------
+// Consolidação de várias importações
+// ---------------------------------------------------------------------------
+
+/**
+ * Chaves candidatas de identidade, da mais forte para a mais fraca. Turmas
+ * diferentes podem trazer o mesmo aluno com metadados diferentes (uma com
+ * `userId` do Web Service, outra só com a pasta do ZIP), então registramos
+ * todos os apelidos para que o segundo encontro reconheça o primeiro.
+ */
+function identityAliases(student) {
+  const aliases = [];
+  if (student.userId) aliases.push(`id:${student.userId}`);
+  if (student.email) aliases.push(`email:${normalizeKey(student.email)}`);
+  if (student.username) aliases.push(`user:${normalizeKey(student.username)}`);
+  if (student.idNumber) aliases.push(`idnum:${normalizeKey(student.idNumber)}`);
+  if (student.folderName) aliases.push(`folder:${normalizeKey(student.folderName)}`);
+  if (student.name) aliases.push(`name:${normalizeKey(student.name)}`);
+  return aliases;
+}
+
+const maxOrNull = (a, b) => (a && b ? Math.max(a, b) : (a ?? b ?? null));
+
+/**
+ * Dois registros que trazem identificadores fortes *diferentes* são pessoas
+ * diferentes, mesmo que casem por um apelido fraco. Sem esta guarda, dois
+ * homônimos de turmas diferentes ("Maria Silva" em P1 e em P2) virariam um
+ * aluno só com as questões das duas turmas somadas.
+ */
+function conflictingIdentity(a, b) {
+  const differs = (left, right, compare = (x, y) => x !== y) =>
+    left !== null && left !== undefined && left !== ''
+    && right !== null && right !== undefined && right !== ''
+    && compare(left, right);
+
+  return differs(a.userId, b.userId, (x, y) => String(x) !== String(y))
+    || differs(a.email, b.email, (x, y) => normalizeKey(x) !== normalizeKey(y))
+    || differs(a.username, b.username, (x, y) => normalizeKey(x) !== normalizeKey(y));
+}
+
+/**
+ * Junta dois registros de submissão da mesma questão. Acontece quando uma
+ * importação descreve o mesmo aluno em dois registros — um vindo da lista de
+ * submissões (nota, tentativas) e outro do ZIP (código, arquivos). Sobrescrever
+ * um com o outro perderia metade dos dados.
+ */
+function mergeSubmissions(existing, incoming) {
+  if (!existing) return incoming;
+  if (!incoming) return existing;
+
+  const firstValue = (a, b) => (a === null || a === undefined ? b : a);
+  const union = (a, b) => [...new Set([...(a || []), ...(b || [])])];
+
+  return {
+    ...existing,
+    ...incoming,
+    submitted: Boolean(existing.submitted || incoming.submitted),
+    submittedAt: maxOrNull(existing.submittedAt, incoming.submittedAt),
+    attempts: Math.max(existing.attempts || 0, incoming.attempts || 0) || null,
+    grade: firstValue(incoming.grade, existing.grade),
+    evaluation: firstValue(incoming.evaluation, existing.evaluation),
+    compilation: firstValue(incoming.compilation, existing.compilation),
+    code: firstValue(incoming.code, existing.code),
+    codeMetrics: firstValue(incoming.codeMetrics, existing.codeMetrics),
+    failedCases: union(existing.failedCases, incoming.failedCases),
+    compileErrors: union(existing.compileErrors, incoming.compileErrors),
+    hasCompileError: Boolean(existing.hasCompileError || incoming.hasCompileError),
+    late: Boolean(existing.late || incoming.late),
+    files: (incoming.files || []).length ? incoming.files : (existing.files || []),
+    history: (incoming.history || []).length ? incoming.history : (existing.history || [])
+  };
+}
+
+/**
+ * Consolida uma ou mais importações em um dataset único.
+ *
+ * Com mais de uma turma as chaves de questão passam a ser prefixadas
+ * (`{turma}::q1`) — sem isso o `q1` de uma turma sobrescreveria o da outra. Cada
+ * questão guarda `turma`/`sourceKey` e cada aluno guarda `turmas`, o que permite
+ * cobrar do aluno apenas as questões das turmas em que ele aparece.
+ */
+function mergeDatasets(input) {
+  const datasets = (Array.isArray(input) ? input : [input]).filter(Boolean);
+  if (!datasets.length) throw new Error('Nenhuma importação informada para o cálculo de métricas.');
+
+  const combined = datasets.length > 1;
+  const questions = [];
+  const students = [];
+  const aliasIndex = new Map();
+  const warnings = [];
+  const sourceKeys = new Set();
+
+  datasets.forEach(dataset => {
+    const turma = dataset.turma;
+    const keyMap = new Map();
+
+    (dataset.questions || []).forEach(question => {
+      const key = combined ? `${turma}::${question.key}` : question.key;
+      keyMap.set(question.key, key);
+      questions.push({ ...question, key, sourceKey: question.key, turma });
+    });
+
+    (dataset.students || []).forEach(student => {
+      let record = identityAliases(student)
+        .map(alias => aliasIndex.get(alias))
+        .find(candidate => candidate && !conflictingIdentity(candidate, student));
+
+      if (!record) {
+        record = { ...student, turmas: [], questions: {} };
+        students.push(record);
+      } else {
+        record.userId = record.userId ?? student.userId ?? null;
+        record.folderName = record.folderName || student.folderName || null;
+        record.email = record.email || student.email || null;
+        record.username = record.username || student.username || null;
+        record.idNumber = record.idNumber || student.idNumber || null;
+        record.name = record.name || student.name;
+        record.enrolled = record.enrolled || Boolean(student.enrolled);
+        record.lastAccess = maxOrNull(record.lastAccess, student.lastAccess);
+        record.lastCourseAccess = maxOrNull(record.lastCourseAccess, student.lastCourseAccess);
+        record.groups = [...new Set([...(record.groups || []), ...(student.groups || [])])];
+      }
+
+      identityAliases(record).forEach(alias => aliasIndex.set(alias, record));
+      if (!record.turmas.includes(turma)) record.turmas.push(turma);
+
+      Object.entries(student.questions || {}).forEach(([sourceKey, submission]) => {
+        const mapped = keyMap.get(sourceKey);
+        if (mapped) record.questions[mapped] = mergeSubmissions(record.questions[mapped], submission);
+      });
+    });
+
+    (dataset.warnings || []).forEach(warning => {
+      warnings.push(combined ? `[${turma}] ${warning}` : warning);
+    });
+    Object.keys(dataset.sources || {}).forEach(key => sourceKeys.add(key));
+  });
+
+  // Uma fonte só é "disponível" se estiver disponível em todas as turmas
+  // selecionadas; disponibilidade parcial é sinalizada à parte para que a tela
+  // não afirme que existe um dado que só metade da seleção tem.
+  const sources = {};
+  const sourcesPartial = {};
+  sourceKeys.forEach(key => {
+    const available = datasets.filter(dataset => Boolean(dataset.sources?.[key])).length;
+    sources[key] = available === datasets.length;
+    sourcesPartial[key] = available > 0 && available < datasets.length;
+  });
+
+  const unique = (values) => [...new Set(values.filter(Boolean))];
+
+  return {
+    combined,
+    turma: datasets.map(dataset => dataset.turma).join(' + '),
+    turmas: datasets.map(dataset => dataset.turma),
+    courseName: unique(datasets.map(dataset => dataset.courseName)).join(' + '),
+    sectionName: unique(datasets.map(dataset => dataset.sectionName)).join(' + '),
+    sections: unique(datasets.flatMap(dataset => dataset.sections || [dataset.sectionName])),
+    baseUrl: datasets[0].baseUrl || null,
+    importedAt: datasets.reduce((latest, dataset) => Math.max(latest, dataset.importedAt || 0), 0) || null,
+    deepHistory: datasets.every(dataset => Boolean(dataset.deepHistory)),
+    datasets: datasets.map(dataset => ({
+      turma: dataset.turma,
+      courseName: dataset.courseName ?? null,
+      sectionName: dataset.sectionName ?? null,
+      importedAt: dataset.importedAt ?? null,
+      studentCount: (dataset.students || []).length,
+      questionCount: (dataset.questions || []).length
+    })),
+    sources,
+    sourcesPartial,
+    warnings,
+    questions,
+    students
+  };
+}
+
+/** Questões que valem para um aluno — só as das turmas em que ele aparece. */
+function scopedQuestions(merged, student) {
+  if (!merged.combined || !student.turmas?.length) return merged.questions;
+  const turmas = new Set(student.turmas);
+  return merged.questions.filter(question => turmas.has(question.turma));
+}
+
+/**
+ * Um aluno "sem histórico" é o cadastro que não tem nenhum vestígio de
+ * atividade nas questões da própria turma: nem entrega, nem nota, nem
+ * tentativa, nem código. Em geral é matrícula cancelada, trancamento ou
+ * cadastro do Moodle sem inscrição na disciplina — mantê-lo distorce taxa de
+ * entrega, índice de dificuldade e distribuição de risco.
+ */
+function hasAnyRecord(merged, student) {
+  return scopedQuestions(merged, student).some(question => {
+    const submission = student.questions?.[question.key];
+    if (!submission) return false;
+    return Boolean(submission.submitted)
+      || (submission.grade !== null && submission.grade !== undefined)
+      || (submission.attempts || 0) > 0
+      || Boolean(submission.code)
+      || Boolean(submission.evaluation)
+      || (submission.history || []).length > 0
+      || (submission.files || []).length > 0;
+  });
+}
+
+/**
+ * Separa os alunos considerados nas métricas dos ignorados por falta de
+ * histórico. Exportado porque as exportações em CSV precisam do mesmo recorte
+ * que a tela.
+ */
+function selectStudents(merged, options = {}) {
+  const students = merged.students || [];
+  if (!options.ignoreEmptyStudents) return { included: students, excluded: [] };
+
+  const included = [];
+  const excluded = [];
+  students.forEach(student => {
+    (hasAnyRecord(merged, student) ? included : excluded).push(student);
+  });
+  return { included, excluded };
+}
+
 // ---------------------------------------------------------------------------
 // Métricas por questão
 // ---------------------------------------------------------------------------
 
-function buildQuestionMetrics(dataset) {
-  const students = dataset.students || [];
+function buildQuestionMetrics(merged, students) {
+  // Uma questão só é "esperada" de quem está na turma dela: em uma visão com
+  // várias turmas, cobrar a questão da turma A de um aluno da turma B faria
+  // toda questão parecer impossível.
+  const studentsByTurma = new Map();
+  students.forEach(student => {
+    (student.turmas?.length ? student.turmas : merged.turmas).forEach(turma => {
+      if (!studentsByTurma.has(turma)) studentsByTurma.set(turma, []);
+      studentsByTurma.get(turma).push(student);
+    });
+  });
 
-  return (dataset.questions || []).map(question => {
-    const submissions = students
+  return (merged.questions || []).map(question => {
+    const audience = studentsByTurma.get(question.turma) || students;
+    const submissions = audience
       .map(student => student.questions?.[question.key])
       .filter(Boolean);
 
@@ -134,6 +377,8 @@ function buildQuestionMetrics(dataset) {
 
     return {
       key: question.key,
+      sourceKey: question.sourceKey ?? question.key,
+      turma: question.turma ?? merged.turma,
       cmid: question.cmid,
       name: question.name,
       section: question.section ?? null,
@@ -142,9 +387,9 @@ function buildQuestionMetrics(dataset) {
       dueDate: question.dueDate ?? null,
       testCaseCount: (question.testCases || []).length,
       hasStatement: Boolean(question.statement),
-      expected: students.length,
+      expected: audience.length,
       submittedCount: submitted.length,
-      submissionRate: rate(submitted.length, students.length),
+      submissionRate: rate(submitted.length, audience.length),
       gradedCount: percentages.length,
       avgPercent: round(avgPercent),
       medianPercent: round(median(percentages)),
@@ -157,8 +402,8 @@ function buildQuestionMetrics(dataset) {
       // Índice de dificuldade: 0 = todos acertaram, 100 = ninguém acertou.
       // Quem não entregou conta como dificuldade, senão a questão que ninguém
       // tentou pareceria fácil.
-      difficultyIndex: students.length
-        ? round(100 - ((avgPercent ?? 0) * submitted.length) / students.length, 1)
+      difficultyIndex: audience.length
+        ? round(100 - ((avgPercent ?? 0) * submitted.length) / audience.length, 1)
         : null,
       avgAttempts: round(mean(attempts), 2),
       maxAttempts: attempts.length ? Math.max(...attempts) : null,
@@ -258,16 +503,22 @@ function computeRisk({ missingRatio, avgPercent, submittedCount, lateRatio, atte
   return { score, level, reasons: reasons.sort((a, b) => b.weight - a.weight) };
 }
 
-function buildStudentMetrics(dataset) {
-  const questions = dataset.questions || [];
-  const questionByKey = new Map(questions.map(q => [q.key, q]));
+function buildStudentMetrics(merged, students) {
+  // As chaves de questão já vêm prefixadas com a turma quando a seleção tem
+  // mais de uma, e é por elas que `student.questions` é indexado — então um
+  // índice único sobre `merged.questions` serve para todos os alunos.
+  const questionByKey = new Map((merged.questions || []).map(q => [q.key, q]));
 
-  return (dataset.students || []).map(student => {
+  return students.map(student => {
+    const questions = scopedQuestions(merged, student);
+
     const perQuestion = questions.map(question => {
       const submission = student.questions?.[question.key];
       const percent = submissionPercent(submission, question);
       return {
         key: question.key,
+        sourceKey: question.sourceKey ?? question.key,
+        turma: question.turma ?? merged.turma,
         name: question.name,
         submitted: Boolean(submission?.submitted),
         submittedAt: submission?.submittedAt ?? null,
@@ -316,13 +567,18 @@ function buildStudentMetrics(dataset) {
       name: student.name,
       email: student.email || null,
       username: student.username || null,
+      idNumber: student.idNumber || null,
       groups: student.groups || [],
+      turmas: student.turmas?.length ? student.turmas : merged.turmas,
+      enrolled: Boolean(student.enrolled),
       lastAccess: student.lastAccess ?? null,
       lastCourseAccess: student.lastCourseAccess ?? null,
+      hasRecords: hasAnyRecord(merged, student),
       submittedCount: submitted.length,
       missingCount: questions.length - submitted.length,
       submissionRate: rate(submitted.length, questions.length),
       avgPercent: round(avgPercent),
+      medianPercent: round(median(percentages)),
       bestPercent: percentages.length ? round(Math.max(...percentages)) : null,
       worstPercent: percentages.length ? round(Math.min(...percentages)) : null,
       totalAttempts: attemptsTotal,
@@ -336,7 +592,7 @@ function buildStudentMetrics(dataset) {
       risk,
       questions: perQuestion,
       concepts: conceptsUsed,
-      questionCount: questionByKey.size
+      questionCount: questions.length
     };
   });
 }
@@ -354,9 +610,14 @@ const LEAD_TIME_BUCKETS = [
   { key: 'late', label: 'após o prazo', min: -Infinity, max: 0 }
 ];
 
-function buildEngagement(dataset, studentMetrics) {
-  const questions = dataset.questions || [];
-  const questionByKey = new Map(questions.map(q => [q.key, q]));
+/** Faixa de antecedência de um envio em relação ao prazo da atividade. */
+function leadTimeBucket(hoursBefore) {
+  return LEAD_TIME_BUCKETS.find(bucket => hoursBefore >= bucket.min && hoursBefore < bucket.max)
+    || LEAD_TIME_BUCKETS[LEAD_TIME_BUCKETS.length - 1];
+}
+
+function buildEngagement(merged, students, studentMetrics) {
+  const questionByKey = new Map((merged.questions || []).map(q => [q.key, q]));
 
   const byHour = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
   const byWeekday = Array.from({ length: 7 }, (_, day) => ({ day, count: 0 }));
@@ -377,8 +638,9 @@ function buildEngagement(dataset, studentMetrics) {
   let totalSubmissions = 0;
   let datedSubmissions = 0;
 
-  (dataset.students || []).forEach(student => {
-    Object.entries(student.questions || {}).forEach(([key, submission]) => {
+  students.forEach(student => {
+    scopedQuestions(merged, student).forEach(question => {
+      const submission = student.questions?.[question.key];
       if (!submission?.submitted) return;
       totalSubmissions += 1;
 
@@ -405,11 +667,11 @@ function buildEngagement(dataset, studentMetrics) {
         byDay.set(dayKey, (byDay.get(dayKey) || 0) + 1);
       });
 
-      const dueDate = questionByKey.get(key)?.dueDate;
+      const dueDate = questionByKey.get(question.key)?.dueDate;
       if (dueDate && submission.submittedAt) {
-        const hoursBefore = (dueDate - submission.submittedAt) / HOUR_MS;
-        const target = leadTimes.find(b => hoursBefore >= b.min && hoursBefore < b.max) || leadTimes[leadTimes.length - 1];
-        target.count += 1;
+        const bucketKey = leadTimeBucket((dueDate - submission.submittedAt) / HOUR_MS).key;
+        const target = leadTimes.find(b => b.key === bucketKey);
+        if (target) target.count += 1;
       }
     });
   });
@@ -427,11 +689,7 @@ function buildEngagement(dataset, studentMetrics) {
     activeStudents,
     inactiveStudents: studentMetrics.length - activeStudents,
     avgAttemptsPerSubmission: round(
-      mean(
-        (dataset.students || []).flatMap(s =>
-          Object.values(s.questions || {}).filter(q => q?.submitted).map(q => q.attempts || 1)
-        )
-      ),
+      mean(studentMetrics.flatMap(s => s.questions.filter(q => q.submitted).map(q => q.attempts || 1))),
       2
     ),
     byHour,
@@ -463,16 +721,18 @@ function loadProfessorGrades(turma) {
   }
 }
 
-function buildProfessorComparison(dataset, studentMetrics) {
-  const grades = loadProfessorGrades(dataset.turma);
-  if (!grades || !grades.length) return null;
-
+function buildProfessorComparison(merged, studentMetrics) {
   const byEmail = new Map();
   const byName = new Map();
-  grades.forEach(entry => {
-    if (entry.email) byEmail.set(normalizeKey(entry.email), entry);
-    if (entry.name) byName.set(normalizeKey(entry.name), entry);
+
+  merged.turmas.forEach(turma => {
+    (loadProfessorGrades(turma) || []).forEach(entry => {
+      if (entry.email) byEmail.set(normalizeKey(entry.email), { ...entry, turma });
+      if (entry.name) byName.set(normalizeKey(entry.name), { ...entry, turma });
+    });
   });
+
+  if (!byEmail.size && !byName.size) return null;
 
   const rows = [];
   studentMetrics.forEach(student => {
@@ -491,6 +751,7 @@ function buildProfessorComparison(dataset, studentMetrics) {
     rows.push({
       userId: student.userId,
       name: student.name,
+      turma: match.turma,
       professorAvg: round(professorAvg),
       automaticAvg: student.avgPercent,
       delta: round(professorAvg - student.avgPercent)
@@ -512,14 +773,18 @@ function buildProfessorComparison(dataset, studentMetrics) {
 // Agregado principal
 // ---------------------------------------------------------------------------
 
-function computeMetrics(dataset) {
-  const questionMetrics = buildQuestionMetrics(dataset);
-  const studentMetrics = buildStudentMetrics(dataset);
-  const engagement = buildEngagement(dataset, studentMetrics);
+function computeMergedMetrics(merged, options = {}) {
+  const { included, excluded } = selectStudents(merged, options);
+
+  const questionMetrics = buildQuestionMetrics(merged, included);
+  const studentMetrics = buildStudentMetrics(merged, included);
+  const engagement = buildEngagement(merged, included, studentMetrics);
 
   const allPercentages = studentMetrics.flatMap(s => s.questions.map(q => q.percent)).filter(v => v !== null);
   const studentAverages = studentMetrics.map(s => s.avgPercent).filter(v => v !== null);
-  const expectedSubmissions = studentMetrics.length * (dataset.questions || []).length;
+  // Com várias turmas cada aluno responde por um número diferente de questões,
+  // então o total esperado é a soma das questões de cada um.
+  const expectedSubmissions = studentMetrics.reduce((acc, s) => acc + s.questionCount, 0);
   const actualSubmissions = studentMetrics.reduce((acc, s) => acc + s.submittedCount, 0);
 
   const sortedByDifficulty = [...questionMetrics]
@@ -540,12 +805,15 @@ function computeMetrics(dataset) {
     };
   }).sort((a, b) => b.rate - a.rate);
 
+  const codedSubmissions = included.flatMap(student =>
+    scopedQuestions(merged, student)
+      .map(question => student.questions?.[question.key])
+      .filter(submission => submission?.codeMetrics)
+  );
+
   const smellCounts = Object.keys(SMELL_LABELS).map(key => {
-    const submissions = (dataset.students || []).flatMap(s =>
-      Object.values(s.questions || {}).filter(q => q?.codeMetrics)
-    );
-    const count = submissions.filter(q => q.codeMetrics.smells?.[key]).length;
-    return { key, label: SMELL_LABELS[key], count, total: submissions.length, rate: rate(count, submissions.length) };
+    const count = codedSubmissions.filter(q => q.codeMetrics.smells?.[key]).length;
+    return { key, label: SMELL_LABELS[key], count, total: codedSubmissions.length, rate: rate(count, codedSubmissions.length) };
   }).sort((a, b) => b.rate - a.rate);
 
   const alerts = studentMetrics
@@ -554,9 +822,11 @@ function computeMetrics(dataset) {
 
   const overview = {
     totalStudents: studentMetrics.length,
-    totalQuestions: (dataset.questions || []).length,
+    totalQuestions: (merged.questions || []).length,
+    totalTurmas: merged.turmas.length,
     activeStudents: engagement.activeStudents,
     inactiveStudents: engagement.inactiveStudents,
+    excludedStudents: excluded.length,
     expectedSubmissions,
     actualSubmissions,
     submissionRate: rate(actualSubmissions, expectedSubmissions),
@@ -590,13 +860,24 @@ function computeMetrics(dataset) {
   };
 
   return {
-    turma: dataset.turma,
-    courseName: dataset.courseName,
-    sectionName: dataset.sectionName,
-    sections: dataset.sections || (dataset.sectionName ? [dataset.sectionName] : []),
-    importedAt: dataset.importedAt,
-    sources: dataset.sources || {},
-    warnings: dataset.warnings || [],
+    turma: merged.turma,
+    turmas: merged.turmas,
+    combined: Boolean(merged.combined),
+    courseName: merged.courseName,
+    sectionName: merged.sectionName,
+    sections: merged.sections || [],
+    datasets: merged.datasets || [],
+    importedAt: merged.importedAt,
+    sources: merged.sources || {},
+    sourcesPartial: merged.sourcesPartial || {},
+    warnings: merged.warnings || [],
+    ignoreEmptyStudents: Boolean(options.ignoreEmptyStudents),
+    excludedStudents: excluded.map(student => ({
+      name: student.name,
+      email: student.email || null,
+      turmas: student.turmas || [],
+      lastCourseAccess: student.lastCourseAccess ?? null
+    })),
     overview,
     questions: questionMetrics,
     students: studentMetrics,
@@ -604,20 +885,58 @@ function computeMetrics(dataset) {
     alerts,
     conceptCoverage,
     smellCounts,
-    professorComparison: buildProfessorComparison(dataset, studentMetrics)
+    professorComparison: buildProfessorComparison(merged, studentMetrics)
   };
+}
+
+/**
+ * Métricas de uma ou várias importações. Com mais de uma turma, `byTurma`
+ * carrega a visão geral de cada uma calculada isoladamente — é o que permite
+ * comparar turmas lado a lado sem duplicar a regra de agregação.
+ */
+function computeMetrics(input, options = {}) {
+  const datasets = (Array.isArray(input) ? input : [input]).filter(Boolean);
+  const merged = mergeDatasets(datasets);
+  const metrics = computeMergedMetrics(merged, options);
+
+  metrics.byTurma = datasets.length > 1
+    ? datasets.map(dataset => {
+        const single = computeMergedMetrics(mergeDatasets([dataset]), options);
+        return {
+          turma: dataset.turma,
+          importedAt: dataset.importedAt ?? null,
+          questionCount: single.questions.length,
+          overview: single.overview
+        };
+      })
+    : [{
+        turma: merged.turma,
+        importedAt: merged.importedAt,
+        questionCount: metrics.questions.length,
+        overview: metrics.overview
+      }];
+
+  return metrics;
 }
 
 module.exports = {
   computeMetrics,
+  mergeDatasets,
+  selectStudents,
+  scopedQuestions,
+  hasAnyRecord,
   submissionPercent,
   questionMaxGrade,
+  studentKey,
+  leadTimeBucket,
+  LEAD_TIME_BUCKETS,
   PASS_THRESHOLD,
+  HOUR_MS,
   mean,
   median,
   stdDev,
-  rate,
   round,
+  rate,
   RELEVANT_GAIN,
   normalizeKey,
   loadProfessorGrades

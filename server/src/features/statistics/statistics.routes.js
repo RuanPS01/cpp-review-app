@@ -7,6 +7,8 @@ router.get('/statistics/datasets', statisticsController.listDatasets);
 router.get('/statistics/dataset', statisticsController.getDataset);
 router.get('/statistics/submission-code', statisticsController.getSubmissionCode);
 router.delete('/statistics/dataset/:turma', statisticsController.deleteDataset);
+router.get('/statistics/export/manifest', statisticsController.exportManifest);
+router.get('/statistics/export', statisticsController.exportData);
 router.get('/statistics/ai-reports', statisticsController.getReports);
 router.post('/statistics/ai-report', statisticsController.generateReport);
 

@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import {
-  AlertTriangle, BarChart3, Activity, ClipboardList, Database, FileQuestion, Fingerprint,
-  FlaskConical, Gauge, Loader2, Plus, RefreshCw, Sparkles, Target, Trash2, Users
+  AlertTriangle, BarChart3, Activity, ClipboardList, Download, FileQuestion, Fingerprint,
+  FlaskConical, Gauge, Loader2, Plus, RefreshCw, Sparkles, Target, UserX, Users
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useStatistics } from '../hooks/useStatistics';
 import Modal from '../components/Modal';
 import StatisticsImportWizard from '../components/statistics/StatisticsImportWizard';
+import StatisticsExportPanel from '../components/statistics/StatisticsExportPanel';
+import DatasetSelector from '../components/statistics/DatasetSelector';
 import OverviewPanel from '../components/statistics/OverviewPanel';
 import EngagementPanel from '../components/statistics/EngagementPanel';
 import QuestionsPanel from '../components/statistics/QuestionsPanel';
@@ -18,12 +20,12 @@ import IndicatorsPanel from '../components/learning/IndicatorsPanel';
 import PatternsPanel from '../components/learning/PatternsPanel';
 import ValidationPanel from '../components/learning/ValidationPanel';
 import InterventionsPanel from '../components/learning/InterventionsPanel';
-import ExportPanel from '../components/learning/ExportPanel';
-import { VIZ, formatDateTime } from '../components/statistics/charts/chartTheme';
+import { scopeOf } from '../services/statistics';
+import { VIZ, formatDateTime, formatNumber } from '../components/statistics/charts/chartTheme';
 
 type StatsTab =
   | 'overview' | 'engagement' | 'questions' | 'students' | 'alerts' | 'ai'
-  | 'concepts' | 'indicators' | 'patterns' | 'validation' | 'interventions' | 'export';
+  | 'concepts' | 'indicators' | 'patterns' | 'validation' | 'interventions';
 /** Dados = o que aconteceu; Aprendizado = o que isso diz sobre a aprendizagem. */
 type StatsGroup = 'data' | 'learning';
 
@@ -37,9 +39,14 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
   const [group, setGroup] = useState<StatsGroup>('data');
   const [tab, setTab] = useState<StatsTab>('overview');
   const [showImport, setShowImport] = useState(false);
+  const [showExport, setShowExport] = useState(false);
+  const [showExcluded, setShowExcluded] = useState(false);
   const [focusedStudent, setFocusedStudent] = useState<string | null>(null);
 
-  const { datasets, selectedTurma, setSelectedTurma, metrics, reports, saveReport, loading, error } = statistics;
+  const {
+    datasets, selectedTurmas, toggleTurma, selectOnly, selectAll, setSelectedTurmas,
+    ignoreEmptyStudents, setIgnoreEmptyStudents, metrics, reports, saveReport, loading, error
+  } = statistics;
 
   const TABS_BY_GROUP: Record<StatsGroup, { key: StatsTab; label: string; icon: typeof BarChart3 }[]> = {
     data: [
@@ -55,8 +62,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
       { key: 'indicators', label: t.learnTabIndicators, icon: Gauge },
       { key: 'patterns', label: t.learnTabPatterns, icon: Fingerprint },
       { key: 'validation', label: t.valTab, icon: FlaskConical },
-      { key: 'interventions', label: t.intTab, icon: ClipboardList },
-      { key: 'export', label: t.expTab, icon: Database }
+      { key: 'interventions', label: t.intTab, icon: ClipboardList }
     ]
   };
   const tabs = TABS_BY_GROUP[group];
@@ -73,6 +79,30 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
     setTab('students');
   };
 
+  const confirmDelete = (turma: string) => {
+    toast((toastObject) => (
+      <div className="flex flex-col gap-3">
+        <span className="text-sm font-bold text-text-bright">{t.statsDeleteConfirm}</span>
+        <span className="text-[11px] text-text-dim">{turma}</span>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={() => toast.dismiss(toastObject.id)}
+            className="text-xs font-bold uppercase tracking-widest text-text-dim"
+          >
+            {t.cancel}
+          </button>
+          <button
+            onClick={() => { toast.dismiss(toastObject.id); statistics.deleteDataset(turma); }}
+            className="rounded-lg border px-4 py-1.5 text-xs font-black uppercase tracking-widest"
+            style={{ color: VIZ.critical, borderColor: VIZ.critical }}
+          >
+            {t.confirmDeleteAction}
+          </button>
+        </div>
+      </div>
+    ), { duration: 8000 });
+  };
+
   const importModal = (
     <Modal
       isOpen={showImport}
@@ -87,8 +117,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
         onClose={() => setShowImport(false)}
         onSuccess={async (turma) => {
           await statistics.fetchDatasets(turma);
-          setSelectedTurma(turma);
-          setGroup('data');
+          setSelectedTurmas([turma]);
           setTab('overview');
         }}
       />
@@ -146,15 +175,28 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={selectedTurma}
-            onChange={(e) => { setSelectedTurma(e.target.value); setFocusedStudent(null); }}
-            className="cursor-pointer rounded-lg border border-border-main bg-button px-4 py-2.5 text-xs font-bold text-text-main transition-all hover:border-accent/50 focus:border-accent focus:outline-none"
+          <DatasetSelector
+            datasets={datasets}
+            selected={selectedTurmas}
+            onToggle={(turma) => { toggleTurma(turma); setFocusedStudent(null); }}
+            onSelectOnly={(turma) => { selectOnly(turma); setFocusedStudent(null); }}
+            onSelectAll={() => { selectAll(); setFocusedStudent(null); }}
+            onDelete={confirmDelete}
+            t={t}
+            lang={lang}
+          />
+
+          <button
+            onClick={() => setIgnoreEmptyStudents(!ignoreEmptyStudents)}
+            title={t.statsIgnoreEmptyHint}
+            className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${
+              ignoreEmptyStudents
+                ? 'border-accent bg-accent/10 text-accent'
+                : 'border-border-main bg-button text-text-dim hover:border-accent/50 hover:text-accent'
+            }`}
           >
-            {datasets.map(dataset => (
-              <option key={dataset.turma} value={dataset.turma}>{dataset.turma}</option>
-            ))}
-          </select>
+            <UserX size={14} /> {t.statsIgnoreEmpty}
+          </button>
 
           <button
             onClick={statistics.refresh}
@@ -165,32 +207,12 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
           </button>
 
           <button
-            onClick={() => {
-              toast((toastObject) => (
-                <div className="flex flex-col gap-3">
-                  <span className="text-sm font-bold text-text-bright">{t.statsDeleteConfirm}</span>
-                  <div className="flex justify-end gap-3">
-                    <button
-                      onClick={() => toast.dismiss(toastObject.id)}
-                      className="text-xs font-bold uppercase tracking-widest text-text-dim"
-                    >
-                      {t.cancel}
-                    </button>
-                    <button
-                      onClick={() => { toast.dismiss(toastObject.id); statistics.deleteDataset(selectedTurma); }}
-                      className="rounded-lg border px-4 py-1.5 text-xs font-black uppercase tracking-widest"
-                      style={{ color: VIZ.critical, borderColor: VIZ.critical }}
-                    >
-                      {t.confirmDeleteAction}
-                    </button>
-                  </div>
-                </div>
-              ), { duration: 8000 });
-            }}
-            title={t.statsDelete}
-            className="rounded-lg border border-border-main bg-button p-2.5 text-text-dim transition-all hover:border-red-500/50 hover:text-red-500 active:scale-95"
+            onClick={() => setShowExport(true)}
+            disabled={!metrics}
+            title={t.statsExportTitle}
+            className="flex items-center gap-2 rounded-lg border border-border-main bg-button px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-text-dim transition-all hover:border-accent/50 hover:text-accent active:scale-95 disabled:opacity-40"
           >
-            <Trash2 size={16} />
+            <Download size={14} /> {t.statsExport}
           </button>
 
           <button
@@ -201,6 +223,12 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
           </button>
         </div>
       </header>
+
+      {!selectedTurmas.length && (
+        <div className="rounded-xl border border-dashed border-border-main p-10 text-center text-[11px] font-bold uppercase tracking-widest text-text-dim">
+          {t.statsNoSelection}
+        </div>
+      )}
 
       {metrics && (
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -254,9 +282,42 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
             </nav>
           </div>
 
-          <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim">
-            {t.statsImportedAt}: {formatDateTime(metrics.importedAt, lang)}
-          </span>
+          <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-text-dim">
+            {metrics.combined && (
+              <span className="rounded-full border border-accent/40 px-3 py-1 text-accent">
+                {t.statsCombinedBadge.replace('{count}', String(metrics.turmas.length))}
+              </span>
+            )}
+            <span>{t.statsImportedAt}: {formatDateTime(metrics.importedAt, lang)}</span>
+          </div>
+        </div>
+      )}
+
+      {metrics && metrics.ignoreEmptyStudents && metrics.overview.excludedStudents > 0 && (
+        <div className="rounded-xl border border-border-main bg-panel p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <UserX size={14} style={{ color: VIZ.warning }} />
+            <span className="text-[11px] font-bold text-text-main">
+              {t.statsIgnoredCount.replace('{count}', formatNumber(metrics.overview.excludedStudents))}
+            </span>
+            <button
+              onClick={() => setShowExcluded(previous => !previous)}
+              className="text-[10px] font-black uppercase tracking-widest text-text-dim transition-colors hover:text-accent"
+            >
+              {showExcluded ? t.statsIgnoredHide : t.statsIgnoredShow}
+            </button>
+          </div>
+          {showExcluded && (
+            <ul className="mt-3 grid grid-cols-1 gap-1 text-[11px] text-text-dim sm:grid-cols-2 lg:grid-cols-3">
+              {metrics.excludedStudents.map((student, index) => (
+                <li key={`${student.email || student.name}-${index}`} className="truncate">
+                  • {student.name}
+                  {student.email ? ` · ${student.email}` : ''}
+                  {metrics.combined && student.turmas.length ? ` · ${student.turmas.join(', ')}` : ''}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
@@ -278,14 +339,14 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
         </div>
       )}
 
-      {loading && !metrics && (
+      {loading && !metrics && selectedTurmas.length > 0 && (
         <div className="flex min-h-[40vh] items-center justify-center">
           <Loader2 size={36} className="animate-spin text-accent" />
         </div>
       )}
 
       {metrics && (
-        <div key={`${selectedTurma}-${group}-${tab}`} className="duration-300 animate-in fade-in">
+        <div key={`${metrics.turma}-${group}-${tab}`} className="duration-300 animate-in fade-in">
           {tab === 'overview' && <OverviewPanel metrics={metrics} t={t} />}
           {tab === 'engagement' && <EngagementPanel metrics={metrics} t={t} lang={lang} />}
           {tab === 'questions' && (
@@ -315,16 +376,32 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
           {tab === 'ai' && (
             <AIInsightsPanel metrics={metrics} reports={reports} onReportGenerated={saveReport} t={t} lang={lang} />
           )}
+
           {tab === 'concepts' && <ConceptsPanel metrics={metrics} t={t} />}
           {tab === 'indicators' && <IndicatorsPanel metrics={metrics} t={t} lang={lang} />}
           {tab === 'patterns' && <PatternsPanel metrics={metrics} t={t} lang={lang} />}
           {tab === 'validation' && <ValidationPanel metrics={metrics} t={t} lang={lang} />}
           {tab === 'interventions' && <InterventionsPanel metrics={metrics} t={t} lang={lang} />}
-          {tab === 'export' && <ExportPanel t={t} />}
         </div>
       )}
 
       {importModal}
+
+      <Modal
+        isOpen={showExport}
+        onClose={() => setShowExport(false)}
+        title={t.statsExportTitle}
+        icon={Download}
+        maxWidth="max-w-3xl"
+        maxHeight="max-h-[92vh]"
+      >
+        {/* O recorte exportado é o das métricas em tela, não a seleção que
+            pode estar carregando — exportar algo diferente do que o professor
+            está vendo seria pior que esperar. */}
+        {showExport && metrics && (
+          <StatisticsExportPanel scope={scopeOf(metrics)} t={t} onClose={() => setShowExport(false)} />
+        )}
+      </Modal>
     </div>
   );
 };

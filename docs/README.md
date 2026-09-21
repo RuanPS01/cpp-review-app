@@ -2,7 +2,7 @@
 
 Ferramenta pedagógica desktop para **revisão e correção de código C++** de submissões de alunos, com análise assistida por IA, terminal integrado, execução de casos de teste (estilo VPL) e importação direta do Moodle.
 
-> **Versão:** 2.3.0 · **Plataforma:** Electron (Windows/Linux/macOS) · **Autor:** RuanPS01
+> **Versão:** 2.3.1 · **Plataforma:** Electron (Windows/Linux/macOS) · **Autor:** RuanPS01
 
 ---
 
@@ -27,8 +27,9 @@ Ferramenta pedagógica desktop para **revisão e correção de código C++** de 
 | [Identidade Visual e Estilos](identidade-visual-estilos.md) | Paleta de cores, tipografia, temas, efeitos visuais |
 | [Editor de Código](implementacao-editor-codigo.md) | Implementação do Monaco Editor |
 | [Markdown e HTML](implementacao-markdown-html.md) | Renderização de enunciados |
-| [Estatísticas da Turma](estatisticas.md) | Importação analítica do Moodle, métricas de engajamento e acerto, score de risco, relatórios de IA, gráficos e o submódulo de Análises de Aprendizado (taxonomia de conceitos e domínio conceitual) |
-| [Integração Moodle/VPL](moodle-vpl-integration-guide.md) | Guia de integração com Moodle VPL |
+| [Estatísticas da Turma](estatisticas.md) | Importação analítica do Moodle, várias turmas na mesma visão, métricas de engajamento e acerto, score de risco, relatórios de IA, gráficos, exportação em CSV e o submódulo de Análises de Aprendizado |
+| [Integração Moodle/VPL](moodle-vpl-integration-guide.md) | Guia de integração com Moodle VPL: configuração, token, funções usadas |
+| [**Extração de dados do Moodle**](moodle/README.md) | Análise consolidada de **todos** os caminhos de extração: OpenAPI de cada rota, Web Services função a função, extração por sessão, por arquivos exportados e por acesso direto, limites e privacidade |
 | [Prompt de Importação Moodle](prompt-importacao-moodle-vpl.md) | Referência do prompt/fluxo de importação |
 
 ---
