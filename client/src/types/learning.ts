@@ -223,3 +223,124 @@ export interface ActivitySummary {
   warnings?: string[];
   studentsWithActivity?: number;
 }
+
+// ---------------------------------------------------------------------------
+// Fase 3 — desfecho, planilha do portal e associação
+// ---------------------------------------------------------------------------
+
+export type OutcomeKind = 'finalGrade' | 'failed' | 'dropout';
+export type OutcomeSource = 'academic' | 'professorGrades' | 'manual';
+/** Quanto a fonte do desfecho é independente das notas que geram os indicadores. */
+export type Independence = 'high' | 'partial' | 'low';
+
+export interface OutcomeConfig {
+  version: number;
+  kind: OutcomeKind;
+  source: OutcomeSource;
+  cut: number;
+  /** Peso das atividades VPL na nota final, em %, quando o professor souber. */
+  vplWeight: number | null;
+  periodoLetivo: string | null;
+  manual: Record<string, boolean>;
+  updatedAt: number | null;
+}
+
+export interface OutcomeState {
+  config: OutcomeConfig;
+  defined: number;
+  total: number;
+  available: boolean;
+  independence: Independence;
+  warnings: string[];
+  hasAcademic: boolean;
+  students: { userId: number | null; name: string; value: number | null; marked: boolean }[];
+}
+
+export interface AcademicMatch {
+  rows: number;
+  matched: number;
+  totalStudents: number;
+  matchRate: number;
+  lowMatch: boolean;
+  byIdNumber: number;
+  byEmail: number;
+  byName: number;
+  unmatched: { idNumber: string | null; name: string | null }[];
+  withoutRow: { userId: number | null; name: string }[];
+}
+
+export interface AcademicState {
+  imported: boolean;
+  importedAt?: number;
+  sourceLabel?: string | null;
+  columns?: Record<string, string>;
+  match?: AcademicMatch;
+}
+
+/** Linha já mapeada pelo cliente, pronta para o servidor casar. */
+export interface AcademicRow {
+  idNumber?: string | null;
+  name?: string | null;
+  email?: string | null;
+  finalGrade?: string | number | null;
+  gradeMax?: string | number | null;
+  absences?: string | number | null;
+  attendanceRate?: string | number | null;
+  status?: string | null;
+}
+
+export type AssociationStatus =
+  | 'ok' | 'constant' | 'insufficientVariation' | 'insufficientPairs'
+  | 'insufficientGroup' | 'lowCoverage' | 'indicatorUnavailable'
+  | 'unstable' | 'undefined' | 'tautology';
+
+export type IndicatorFamily = 'independent' | 'partial' | 'shared';
+
+export interface AssociationRow {
+  key: string;
+  dimension: DimensionKey;
+  family: IndicatorFamily;
+  status: AssociationStatus;
+  measure: 'spearman' | 'cliffsDelta';
+  value: number | null;
+  auc: number | null;
+  ci: [number, number] | null;
+  width: number | null;
+  n: number;
+  coverage: number;
+  partialCoverage: boolean;
+  smallSample: boolean;
+  distinct: number;
+  maxTieShare: number;
+  onlyValue: number | null;
+  direction: 'positive' | 'negative' | null;
+  droppedIndicator: number;
+  droppedOutcome: number;
+  groups?: { positive: number; negative: number } | null;
+  resamples: number;
+  /** Pares observados, só quando o cálculo saiu; alimenta a dispersão. */
+  points: { x: number; y: number; label: string }[];
+}
+
+export interface AssociationResult {
+  available: boolean;
+  window: 'full' | 'early';
+  cutoff: number | null;
+  measure: 'spearman' | 'cliffsDelta';
+  outcome: {
+    kind: OutcomeKind;
+    source: OutcomeSource;
+    cut: number;
+    vplWeight: number | null;
+    independence: Independence;
+    defined: number;
+    total: number;
+    binary: boolean;
+  };
+  studentsWithOutcome: number;
+  blocks: { family: IndicatorFamily; indicators: AssociationRow[] }[];
+  thresholds: { minPairs: number; smallSample: number; minCoverage: number; partialCoverage: number };
+  sources: { logs: boolean; participation: boolean; history: boolean; taxonomy: boolean };
+  period: { start: number; end: number } | null;
+  warnings: string[];
+}

@@ -18,4 +18,12 @@ router.post('/learning/activity/collect', learningController.collectActivity);
 router.get('/learning/indicators', learningController.getIndicators);
 router.get('/learning/patterns', learningController.getPatterns);
 
+router.get('/learning/academic', learningController.getAcademic);
+router.post('/learning/academic', learningController.saveAcademic);
+router.post('/learning/academic/preview', learningController.previewAcademic);
+
+router.get('/learning/outcome', learningController.getOutcome);
+router.post('/learning/outcome', learningController.saveOutcome);
+router.get('/learning/association', learningController.getAssociation);
+
 module.exports = router;

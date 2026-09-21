@@ -618,5 +618,7 @@ module.exports = {
   stdDev,
   rate,
   round,
-  RELEVANT_GAIN
+  RELEVANT_GAIN,
+  normalizeKey,
+  loadProfessorGrades
 };

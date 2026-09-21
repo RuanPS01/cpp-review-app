@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { API_BASE } from './api';
 import type {
-  ActivitySummary, IndicatorsResult, MappingRecord, MasteryResult, PatternsResult,
-  QuestionMapping, SuggestionResult, Taxonomy, TaxonomyFile
+  AcademicMatch, AcademicRow, AcademicState, ActivitySummary, AssociationResult,
+  IndicatorsResult, MappingRecord, MasteryResult, OutcomeConfig, OutcomeState,
+  PatternsResult, QuestionMapping, SuggestionResult, Taxonomy, TaxonomyFile
 } from '../types/learning';
 
 export const learningApi = {
@@ -32,5 +33,20 @@ export const learningApi = {
   getIndicators: (turma: string) =>
     axios.get<IndicatorsResult>(`${API_BASE}/learning/indicators`, { params: { turma } }),
   getPatterns: (turma: string) =>
-    axios.get<PatternsResult>(`${API_BASE}/learning/patterns`, { params: { turma } })
+    axios.get<PatternsResult>(`${API_BASE}/learning/patterns`, { params: { turma } }),
+
+  getAcademic: (turma: string) =>
+    axios.get<AcademicState>(`${API_BASE}/learning/academic`, { params: { turma } }),
+  previewAcademic: (turma: string, rows: AcademicRow[]) =>
+    axios.post<AcademicMatch>(`${API_BASE}/learning/academic/preview`, { turma, rows }),
+  saveAcademic: (data: { turma: string; rows: AcademicRow[]; columns: Record<string, string>; sourceLabel?: string }) =>
+    axios.post(`${API_BASE}/learning/academic`, data),
+
+  getOutcome: (turma: string) =>
+    axios.get<OutcomeState>(`${API_BASE}/learning/outcome`, { params: { turma } }),
+  saveOutcome: (turma: string, config: Partial<OutcomeConfig>) =>
+    axios.post<OutcomeConfig>(`${API_BASE}/learning/outcome`, { turma, ...config }),
+
+  getAssociation: (turma: string, window: 'full' | 'early') =>
+    axios.get<AssociationResult>(`${API_BASE}/learning/association`, { params: { turma, window } })
 };

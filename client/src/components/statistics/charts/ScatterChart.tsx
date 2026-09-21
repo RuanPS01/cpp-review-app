@@ -29,9 +29,16 @@ const ScatterChart: React.FC<ScatterChartProps> = ({
   const padding = { top: 18, right: 16, bottom: 40, left: 44 };
   const plotWidth = Math.max(40, width - padding.left - padding.right);
   const plotHeight = height - padding.top - padding.bottom;
-  const xMax = niceMax(Math.max(1, ...points.map(p => p.x)));
 
-  const toX = (value: number) => padding.left + (value / xMax) * plotWidth;
+  // O eixo X começava sempre em zero. Indicadores como o ganho entre a primeira
+  // e a última tentativa são negativos para parte da turma e saíam do gráfico
+  // pela esquerda — sem aviso, o ponto simplesmente não aparecia.
+  const xs = points.map(p => p.x);
+  const rawMin = xs.length ? Math.min(...xs) : 0;
+  const xMin = rawMin < 0 ? -niceMax(-rawMin) : 0;
+  const xMax = niceMax(Math.max(1, ...xs));
+
+  const toX = (value: number) => padding.left + ((value - xMin) / (xMax - xMin)) * plotWidth;
   const toY = (value: number) => padding.top + plotHeight - (value / yMax) * plotHeight;
 
   return (
@@ -47,7 +54,17 @@ const ScatterChart: React.FC<ScatterChartProps> = ({
             </g>
           ))}
 
-          {axisTicks(xMax).map(tick => (
+          {/* Com domínio negativo, a linha do zero é a referência que dá sentido
+              a "ganho negativo"; sem ela o leitor não sabe onde fica o nada. */}
+          {xMin < 0 && (
+            <line
+              x1={toX(0)} x2={toX(0)}
+              y1={padding.top} y2={padding.top + plotHeight}
+              stroke={VIZ.axis} strokeWidth={1}
+            />
+          )}
+
+          {axisTicks(xMax, 4, xMin).map(tick => (
             <text key={`x-${tick}`} x={toX(tick)} y={height - padding.bottom + 14} textAnchor="middle" className="fill-text-dim text-[10px] tabular-nums">
               {tick}
             </text>

@@ -365,4 +365,7 @@ function computeIndicators(dataset, activity, mastery) {
   };
 }
 
-module.exports = { computeIndicators, readTrajectory, trajectories, UNAVAILABLE, DIMENSIONS };
+module.exports = {
+  computeIndicators, readTrajectory, trajectories, percentileOf,
+  UNAVAILABLE, DIMENSIONS
+};

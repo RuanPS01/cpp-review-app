@@ -7,6 +7,9 @@ const { buildTaxonomySuggestionPrompt } = require('./learning.prompts');
 const { collectActivity } = require('./moodleActivity');
 const { computeIndicators } = require('./indicators.service');
 const { detectPatterns } = require('./patterns.service');
+const { buildAcademicRecord } = require('./academic.service');
+const outcomeService = require('./outcome.service');
+const association = require('./association.service');
 
 // ---------------------------------------------------------------------------
 // Taxonomias globais
@@ -226,7 +229,36 @@ function loadContext(turma) {
     : { bound: false, topics: [], students: [] };
 
   const activity = readJsonFile(statisticsPaths(turma).activity, null);
-  return { dataset, mastery, activity };
+  return { dataset, mastery, activity, taxonomy, mapping: stored.mapping };
+}
+
+/**
+ * Contexto de uma janela de observação.
+ *
+ * A janela "início" recorta tudo — submissões, histórico e atividade — até o
+ * primeiro terço do período e **recalcula** indicadores e domínio sobre o
+ * recorte. Recalcular é o ponto: usar o domínio do fim do semestre com a
+ * atividade do começo misturaria dois tempos.
+ */
+function windowedContext(context, window) {
+  if (window !== 'early') {
+    return {
+      indicators: computeIndicators(context.dataset, context.activity, context.mastery),
+      cutoff: null
+    };
+  }
+
+  const full = computeIndicators(context.dataset, context.activity, context.mastery);
+  const cutoff = association.earlyCutoff(full.period);
+  if (!cutoff) return { indicators: full, cutoff: null };
+
+  const dataset = association.truncateDataset(context.dataset, cutoff);
+  const activity = association.truncateActivity(context.activity, cutoff);
+  const mastery = context.taxonomy
+    ? { bound: true, ...computeMastery(dataset, context.taxonomy, context.mapping) }
+    : { bound: false, topics: [], students: [] };
+
+  return { indicators: computeIndicators(dataset, activity, mastery), cutoff };
 }
 
 exports.getActivity = (req, res) => {
@@ -312,5 +344,131 @@ exports.getPatterns = (req, res) => {
   } catch (err) {
     console.error('[learning] Patterns failed:', err);
     res.status(500).json({ error: `Falha ao detectar os padrões: ${err.message}` });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Notas e frequência do portal
+// ---------------------------------------------------------------------------
+
+exports.getAcademic = (req, res) => {
+  const { turma } = req.query;
+  const dataset = readDataset(turma);
+  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
+
+  const record = readJsonFile(statisticsPaths(turma).academic, null);
+  if (!record) return res.json({ imported: false });
+  res.json({
+    imported: true,
+    importedAt: record.importedAt,
+    sourceLabel: record.sourceLabel,
+    columns: record.columns,
+    match: record.match
+  });
+};
+
+exports.saveAcademic = (req, res) => {
+  const { turma, rows, columns, sourceLabel } = req.body;
+  const dataset = readDataset(turma);
+  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
+  if (!Array.isArray(rows) || !rows.length) {
+    return res.status(400).json({ error: 'A planilha não trouxe nenhuma linha.' });
+  }
+
+  try {
+    const record = buildAcademicRecord({ dataset, rows, columns, sourceLabel });
+    writeJsonFile(statisticsPaths(turma).academic, record);
+    res.json({ success: true, importedAt: record.importedAt, match: record.match });
+  } catch (err) {
+    console.error('[learning] Academic import failed:', err);
+    res.status(500).json({ error: `Falha ao importar a planilha: ${err.message}` });
+  }
+};
+
+/** Prévia do casamento, sem gravar nada — o professor confere antes de aceitar. */
+exports.previewAcademic = (req, res) => {
+  const { turma, rows } = req.body;
+  const dataset = readDataset(turma);
+  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
+
+  try {
+    const { match } = require('./academic.service').matchAcademicRows(dataset, rows || []);
+    res.json(match);
+  } catch (err) {
+    res.status(500).json({ error: `Falha ao conferir a planilha: ${err.message}` });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Desfecho e associação
+// ---------------------------------------------------------------------------
+
+exports.getOutcome = (req, res) => {
+  const { turma } = req.query;
+  const dataset = readDataset(turma);
+  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
+
+  const stored = readJsonFile(statisticsPaths(turma).outcome, null);
+  const academic = readJsonFile(statisticsPaths(turma).academic, null);
+  const resolved = outcomeService.resolveOutcome(dataset, stored, academic);
+
+  res.json({
+    config: outcomeService.normalizeConfig(stored),
+    defined: resolved.defined,
+    total: resolved.total,
+    available: resolved.available,
+    independence: resolved.independence,
+    warnings: resolved.warnings,
+    hasAcademic: Boolean(academic),
+    students: (dataset.students || []).map(student => ({
+      userId: student.userId,
+      name: student.name,
+      value: resolved.values.get(String(student.userId ?? student.folderName)) ?? null,
+      marked: resolved.manual[String(student.userId ?? student.folderName)] === true
+    }))
+  });
+};
+
+exports.saveOutcome = (req, res) => {
+  const { turma, ...config } = req.body;
+  const dataset = readDataset(turma);
+  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
+
+  try {
+    const record = { ...outcomeService.normalizeConfig(config), updatedAt: Date.now() };
+    writeJsonFile(statisticsPaths(turma).outcome, record);
+    res.json(record);
+  } catch (err) {
+    res.status(500).json({ error: `Falha ao salvar o desfecho: ${err.message}` });
+  }
+};
+
+exports.getAssociation = (req, res) => {
+  const { turma, window } = req.query;
+  const context = loadContext(turma);
+  if (!context) return res.status(404).json({ error: 'Importação não encontrada.' });
+
+  try {
+    const stored = readJsonFile(statisticsPaths(turma).outcome, null);
+    const academic = readJsonFile(statisticsPaths(turma).academic, null);
+    const outcome = outcomeService.resolveOutcome(context.dataset, stored, academic);
+
+    if (!outcome.available) {
+      return res.json({
+        available: false,
+        outcome: { kind: outcome.kind, source: outcome.source, defined: 0, total: outcome.total },
+        warnings: outcome.warnings,
+        blocks: []
+      });
+    }
+
+    const { indicators, cutoff } = windowedContext(context, window === 'early' ? 'early' : 'full');
+    const result = association.computeAssociation(indicators, outcome, {
+      turma, window: window === 'early' ? 'early' : 'full'
+    });
+    res.json({ available: true, cutoff, ...result });
+  } catch (err) {
+    console.error('[learning] Association failed:', err);
+    res.status(500).json({ error: `Falha ao calcular a associação: ${err.message}` });
   }
 };
