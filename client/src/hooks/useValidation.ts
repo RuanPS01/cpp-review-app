@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { learningApi } from '../services/learning';
 import type {
-  AcademicRow, AcademicState, AssociationResult, OutcomeConfig, OutcomeState
+  AcademicRow, AcademicState, AssociationResult, OutcomeConfig, OutcomeScope
 } from '../types/learning';
 
 /**
@@ -12,9 +12,10 @@ import type {
  * "período inteiro" e "início do período" refaz o cálculo, e é a troca que o
  * professor mais usa — a pergunta útil é o que dava para saber cedo.
  */
-export function useValidation(turma: string) {
+export function useValidation(turmas: string[]) {
+  const scopeId = turmas.join('|');
   const [academic, setAcademic] = useState<AcademicState | null>(null);
-  const [outcome, setOutcome] = useState<OutcomeState | null>(null);
+  const [outcome, setOutcome] = useState<OutcomeScope | null>(null);
   const [association, setAssociation] = useState<AssociationResult | null>(null);
   const [window, setWindow] = useState<'full' | 'early'>('full');
   const [loading, setLoading] = useState(false);
@@ -22,14 +23,14 @@ export function useValidation(turma: string) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (nextWindow: 'full' | 'early' = window) => {
-    if (!turma) return;
+    if (!turmas.length) return;
     setLoading(true);
     setError(null);
     try {
       const [academicRes, outcomeRes, associationRes] = await Promise.all([
-        learningApi.getAcademic(turma),
-        learningApi.getOutcome(turma),
-        learningApi.getAssociation(turma, nextWindow)
+        learningApi.getAcademic(turmas[0]),
+        learningApi.getOutcome(turmas),
+        learningApi.getAssociation(turmas, nextWindow)
       ]);
       setAcademic(academicRes.data);
       setOutcome(outcomeRes.data);
@@ -40,11 +41,12 @@ export function useValidation(turma: string) {
     } finally {
       setLoading(false);
     }
-  }, [turma, window]);
+  }, [scopeId, window]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { load(window); }, [turma, window]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(window); }, [scopeId, window]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const saveOutcome = useCallback(async (config: Partial<OutcomeConfig>) => {
+  /** O desfecho é configurado turma a turma; a associação é que empilha. */
+  const saveOutcome = useCallback(async (turma: string, config: Partial<OutcomeConfig>) => {
     setSaving(true);
     try {
       await learningApi.saveOutcome(turma, config);
@@ -56,9 +58,10 @@ export function useValidation(turma: string) {
     } finally {
       setSaving(false);
     }
-  }, [turma, window, load]);
+  }, [window, load]);
 
   const importAcademic = useCallback(async (
+    turma: string,
     rows: AcademicRow[],
     columns: Record<string, string>,
     sourceLabel?: string
@@ -71,7 +74,7 @@ export function useValidation(turma: string) {
       toast.error(err.response?.data?.error || err.message);
       return null;
     }
-  }, [turma, window, load]);
+  }, [window, load]);
 
   return {
     academic, outcome, association, window,

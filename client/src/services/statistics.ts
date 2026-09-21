@@ -50,6 +50,12 @@ const scopeParams = (scope: StatisticsScope) => ({
   ignoreEmpty: scope.ignoreEmptyStudents ? '1' : '0'
 });
 
+/** O escopo da exportação, que além do recorte carrega se ela vai identificada. */
+const exportParams = (scope: StatisticsScope, pseudonymize = false) => ({
+  ...scopeParams(scope),
+  pseudonymize: pseudonymize ? '1' : '0'
+});
+
 /**
  * Chave do relatório de IA em cache. O escopo faz parte da chave: um
  * diagnóstico de duas turmas juntas não é o diagnóstico de cada uma. A regra é
@@ -123,17 +129,17 @@ export const statisticsApi = {
     axios.get<ExportManifest>(`${API_BASE}/statistics/export/manifest`, { params: scopeParams(scope) }),
 
   /** Um CSV único de uma tabela. */
-  exportCsv: (scope: StatisticsScope, table: string) =>
+  exportCsv: (scope: StatisticsScope, table: string, pseudonymize = false) =>
     axios.get(`${API_BASE}/statistics/export`, {
-      params: { ...scopeParams(scope), tables: table, bundle: 'csv' },
+      params: { ...exportParams(scope, pseudonymize), tables: table, bundle: 'csv' },
       responseType: 'blob'
     }),
 
   /** ZIP com as tabelas escolhidas e, opcionalmente, os markdowns de apoio. */
-  exportZip: (scope: StatisticsScope, tables: string[], includeDocs = true) =>
+  exportZip: (scope: StatisticsScope, tables: string[], includeDocs = true, pseudonymize = false) =>
     axios.get(`${API_BASE}/statistics/export`, {
       params: {
-        ...scopeParams(scope),
+        ...exportParams(scope, pseudonymize),
         tables: tables.join(','),
         bundle: 'zip',
         docs: includeDocs ? '1' : '0'

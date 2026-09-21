@@ -33,7 +33,8 @@ router.delete('/learning/interventions/:id', learningController.deleteInterventi
 
 router.post('/learning/socratic', learningController.buildSocratic);
 
-router.get('/learning/export/turmas', learningController.listExportTurmas);
-router.post('/learning/export', learningController.exportPackage);
+// A exportação vive na de estatísticas: as tabelas de aprendizado entram lá
+// como um grupo, reusando o mesmo CSV, ZIP, guia e dicionário. Dois botões de
+// exportar que se sobrepõem seriam pior que um só.
 
 module.exports = router;

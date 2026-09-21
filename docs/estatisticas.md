@@ -260,7 +260,7 @@ estatisticas_{turmas}_{AAAAMMDD-HHMM}.zip
 | `correlation.js` | Postos médios, Spearman, delta de Cliff, bootstrap com semente |
 | `association.service.js` | Famílias, cobertura, janela de início, as recusas |
 | `interventions.service.js` | Registro com retrato e grupo de comparação |
-| `consolidation.service.js` | O `.zip` autodescrito |
+| `scope.js` | Resolve a seleção de turmas: o que combina e o que fica por turma |
 | `learning.prompts.js` | Prompt da sugestão de mapeamento |
 
 ### Rotas
@@ -346,7 +346,41 @@ A Fase 1 entrega a sub-aba **Conceitos**: sem mapear questão a conceito, os dad
 
 A Fase 2 entrega as sub-abas **Indicadores** e **Padrões**, mais a coleta dos logs do Moodle: o domínio conceitual diz *em qual conceito* o aluno tem lacuna, e os indicadores dizem *como ele estuda*.
 
-As Fases 3 e 4 fecham o ciclo: **Validação** confronta os indicadores com um desfecho real, **Intervenções** registra o que o professor fez depois do alerta, e **Exportação** consolida tudo numa base longitudinal autodescrita.
+As Fases 3 e 4 fecham o ciclo: **Validação** confronta os indicadores com um desfecho real e **Intervenções** registra o que o professor fez depois do alerta. As tabelas de aprendizado entram na exportação em CSV como um grupo próprio.
+
+### Com várias turmas selecionadas
+
+A regra que organiza o submódulo inteiro: **o que depende do período letivo é calculado por turma.**
+
+Engajamento e regularidade dividem por semanas do período, e o período sai do `min(startDate)`/`max(dueDate)` das questões. Somar três semestres faria o período ir de 10 para 61 semanas: um aluno que cursou só um deles apareceria com um terço das semanas ativas e meses de silêncio — artefato da agregação, não fato sobre o aluno.
+
+| Sub-aba | Com várias turmas |
+|---|---|
+| **Conceitos** | **Combinado.** Domínio é proporção de acerto ponderada e não divide por tempo, então juntar só aumenta a evidência por conceito — que é o que falta com 2 a 4 questões por conceito |
+| **Indicadores** | **Por turma, empilhados**, com coluna de turma. O percentil continua sendo posição entre os colegas da própria turma |
+| **Padrões** | **Por turma**, com seletor. Os limiares saem da distribuição de cada turma (a mediana do ganho, o quartil de silêncio), então cartões de turmas diferentes não são comparáveis lado a lado |
+| **Validação** | **Pares empilhados.** Com 40 alunos quase todo indicador cai no inconclusivo; juntar semestres é o que tira a análise desse território. O `n` de cada turma fica visível na coluna de pares |
+| **Intervenções** | **Por turma**, empilhadas com coluna de turma — o retrato de baseline aponta para a importação de uma turma |
+
+Duas recusas explícitas:
+
+- **Taxonomias diferentes entre as turmas** → o domínio conceitual não é calculado, e a tela lista quem usa o quê. Dois conceitos com o mesmo código podem ter sido definidos de formas distintas; somá-los produziria um número que não significa nada. O botão de vincular aplica a mesma taxonomia a toda a seleção, e o reaproveitamento por `cmid` faz a mesma prova de dois semestres chegar já mapeada.
+- **Desfechos de tipos ou fontes diferentes** → a associação não empilha. Nota final de um lado e reprovação do outro não são a mesma variável.
+
+E um aviso que não é recusa: quando o mesmo aluno aparece em mais de uma turma da seleção, as duas passagens entram como observações separadas — que é o que elas são — mas não são independentes entre si, e a tela diz isso.
+
+### As tabelas de aprendizado na exportação
+
+Em vez de uma segunda tela de exportação, as tabelas entram na declaração de `statistics.export.js` como o grupo `learning`, reusando o mesmo CSV, ZIP, guia e dicionário:
+
+| Arquivo | Grão |
+|---|---|
+| `learning_indicators.csv` | turma × aluno — 17 indicadores, 5 escores, desfecho e nota do portal |
+| `learning_concepts.csv` | aluno × conceito, em formato longo |
+| `learning_access.csv` | turma × aluno × dia de acesso ao Moodle (presença, não entrega — diferente de `student_daily_activity.csv`, que conta envios) |
+| `learning_interventions.csv` | uma por intervenção, com o antes e o depois |
+
+Junto veio a **pseudonimização**, que passou a valer para as 29 tabelas e não só para as novas: nome, e-mail e matrícula saem, e o identificador do aluno vira um hash com sal guardado em `{DATA_DIR}/export-salt.txt`, fora do pacote. O mesmo aluno mantém o mesmo id entre exportações, então a ligação longitudinal sobrevive. Um pacote que se diz anônimo e traz o nome do aluno em uma das tabelas é pior que um pacote identificado, porque promete o que não cumpre.
 
 ### Taxonomia: global, mapeamento por turma
 
@@ -509,19 +543,17 @@ Decisões que fazem o pacote servir para o que promete:
 | POST | `/api/learning/taxonomy` | Salva o mapeamento |
 | POST | `/api/learning/taxonomy/bind` | Vincula a taxonomia e herda o mapeamento por `cmid` |
 | POST | `/api/learning/taxonomy/suggest` | Sugestão por IA (não persiste) |
-| GET | `/api/learning/mastery?turma=` | Domínio conceitual calculado |
+| GET | `/api/learning/mastery?turmas=` | Domínio conceitual combinado (ou a recusa por taxonomias divergentes) |
 | GET | `/api/learning/activity?turma=` | Resumo do que foi coletado (e a origem para reabrir o Moodle) |
 | POST | `/api/learning/activity/collect` | Coleta logs e participação (progresso via Socket.IO) |
-| GET | `/api/learning/indicators?turma=` | Cinco dimensões por aluno |
-| GET | `/api/learning/patterns?turma=` | Padrões detectados, com os limiares em uso |
+| GET | `/api/learning/indicators?turmas=` | Cinco dimensões por aluno, por turma |
+| GET | `/api/learning/patterns?turmas=` | Padrões detectados por turma, com os limiares de cada uma |
 | GET / POST | `/api/learning/academic` | Planilha do portal (`POST /academic/preview` confere antes) |
 | GET / POST | `/api/learning/outcome` | Definição do desfecho |
-| GET | `/api/learning/association?turma=&window=` | Associação indicador × desfecho |
+| GET | `/api/learning/association?turmas=&window=` | Associação com os pares de todas as turmas empilhados |
 | GET / POST | `/api/learning/interventions` | Registro com retrato e acompanhamento |
 | PATCH / DELETE | `/api/learning/interventions/:id` | Situação, anotação, remoção |
 | POST | `/api/learning/socratic` | Pacote socrático |
-| GET | `/api/learning/export/turmas` | Turmas disponíveis para a base |
-| POST | `/api/learning/export` | Devolve o `.zip` consolidado |
 
 ### Arquivos-irmão do dataset
 

@@ -166,10 +166,18 @@ const PatternCard: React.FC<{
 };
 
 const PatternsPanel: React.FC<PatternsPanelProps> = ({ metrics, t, lang }) => {
-  const insights = useLearningInsights(metrics.turma);
-  const patterns = insights.patterns;
+  const insights = useLearningInsights(metrics.turmas);
+  const scope = insights.patterns;
 
-  if (insights.loading && !patterns) {
+  // Um seletor em vez de empilhar: os limiares de cada padrão saem da
+  // distribuição da própria turma (a mediana do ganho, o quartil de silêncio),
+  // então cartões de turmas diferentes não são comparáveis lado a lado — e
+  // sete cartões vezes três turmas não se lê.
+  const [turma, setTurma] = useState<string | null>(null);
+  const current = (scope?.byTurma || []).find(entry => entry.turma === turma) || scope?.byTurma?.[0] || null;
+  const patterns = current;
+
+  if (insights.loading && !scope) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <Loader2 size={36} className="animate-spin text-accent" />
@@ -193,11 +201,31 @@ const PatternsPanel: React.FC<PatternsPanelProps> = ({ metrics, t, lang }) => {
         </div>
       )}
 
+      {scope && scope.combined && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-text-dim">{t.learnTurmaColumn}</span>
+          {scope.byTurma.map(entry => (
+            <button
+              key={entry.turma}
+              onClick={() => setTurma(entry.turma)}
+              className={`rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                current?.turma === entry.turma
+                  ? 'border-accent bg-accent text-black'
+                  : 'border-border-main bg-button text-text-dim hover:border-accent/50 hover:text-accent'
+              }`}
+            >
+              {entry.turma}
+            </button>
+          ))}
+        </div>
+      )}
+
       <LearningSourcesBar
         t={t}
         lang={lang}
-        activity={insights.activity}
         sources={insights.indicators?.sources || null}
+        sourcesPartial={insights.indicators?.sourcesPartial || null}
+        perTurma={insights.activity?.perTurma || []}
         collecting={insights.collecting}
         progress={insights.progress}
         onCollect={() => insights.collectLogs({ noOrigin: t.learnNoOrigin, noSession: t.cookieInstructions })}

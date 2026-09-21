@@ -28,8 +28,11 @@ function masteryLabel(mastery: number | null, t: Record<string, string>) {
 }
 
 const ConceptsPanel: React.FC<ConceptsPanelProps> = ({ metrics, t }) => {
-  const learning = useLearning(metrics.turma, true);
+  const learning = useLearning(metrics.turmas, true);
   const [query, setQuery] = useState('');
+  // O mapeamento é de uma turma por vez: questões homônimas de semestres
+  // diferentes podem ter enunciados diferentes. O domínio é que combina.
+  const [mappingTurma, setMappingTurma] = useState<string | null>(null);
 
   const mastery: MasteryResult | null = learning.mastery;
   const statusLabels: Record<TopicStatus, string> = {
@@ -39,10 +42,15 @@ const ConceptsPanel: React.FC<ConceptsPanelProps> = ({ metrics, t }) => {
     insufficient: t.learnInsufficient
   };
 
+  const activeTurma = mappingTurma || learning.mapping?.perTurma?.[0]?.turma || metrics.turmas[0];
+  const turmaMapping = useMemo(
+    () => learning.mapping?.perTurma.find(item => item.turma === activeTurma) || null,
+    [learning.mapping, activeTurma]
+  );
   const questions = useMemo(
-    () => (learning.mapping?.questions
+    () => (turmaMapping?.questions
       || metrics.questions.map(q => ({ key: q.key, name: q.name, section: q.section }))),
-    [learning.mapping?.questions, metrics.questions]
+    [turmaMapping, metrics.questions]
   );
 
   const filteredStudents = useMemo(() => {
@@ -95,16 +103,61 @@ const ConceptsPanel: React.FC<ConceptsPanelProps> = ({ metrics, t }) => {
         </div>
       )}
 
+      {/* Taxonomias diferentes entre as turmas selecionadas: o domínio não é
+          comparável, e somar conceitos de códigos iguais definidos de formas
+          distintas produziria um número que não significa nada. */}
+      {mastery?.conflict && (
+        <div className="rounded-xl border p-4" style={{ borderColor: VIZ.critical }}>
+          <div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest" style={{ color: VIZ.critical }}>
+            <AlertTriangle size={12} /> {t.learnTaxonomyConflict}
+          </div>
+          <p className="text-[11px] leading-relaxed text-text-dim">{t.learnTaxonomyConflictHint}</p>
+          <ul className="mt-2 space-y-0.5 text-[11px] text-text-dim">
+            {mastery.conflict.map(item => (
+              <li key={item.turma}>• {item.turma} → <span className="font-mono">{item.taxonomyId}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(mastery?.unboundTurmas?.length ?? 0) > 0 && (
+        <div className="rounded-xl border p-4" style={{ borderColor: VIZ.warning }}>
+          <p className="text-[11px] leading-tight text-text-dim">
+            {t.learnUnboundTurmas.replace('{turmas}', (mastery!.unboundTurmas || []).join(', '))}
+          </p>
+        </div>
+      )}
+
+      {metrics.turmas.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-text-dim">{t.learnMappingOf}</span>
+          {metrics.turmas.map(item => (
+            <button
+              key={item}
+              onClick={() => setMappingTurma(item)}
+              className={`rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                activeTurma === item
+                  ? 'border-accent bg-accent text-black'
+                  : 'border-border-main bg-button text-text-dim hover:border-accent/50 hover:text-accent'
+              }`}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+      )}
+
       <TopicMappingSection
         t={t}
         taxonomies={learning.taxonomies}
-        mapping={learning.mapping}
+        mapping={turmaMapping}
+        turmaCount={metrics.turmas.length}
         suggestion={learning.suggestion}
         suggesting={learning.suggesting}
         questions={questions}
         onBind={learning.bindTaxonomy}
-        onSave={learning.saveMapping}
-        onSuggest={learning.requestSuggestion}
+        onSave={(next, reviewed) => learning.saveMapping(activeTurma, next, reviewed)}
+        onSuggest={() => learning.requestSuggestion(activeTurma)}
         onDismissSuggestion={() => learning.setSuggestion(null)}
       />
 

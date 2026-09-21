@@ -35,9 +35,10 @@ function readWidth(width: number | null, t: Record<string, string>) {
 const IndicatorRow: React.FC<{
   row: AssociationRow;
   t: Record<string, string>;
+  combined: boolean;
   selected: boolean;
   onSelect: () => void;
-}> = ({ row, t, selected, onSelect }) => {
+}> = ({ row, t, combined, selected, onSelect }) => {
   const width = readWidth(row.width, t);
   const measurable = row.status === 'ok';
   // Quando o intervalo é largo demais, o ponto some: exibi-lo daria a um
@@ -75,18 +76,31 @@ const IndicatorRow: React.FC<{
             ? t.valStatusConstant.replace('{value}', formatNumber(row.onlyValue, 1))
             : t[`valStatus_${row.status}`] || row.status}
       </td>
-      <td className="py-2 text-right text-[10px] tabular-nums text-text-dim">{row.n}</td>
+      <td className="py-2 text-right text-[10px] tabular-nums text-text-dim">
+        {row.n}
+        {/* Quanto cada turma contribuiu: um coeficiente sustentado por uma
+            turma só não é um achado da disciplina, é um achado daquela turma. */}
+        {combined && Object.keys(row.byTurma || {}).length > 0 && (
+          <div className="mt-0.5 text-[9px] leading-tight text-text-dim/70">
+            {Object.entries(row.byTurma).map(([turma, count]) => `${turma}: ${count}`).join(' · ')}
+          </div>
+        )}
+      </td>
     </tr>
   );
 };
 
 const ValidationPanel: React.FC<ValidationPanelProps> = ({ metrics, t, lang }) => {
-  const validation = useValidation(metrics.turma);
+  const validation = useValidation(metrics.turmas);
+  // O desfecho é configurado turma a turma; a associação é que empilha os pares.
+  const [configTurma, setConfigTurma] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
 
   const { association, outcome, academic } = validation;
-  const config = outcome?.config;
+  const activeTurma = configTurma || outcome?.perTurma?.[0]?.turma || metrics.turmas[0];
+  const turmaOutcome = outcome?.perTurma.find(item => item.turma === activeTurma) || null;
+  const config = turmaOutcome?.config;
 
   const selectedRow: AssociationRow | null = useMemo(() => {
     if (!association?.blocks) return null;
@@ -96,7 +110,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ metrics, t, lang }) =
 
   const update = (patch: Record<string, unknown>) => {
     if (!config) return;
-    validation.saveOutcome({ ...config, ...patch });
+    validation.saveOutcome(activeTurma, { ...config, ...patch });
   };
 
   if (validation.loading && !association) {
@@ -128,8 +142,28 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ metrics, t, lang }) =
           >
             <FileSpreadsheet size={14} />
             {academic?.imported ? t.valReimportSheet : t.valImportSheet}
+            {metrics.turmas.length > 1 ? ` · ${activeTurma}` : ''}
           </button>
         </div>
+
+        {metrics.turmas.length > 1 && (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-text-dim">{t.valConfigOf}</span>
+            {metrics.turmas.map(item => (
+              <button
+                key={item}
+                onClick={() => setConfigTurma(item)}
+                className={`rounded-lg border px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                  activeTurma === item
+                    ? 'border-accent bg-accent text-black'
+                    : 'border-border-main bg-button text-text-dim hover:border-accent/50 hover:text-accent'
+                }`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        )}
 
         {config && (
           <div className="mt-4 grid gap-3 lg:grid-cols-4">
@@ -268,6 +302,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ metrics, t, lang }) =
                           key={row.key}
                           row={row}
                           t={t}
+                          combined={metrics.turmas.length > 1}
                           selected={selected === row.key}
                           onSelect={() => setSelected(selected === row.key ? null : row.key)}
                         />
@@ -305,9 +340,10 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ metrics, t, lang }) =
       <AcademicImportModal
         isOpen={showImport}
         onClose={() => setShowImport(false)}
-        turma={metrics.turma}
+        turma={activeTurma}
         t={t}
-        onImported={validation.importAcademic}
+        onImported={(rows, columns, label) =>
+          validation.importAcademic(activeTurma, rows, columns, label)}
       />
     </div>
   );

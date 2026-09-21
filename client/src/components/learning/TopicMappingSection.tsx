@@ -4,14 +4,16 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
-  MappingRecord, QuestionMapping, SuggestionResult, Taxonomy, TopicWeight
+  QuestionMapping, SuggestionResult, Taxonomy, TopicWeight
 } from '../../types/learning';
 import { VIZ } from '../statistics/charts/chartTheme';
 
 interface TopicMappingSectionProps {
   t: Record<string, string>;
   taxonomies: Taxonomy[];
-  mapping: MappingRecord | null;
+  mapping: { turma: string; taxonomyId: string | null; mapping: QuestionMapping } | null;
+  /** Quantas turmas a seleção tem — o vínculo vale para todas elas de uma vez. */
+  turmaCount?: number;
   suggestion: SuggestionResult | null;
   suggesting: boolean;
   questions: { key: string; name: string; section: string | null }[];
@@ -30,7 +32,7 @@ const WEIGHT_NEXT: Record<string, TopicWeight> = { '1': 0.5, '0.5': 1 };
  * justificativa ao lado, e só entra no mapeamento quando o professor aceita.
  */
 const TopicMappingSection: React.FC<TopicMappingSectionProps> = ({
-  t, taxonomies, mapping, suggestion, suggesting, questions,
+  t, taxonomies, mapping, turmaCount = 1, suggestion, suggesting, questions,
   onBind, onSave, onSuggest, onDismissSuggestion
 }) => {
   const [draft, setDraft] = useState<QuestionMapping | null>(null);
@@ -108,7 +110,11 @@ const TopicMappingSection: React.FC<TopicMappingSectionProps> = ({
           </div>
           <div>
             <h3 className="text-xs font-black uppercase tracking-widest text-text-bright">{t.learnMappingTitle}</h3>
-            <p className="mt-1 max-w-2xl text-[11px] leading-tight text-text-dim">{t.learnMappingDesc}</p>
+            <p className="mt-1 max-w-2xl text-[11px] leading-tight text-text-dim">
+              {t.learnMappingDesc}
+              {/* O vínculo vale para a seleção inteira; o mapeamento, não. */}
+              {turmaCount > 1 && ` ${t.learnBindAppliesToAll.replace('{count}', String(turmaCount))}`}
+            </p>
           </div>
         </div>
 
@@ -152,9 +158,6 @@ const TopicMappingSection: React.FC<TopicMappingSectionProps> = ({
         <>
           <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-text-dim">
             <span>{t.learnMappedCount.replace('{done}', String(mappedCount)).replace('{total}', String(questions.length))}</span>
-            {mapping?.reusedFrom?.length ? (
-              <span style={{ color: VIZ.good }}>{t.learnReusedFrom.replace('{turmas}', mapping.reusedFrom.join(', '))}</span>
-            ) : null}
             {isDirty && <span style={{ color: VIZ.warning }}>{t.learnUnsaved}</span>}
           </div>
 

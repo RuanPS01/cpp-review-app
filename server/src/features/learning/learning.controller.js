@@ -11,8 +11,30 @@ const { buildAcademicRecord } = require('./academic.service');
 const outcomeService = require('./outcome.service');
 const association = require('./association.service');
 const interventions = require('./interventions.service');
-const consolidation = require('./consolidation.service');
 const { buildSocraticPackagePrompt, SOCRATIC_RULES } = require('./learning.prompts');
+const { parseTurmas } = require('../statistics/statistics.selection');
+const scopeService = require('./scope');
+
+/**
+ * Resolve a seleção da requisição, já respondendo o erro quando não há nada.
+ * Devolve `null` nesse caso, para o handler só precisar de um `if`.
+ */
+function resolveScope(req, res, source) {
+  const turmas = parseTurmas(source);
+  if (!turmas.length) {
+    res.status(400).json({ error: 'Informe ao menos uma importação de estatísticas.' });
+    return null;
+  }
+  const scope = scopeService.loadScope(turmas);
+  if (!scope) {
+    res.status(404).json({ error: `Importação não encontrada: ${turmas.join(', ')}` });
+    return null;
+  }
+  return scope;
+}
+
+/** Identificador estável do recorte, usado como semente do bootstrap. */
+const scopeId = (turmas) => [...turmas].sort().join(' + ');
 
 // ---------------------------------------------------------------------------
 // Taxonomias globais
@@ -48,15 +70,21 @@ exports.deleteTaxonomy = (req, res) => {
 // ---------------------------------------------------------------------------
 
 exports.getMapping = (req, res) => {
-  const { turma } = req.query;
-  const dataset = readDataset(turma);
-  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
+  const scope = resolveScope(req, res, req.query);
+  if (!scope) return;
 
-  const stored = taxonomyService.readMapping(turma);
+  // O mapeamento é por turma mesmo com várias selecionadas: uma questão de
+  // 2025/2 e outra de 2026/1 podem ter enunciados diferentes sob o mesmo nome.
   res.json({
-    ...stored,
-    questions: (dataset.questions || []).map(q => ({
-      key: q.key, name: q.name, section: q.section || null, cmid: q.cmid
+    turmas: scope.turmas,
+    combined: scope.combined,
+    perTurma: scope.contexts.map(context => ({
+      turma: context.turma,
+      taxonomyId: context.taxonomyId,
+      mapping: context.mapping,
+      questions: (context.dataset.questions || []).map(question => ({
+        key: question.key, name: question.name, section: question.section || null, cmid: question.cmid
+      }))
     }))
   });
 };
@@ -88,26 +116,33 @@ exports.saveMapping = (req, res) => {
  * para as mesmas atividades VPL.
  */
 exports.bindTaxonomy = (req, res) => {
-  const { turma, taxonomyId } = req.body;
-  const dataset = readDataset(turma);
-  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
+  const { taxonomyId } = req.body;
+  const scope = resolveScope(req, res, req.body);
+  if (!scope) return;
 
   const taxonomy = taxonomyService.getTaxonomy(taxonomyId);
   if (!taxonomy) return res.status(400).json({ error: 'Taxonomia não encontrada.' });
 
   try {
-    const previous = taxonomyService.readMapping(turma);
-    const inherited = previous.taxonomyId === taxonomyId
-      ? { mapping: previous.mapping, reusedFrom: [] }
-      : taxonomyService.inheritMappingByCmid(dataset, taxonomyId);
+    // Vincular a seleção inteira de uma vez é o que resolve, pela tela, o caso
+    // em que turmas diferentes apontam para taxonomias diferentes — e o
+    // reaproveitamento por `cmid` faz a mesma prova de dois semestres chegar já
+    // mapeada.
+    const records = scope.contexts.map(context => {
+      const previous = taxonomyService.readMapping(context.turma);
+      const inherited = previous.taxonomyId === taxonomyId
+        ? { mapping: previous.mapping, reusedFrom: [] }
+        : taxonomyService.inheritMappingByCmid(context.dataset, taxonomyId);
 
-    const record = taxonomyService.writeMapping(turma, {
-      ...previous,
-      taxonomyId,
-      mapping: taxonomyService.normalizeMapping(inherited.mapping, taxonomy)
+      const record = taxonomyService.writeMapping(context.turma, {
+        ...previous,
+        taxonomyId,
+        mapping: taxonomyService.normalizeMapping(inherited.mapping, taxonomy)
+      });
+      return { turma: context.turma, ...record, reusedFrom: inherited.reusedFrom };
     });
 
-    res.json({ ...record, reusedFrom: inherited.reusedFrom });
+    res.json({ turmas: scope.turmas, perTurma: records });
   } catch (err) {
     res.status(500).json({ error: `Falha ao vincular a taxonomia: ${err.message}` });
   }
@@ -189,27 +224,13 @@ exports.suggestMapping = async (req, res) => {
 // ---------------------------------------------------------------------------
 
 exports.getMastery = (req, res) => {
-  const { turma } = req.query;
-  const dataset = readDataset(turma);
-  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
-
-  const stored = taxonomyService.readMapping(turma);
-  if (!stored.taxonomyId) {
-    return res.json({ bound: false, taxonomyId: null, topics: [], students: [], coverage: null });
-  }
-
-  const taxonomy = taxonomyService.getTaxonomy(stored.taxonomyId);
-  if (!taxonomy) {
-    return res.json({
-      bound: false,
-      taxonomyId: stored.taxonomyId,
-      error: 'A taxonomia vinculada a esta turma não existe mais.',
-      topics: [], students: [], coverage: null
-    });
-  }
+  const scope = resolveScope(req, res, req.query);
+  if (!scope) return;
 
   try {
-    res.json({ bound: true, ...computeMastery(dataset, taxonomy, stored.mapping) });
+    // Domínio conceitual é o único cálculo do módulo que não divide por tempo,
+    // então juntar turmas aqui só aumenta a evidência por conceito.
+    res.json({ turmas: scope.turmas, combined: scope.combined, ...scopeService.scopeMastery(scope) });
   } catch (err) {
     console.error('[learning] Mastery failed:', err);
     res.status(500).json({ error: `Falha ao calcular o domínio conceitual: ${err.message}` });
@@ -220,40 +241,17 @@ exports.getMastery = (req, res) => {
 // Atividade (logs do Moodle)
 // ---------------------------------------------------------------------------
 
-/** Carrega o que as três camadas precisam: dataset, domínio e atividade. */
-function loadContext(turma) {
-  const dataset = readDataset(turma);
-  if (!dataset) return null;
-
-  const stored = taxonomyService.readMapping(turma);
-  const taxonomy = stored.taxonomyId ? taxonomyService.getTaxonomy(stored.taxonomyId) : null;
-  const mastery = taxonomy
-    ? { bound: true, ...computeMastery(dataset, taxonomy, stored.mapping) }
-    : { bound: false, topics: [], students: [] };
-
-  const activity = readJsonFile(statisticsPaths(turma).activity, null);
-  return { dataset, mastery, activity, taxonomy, mapping: stored.mapping };
-}
-
 /**
- * Contexto de uma janela de observação.
+ * Recorta uma turma até uma data e recalcula tudo sobre o recorte.
  *
- * A janela "início" recorta tudo — submissões, histórico e atividade — até o
- * primeiro terço do período e **recalcula** indicadores e domínio sobre o
- * recorte. Recalcular é o ponto: usar o domínio do fim do semestre com a
- * atividade do começo misturaria dois tempos.
+ * A janela "início do período" é o que impede a evasão de ser tautológica — e é
+ * também a pergunta útil: o que dava para saber cedo.
  */
 function windowedContext(context, window) {
-  if (window !== 'early') {
-    return {
-      indicators: computeIndicators(context.dataset, context.activity, context.mastery),
-      cutoff: null
-    };
-  }
+  if (window !== 'early') return { indicators: context.indicators, cutoff: null };
 
-  const full = computeIndicators(context.dataset, context.activity, context.mastery);
-  const cutoff = association.earlyCutoff(full.period);
-  if (!cutoff) return { indicators: full, cutoff: null };
+  const cutoff = association.earlyCutoff(context.indicators.period);
+  if (!cutoff) return { indicators: context.indicators, cutoff: null };
 
   const dataset = association.truncateDataset(context.dataset, cutoff);
   const activity = association.truncateActivity(context.activity, cutoff);
@@ -265,24 +263,29 @@ function windowedContext(context, window) {
 }
 
 exports.getActivity = (req, res) => {
-  const { turma } = req.query;
-  const dataset = readDataset(turma);
-  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
+  const scope = resolveScope(req, res, req.query);
+  if (!scope) return;
 
-  // A tela precisa do endereço e do id do curso para abrir o login do Moodle
-  // sem pedir de novo o que a importação já guardou.
-  const origin = { baseUrl: dataset.baseUrl || null, courseId: dataset.courseId ?? null };
-
-  const activity = readJsonFile(statisticsPaths(turma).activity, null);
-  if (!activity) return res.json({ collected: false, ...origin });
   res.json({
-    collected: true,
-    ...origin,
-    collectedAt: activity.collectedAt,
-    sources: activity.sources,
-    logRows: activity.logRows,
-    warnings: activity.warnings || [],
-    studentsWithActivity: Object.keys(activity.byStudent || {}).length
+    turmas: scope.turmas,
+    perTurma: scope.contexts.map(context => {
+      const activity = context.activity;
+      const origin = {
+        turma: context.turma,
+        baseUrl: context.dataset.baseUrl || null,
+        courseId: context.dataset.courseId ?? null
+      };
+      if (!activity) return { ...origin, collected: false };
+      return {
+        ...origin,
+        collected: true,
+        collectedAt: activity.collectedAt,
+        sources: activity.sources,
+        logRows: activity.logRows,
+        warnings: activity.warnings || [],
+        studentsWithActivity: Object.keys(activity.byStudent || {}).length
+      };
+    })
   });
 };
 
@@ -326,11 +329,22 @@ exports.collectActivity = async (req, res) => {
 // ---------------------------------------------------------------------------
 
 exports.getIndicators = (req, res) => {
-  const context = loadContext(req.query.turma);
-  if (!context) return res.status(404).json({ error: 'Importação não encontrada.' });
+  const scope = resolveScope(req, res, req.query);
+  if (!scope) return;
 
   try {
-    res.json(computeIndicators(context.dataset, context.activity, context.mastery));
+    // Calculado por turma de propósito: engajamento e regularidade dividem por
+    // semanas do período, e somar semestres faria um aluno de um semestre só
+    // parecer meses em silêncio.
+    res.json({
+      turmas: scope.turmas,
+      combined: scope.combined,
+      ...scopeService.scopeSources(scope),
+      byTurma: scope.contexts.map(context => ({
+        turma: context.turma,
+        ...context.indicators
+      }))
+    });
   } catch (err) {
     console.error('[learning] Indicators failed:', err);
     res.status(500).json({ error: `Falha ao calcular os indicadores: ${err.message}` });
@@ -338,12 +352,21 @@ exports.getIndicators = (req, res) => {
 };
 
 exports.getPatterns = (req, res) => {
-  const context = loadContext(req.query.turma);
-  if (!context) return res.status(404).json({ error: 'Importação não encontrada.' });
+  const scope = resolveScope(req, res, req.query);
+  if (!scope) return;
 
   try {
-    const indicators = computeIndicators(context.dataset, context.activity, context.mastery);
-    res.json(detectPatterns(context.dataset, indicators, context.mastery, context.activity));
+    res.json({
+      turmas: scope.turmas,
+      combined: scope.combined,
+      byTurma: scope.contexts.map(context => ({
+        turma: context.turma,
+        // Os limiares saem da distribuição da própria turma — misturar
+        // semestres para calcular a mediana do ganho mudaria o critério de
+        // cada aluno conforme quem mais está selecionado na tela.
+        ...detectPatterns(context.dataset, context.indicators, context.mastery, context.activity)
+      }))
+    });
   } catch (err) {
     console.error('[learning] Patterns failed:', err);
     res.status(500).json({ error: `Falha ao detectar os padrões: ${err.message}` });
@@ -407,28 +430,34 @@ exports.previewAcademic = (req, res) => {
 // ---------------------------------------------------------------------------
 
 exports.getOutcome = (req, res) => {
-  const { turma } = req.query;
-  const dataset = readDataset(turma);
-  if (!dataset) return res.status(404).json({ error: 'Importação não encontrada.' });
+  const scope = resolveScope(req, res, req.query);
+  if (!scope) return;
 
-  const stored = readJsonFile(statisticsPaths(turma).outcome, null);
-  const academic = readJsonFile(statisticsPaths(turma).academic, null);
-  const resolved = outcomeService.resolveOutcome(dataset, stored, academic);
-
+  const consolidated = scopeService.scopeOutcome(scope);
   res.json({
-    config: outcomeService.normalizeConfig(stored),
-    defined: resolved.defined,
-    total: resolved.total,
-    available: resolved.available,
-    independence: resolved.independence,
-    warnings: resolved.warnings,
-    hasAcademic: Boolean(academic),
-    students: (dataset.students || []).map(student => ({
-      userId: student.userId,
-      name: student.name,
-      value: resolved.values.get(String(student.userId ?? student.folderName)) ?? null,
-      marked: resolved.manual[String(student.userId ?? student.folderName)] === true
-    }))
+    turmas: scope.turmas,
+    combined: scope.combined,
+    available: consolidated.available,
+    mismatch: consolidated.mismatch || null,
+    kind: consolidated.kind ?? null,
+    source: consolidated.source ?? null,
+    independence: consolidated.independence ?? null,
+    defined: consolidated.defined ?? 0,
+    total: consolidated.total ?? 0,
+    warnings: consolidated.warnings,
+    perTurma: scope.contexts.map(context => {
+      const resolved = outcomeService.resolveOutcome(context.dataset, context.outcomeConfig, context.academic);
+      return {
+        turma: context.turma,
+        config: outcomeService.normalizeConfig(context.outcomeConfig),
+        defined: resolved.defined,
+        total: resolved.total,
+        available: resolved.available,
+        independence: resolved.independence,
+        hasAcademic: Boolean(context.academic),
+        warnings: resolved.warnings
+      };
+    })
   });
 };
 
@@ -447,29 +476,43 @@ exports.saveOutcome = (req, res) => {
 };
 
 exports.getAssociation = (req, res) => {
-  const { turma, window } = req.query;
-  const context = loadContext(turma);
-  if (!context) return res.status(404).json({ error: 'Importação não encontrada.' });
+  const scope = resolveScope(req, res, req.query);
+  if (!scope) return;
+  const window = req.query.window === 'early' ? 'early' : 'full';
 
   try {
-    const stored = readJsonFile(statisticsPaths(turma).outcome, null);
-    const academic = readJsonFile(statisticsPaths(turma).academic, null);
-    const outcome = outcomeService.resolveOutcome(context.dataset, stored, academic);
-
-    if (!outcome.available) {
+    const consolidated = scopeService.scopeOutcome(scope);
+    if (!consolidated.available) {
       return res.json({
         available: false,
-        outcome: { kind: outcome.kind, source: outcome.source, defined: 0, total: outcome.total },
-        warnings: outcome.warnings,
+        turmas: scope.turmas,
+        mismatch: consolidated.mismatch || null,
+        warnings: consolidated.warnings,
         blocks: []
       });
     }
 
-    const { indicators, cutoff } = windowedContext(context, window === 'early' ? 'early' : 'full');
-    const result = association.computeAssociation(indicators, outcome, {
-      turma, window: window === 'early' ? 'early' : 'full'
+    // Uma fonte por turma: os indicadores vêm do período da própria turma, e só
+    // os **pares** é que são empilhados.
+    const withOutcome = new Set(consolidated.perTurma.map(entry => entry.turma));
+    const sources = scope.contexts
+      .filter(context => withOutcome.has(context.turma))
+      .map(context => {
+        const { indicators, cutoff } = windowedContext(context, window);
+        const outcome = consolidated.perTurma.find(entry => entry.turma === context.turma).outcome;
+        return { turma: context.turma, indicators, values: outcome.values, cutoff };
+      });
+
+    const result = association.computeAssociation(sources, consolidated, {
+      scopeId: scopeId(scope.turmas), window
     });
-    res.json({ available: true, cutoff, ...result });
+
+    res.json({
+      available: true,
+      cutoff: sources[0]?.cutoff ?? null,
+      ...scopeService.scopeSources(scope),
+      ...result
+    });
   } catch (err) {
     console.error('[learning] Association failed:', err);
     res.status(500).json({ error: `Falha ao calcular a associação: ${err.message}` });
@@ -484,19 +527,29 @@ const readRegistry = (turma) =>
   readJsonFile(statisticsPaths(turma).interventions, interventions.emptyRegistry());
 
 exports.getInterventions = (req, res) => {
-  const { turma } = req.query;
-  const context = loadContext(turma);
-  if (!context) return res.status(404).json({ error: 'Importação não encontrada.' });
+  const scope = resolveScope(req, res, req.query);
+  if (!scope) return;
 
   try {
-    const registry = readRegistry(turma);
-    const followup = interventions.computeFollowup(context.dataset, registry);
+    // O registro é por turma, porque o retrato de baseline aponta para a
+    // importação daquela turma. A tela empilha com a coluna de turma.
+    const perTurma = scope.contexts.map(context => {
+      const registry = readRegistry(context.turma);
+      return {
+        turma: context.turma,
+        importedAt: context.dataset.importedAt,
+        entries: (registry.entries || []).map(entry => ({ ...entry, turma: context.turma })),
+        followup: interventions.computeFollowup(context.dataset, registry)
+      };
+    });
+
     res.json({
-      entries: registry.entries || [],
-      followup,
+      turmas: scope.turmas,
+      combined: scope.combined,
+      perTurma,
+      entries: perTurma.flatMap(item => item.entries),
       actions: interventions.ACTIONS,
-      statuses: interventions.STATUSES,
-      importedAt: context.dataset.importedAt
+      statuses: interventions.STATUSES
     });
   } catch (err) {
     console.error('[learning] Interventions failed:', err);
@@ -506,16 +559,15 @@ exports.getInterventions = (req, res) => {
 
 exports.addIntervention = (req, res) => {
   const { turma, ...entry } = req.body;
-  const context = loadContext(turma);
+  const context = scopeService.loadTurmaContext(turma);
   if (!context) return res.status(404).json({ error: 'Importação não encontrada.' });
   if (entry.userId === undefined || entry.userId === null) {
     return res.status(400).json({ error: 'A intervenção precisa de um aluno.' });
   }
 
   try {
-    const indicators = computeIndicators(context.dataset, context.activity, context.mastery);
     const next = interventions.addEntry(readRegistry(turma), {
-      dataset: context.dataset, indicators, mastery: context.mastery, entry
+      dataset: context.dataset, indicators: context.indicators, mastery: context.mastery, entry
     });
     writeJsonFile(statisticsPaths(turma).interventions, next);
     res.json({ success: true, entries: next.entries });
@@ -557,7 +609,7 @@ exports.deleteIntervention = (req, res) => {
 
 exports.buildSocratic = async (req, res) => {
   const { turma, userId, questionKey, topicCode, lang } = req.body;
-  const context = loadContext(turma);
+  const context = scopeService.loadTurmaContext(turma);
   if (!context) return res.status(404).json({ error: 'Importação não encontrada.' });
 
   const dataset = context.dataset;
@@ -612,35 +664,3 @@ exports.buildSocratic = async (req, res) => {
   }
 };
 
-// ---------------------------------------------------------------------------
-// Base consolidada
-// ---------------------------------------------------------------------------
-
-exports.listExportTurmas = (req, res) => {
-  try {
-    res.json({ turmas: consolidation.listTurmas(), schemaVersion: consolidation.SCHEMA_VERSION });
-  } catch (err) {
-    res.status(500).json({ error: `Falha ao listar as turmas: ${err.message}` });
-  }
-};
-
-exports.exportPackage = (req, res) => {
-  const { turmas, pseudonymize } = req.body;
-  if (!Array.isArray(turmas) || !turmas.length) {
-    return res.status(400).json({ error: 'Escolha ao menos uma turma.' });
-  }
-
-  try {
-    const { buffer, summary } = consolidation.buildZip({
-      turmas, pseudonymize: pseudonymize !== false
-    });
-    const stamp = new Date().toISOString().slice(0, 10);
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="analises-aprendizado_${stamp}.zip"`);
-    res.setHeader('X-Export-Summary', encodeURIComponent(JSON.stringify(summary)));
-    res.send(buffer);
-  } catch (err) {
-    console.error('[learning] Export failed:', err);
-    res.status(500).json({ error: `Falha ao montar o pacote: ${err.message}` });
-  }
-};

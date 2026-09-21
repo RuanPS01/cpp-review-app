@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ChevronLeft, Info, Loader2, Search } from 'lucide-react';
 import type { StatisticsMetrics } from '../../types/statistics';
-import type { DimensionKey, Indicator, StudentIndicators } from '../../types/learning';
+import type { DimensionKey, Indicator } from '../../types/learning';
 import { useLearningInsights } from '../../hooks/useLearningInsights';
 import ChartCard from '../statistics/charts/ChartCard';
 import LineChart from '../statistics/charts/LineChart';
@@ -77,13 +77,22 @@ const ScoreBar: React.FC<{ score: { value: number | null; available: boolean }; 
 };
 
 const IndicatorsPanel: React.FC<IndicatorsPanelProps> = ({ metrics, t, lang }) => {
-  const insights = useLearningInsights(metrics.turma);
+  const insights = useLearningInsights(metrics.turmas);
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [curveKey, setCurveKey] = useState<string | null>(null);
 
   const indicators = insights.indicators;
-  const students = indicators?.students || [];
+
+  // Empilhado por turma: os indicadores de cada uma são calculados dentro do
+  // período dela, e o percentil é posição entre os colegas da própria turma.
+  // Uma linha por aluno **por turma** — quem repetiu a disciplina aparece duas
+  // vezes, que é o que aconteceu.
+  const students = useMemo(
+    () => (indicators?.byTurma || []).flatMap(entry =>
+      (entry.students || []).map(student => ({ ...student, turma: entry.turma }))),
+    [indicators]
+  );
 
   const dimensionLabels: Record<DimensionKey, string> = {
     engagement: t.learnDimEngagement,
@@ -101,15 +110,18 @@ const IndicatorsPanel: React.FC<IndicatorsPanelProps> = ({ metrics, t, lang }) =
       .some(field => String(field).toLowerCase().includes(normalized)));
   }, [students, query]);
 
-  const selected: StudentIndicators | null = useMemo(
-    () => students.find(student => String(student.userId ?? student.folderName) === selectedId) || null,
+  const selected = useMemo(
+    () => students.find(student => `${student.turma}::${student.userId ?? student.folderName}` === selectedId) || null,
     [students, selectedId]
   );
 
-  // Mediana da turma por número da tentativa: o pano de fundo da curva do aluno.
+  // Mediana por número de tentativa — da **própria turma** do aluno aberto, não
+  // da seleção inteira: comparar um aluno de 2025/2 com a mediana de três
+  // semestres misturados compararia coisas diferentes.
   const classCurve = useMemo(() => {
     const columns: number[][] = [];
-    students.forEach(student => student.trajectories.forEach(path => {
+    const cohort = selected ? students.filter(item => item.turma === selected.turma) : students;
+    cohort.forEach(student => student.trajectories.forEach(path => {
       path.percents.forEach((percent, index) => {
         if (!columns[index]) columns[index] = [];
         columns[index].push(percent);
@@ -120,7 +132,7 @@ const IndicatorsPanel: React.FC<IndicatorsPanelProps> = ({ metrics, t, lang }) =
       const middle = Math.floor(sorted.length / 2);
       return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
     });
-  }, [students]);
+  }, [students, selected]);
 
   const curve = useMemo(() => {
     if (!selected?.trajectories.length) return null;
@@ -146,8 +158,9 @@ const IndicatorsPanel: React.FC<IndicatorsPanelProps> = ({ metrics, t, lang }) =
       <LearningSourcesBar
         t={t}
         lang={lang}
-        activity={insights.activity}
         sources={indicators?.sources || null}
+        sourcesPartial={indicators?.sourcesPartial || null}
+        perTurma={insights.activity?.perTurma || []}
         collecting={insights.collecting}
         progress={insights.progress}
         onCollect={() => insights.collectLogs({ noOrigin: t.learnNoOrigin, noSession: t.cookieInstructions })}
@@ -178,6 +191,7 @@ const IndicatorsPanel: React.FC<IndicatorsPanelProps> = ({ metrics, t, lang }) =
               <thead className="border-b border-border-main text-[10px] font-black uppercase tracking-widest text-text-dim">
                 <tr>
                   <th className="py-2">{t.learnStudentColumn}</th>
+                  {indicators && indicators.combined && <th className="py-2 pr-4">{t.learnTurmaColumn}</th>}
                   {DIMENSION_ORDER.map(dimension => (
                     <th key={dimension} className="py-2">{dimensionLabels[dimension]}</th>
                   ))}
@@ -186,14 +200,17 @@ const IndicatorsPanel: React.FC<IndicatorsPanelProps> = ({ metrics, t, lang }) =
               <tbody className="divide-y divide-border-main/50">
                 {filtered.map(student => (
                   <tr
-                    key={String(student.userId ?? student.folderName)}
+                    key={`${student.turma}::${student.userId ?? student.folderName}`}
                     onClick={() => {
-                      setSelectedId(String(student.userId ?? student.folderName));
+                      setSelectedId(`${student.turma}::${student.userId ?? student.folderName}`);
                       setCurveKey(null);
                     }}
                     className="cursor-pointer transition-colors hover:bg-button"
                   >
                     <td className="py-2 pr-4 font-bold text-text-main">{student.name}</td>
+                    {indicators && indicators.combined && (
+                      <td className="py-2 pr-4 text-[10px] text-text-dim">{student.turma}</td>
+                    )}
                     {DIMENSION_ORDER.map(dimension => (
                       <td key={dimension} className="py-2 pr-4">
                         <ScoreBar score={student.scores[dimension]} label={dimensionLabels[dimension]} />
@@ -216,7 +233,9 @@ const IndicatorsPanel: React.FC<IndicatorsPanelProps> = ({ metrics, t, lang }) =
 
           <div className="rounded-xl border border-border-main bg-panel p-5">
             <h3 className="text-lg font-black uppercase tracking-tighter text-text-bright">{selected.name}</h3>
-            {selected.email && <p className="text-[11px] text-text-dim">{selected.email}</p>}
+            <p className="text-[11px] text-text-dim">
+              {selected.turma}{selected.email ? ` · ${selected.email}` : ''}
+            </p>
             <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
               {DIMENSION_ORDER.map(dimension => (
                 <div key={dimension} className="rounded-lg border border-border-main bg-button p-3">

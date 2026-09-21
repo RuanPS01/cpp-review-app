@@ -16,9 +16,12 @@
 //    p-valor pela porta dos fundos. A incerteza se lê pela largura.
 
 const { DIMENSIONS } = require('./indicators.service');
+const { studentKey } = require('../statistics/statistics.service');
 const { associate, intervalWidth, MIN_PAIRS, SMALL_SAMPLE } = require('./correlation');
 
 /** Fração do período letivo que a janela "início" cobre. */
+const studentKeyOf = (row) => studentKey(row);
+
 const EARLY_WINDOW_SHARE = 1 / 3;
 /** Abaixo desta cobertura, o número descreve um subgrupo pequeno demais. */
 const MIN_COVERAGE = 0.34;
@@ -152,11 +155,19 @@ function earlyCutoff(period) {
 // ---------------------------------------------------------------------------
 
 /**
- * @param {object} indicators saída de computeIndicators (da janela escolhida)
- * @param {object} outcome    saída de resolveOutcome
- * @param {object} options    { turma, window }
+ * @param {object[]} sources  uma entrada por turma: { turma, indicators, values }
+ *                            — `indicators` é a saída de `computeIndicators` da
+ *                            própria turma, `values` o desfecho por aluno dela
+ * @param {object} outcome    o desfecho consolidado (tipo, fonte, corte)
+ * @param {object} options    { scopeId, window }
+ *
+ * Os pares de todas as turmas entram **na mesma conta**: com 40 alunos por
+ * turma, quase todo indicador cairia no "inconclusivo", e empilhar semestres é o
+ * que tira a análise desse território. O que fica visível é o `n` de cada turma,
+ * porque um coeficiente sustentado por uma turma só não é um achado da
+ * disciplina — é um achado daquela turma.
  */
-function computeAssociation(indicators, outcome, { turma, window = 'full' } = {}) {
+function computeAssociation(sources, outcome, { scopeId, window = 'full' } = {}) {
   const warnings = [...(outcome.warnings || [])];
 
   // A tautologia da evasão: recusar é mais honesto do que exibir com ressalva.
@@ -168,11 +179,26 @@ function computeAssociation(indicators, outcome, { turma, window = 'full' } = {}
     );
   }
 
-  const rows = indicators.students || [];
-  const studentsWithOutcome = rows.filter(row => {
-    const value = outcome.values.get(String(row.userId ?? row.folderName));
-    return value !== null && value !== undefined;
-  }).length;
+  // Uma linha por aluno **por turma**: o mesmo aluno em dois semestres são duas
+  // observações de dois períodos, não uma medida repetida a ser mediada.
+  const rows = sources.flatMap(source => (source.indicators.students || [])
+    .map(row => ({ ...row, turma: source.turma, outcome: source.values.get(studentKeyOf(row)) })));
+
+  const studentsWithOutcome = rows.filter(row => row.outcome !== null && row.outcome !== undefined).length;
+
+  const repeated = new Map();
+  rows.forEach(row => {
+    const identity = row.email || row.folderName || row.name;
+    if (identity) repeated.set(identity, (repeated.get(identity) || 0) + 1);
+  });
+  const repeatedCount = [...repeated.values()].filter(count => count > 1).length;
+  if (repeatedCount) {
+    warnings.push(
+      `${repeatedCount} aluno(s) aparecem em mais de uma turma da seleção. `
+      + 'As duas passagens entram como observações separadas, que é o que elas são — '
+      + 'mas não são independentes entre si.'
+    );
+  }
 
   const results = [];
 
@@ -180,17 +206,19 @@ function computeAssociation(indicators, outcome, { turma, window = 'full' } = {}
     const keys = Object.keys(rows[0]?.dimensions?.[dimension] || {});
     keys.forEach(key => {
       const pairs = [];
+      const byTurma = {};
       let droppedIndicator = 0;
       let droppedOutcome = 0;
 
       rows.forEach(row => {
         const indicator = row.dimensions[dimension][key];
-        const target = outcome.values.get(String(row.userId ?? row.folderName));
+        const target = row.outcome;
         const hasOutcome = target !== null && target !== undefined;
         const hasIndicator = indicator?.available && indicator.value !== null;
 
         if (!hasOutcome) { droppedOutcome += 1; return; }
         if (!hasIndicator) { droppedIndicator += 1; return; }
+        byTurma[row.turma] = (byTurma[row.turma] || 0) + 1;
         // O nome viaja junto para a dispersão: ver que três pontos carregam o
         // coeficiente inteiro é o antídoto mais barato contra ler r como lei.
         pairs.push({ x: indicator.value, y: target, label: row.name });
@@ -203,6 +231,7 @@ function computeAssociation(indicators, outcome, { turma, window = 'full' } = {}
         dimension,
         family,
         coverage: Math.round(coverage * 1000) / 10,
+        byTurma,
         partialCoverage: coverage < PARTIAL_COVERAGE,
         droppedIndicator,
         droppedOutcome,
@@ -233,7 +262,7 @@ function computeAssociation(indicators, outcome, { turma, window = 'full' } = {}
         // Semente estável: o mesmo indicador da mesma turma devolve o mesmo
         // intervalo em toda recarga. Intervalo que dança a cada F5 destrói a
         // confiança mais rápido do que intervalo largo.
-        seed: `${turma}|${key}|${outcome.kind}|${outcome.source}|${window}|${pairs.length}`
+        seed: `${scopeId}|${key}|${outcome.kind}|${outcome.source}|${window}|${pairs.length}`
       });
 
       results.push({
@@ -276,8 +305,7 @@ function computeAssociation(indicators, outcome, { turma, window = 'full' } = {}
       minCoverage: Math.round(MIN_COVERAGE * 100),
       partialCoverage: Math.round(PARTIAL_COVERAGE * 100)
     },
-    sources: indicators.sources,
-    period: indicators.period,
+    turmas: sources.map(source => source.turma),
     warnings
   };
 }

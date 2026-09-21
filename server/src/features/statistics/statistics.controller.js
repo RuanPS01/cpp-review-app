@@ -10,6 +10,7 @@ const { computeMetrics, mergeDatasets, hasAnyRecord, studentKey } = require('./s
 const statisticsExport = require('./statistics.export');
 const { buildPrompt, REPORT_KINDS } = require('./statistics.prompts');
 const { runPrompt, readSettings } = require('../ai/ai.service');
+const { parseTurmas, parseFlag, parseIdList, loadDatasets } = require('./statistics.selection');
 const {
   sanitizeTurma, statisticsPaths, isDatasetFile, readDataset, readJsonFile
 } = require('./statistics.paths');
@@ -434,50 +435,6 @@ exports.importMoodle = async (req, res) => {
 // ---------------------------------------------------------------------------
 
 /**
- * Lê a seleção de turmas de uma query ou de um corpo de requisição. Aceita um
- * array (corpo JSON), um JSON serializado (`["A","B"]`, usado nos GETs) ou um
- * nome único. Nomes de turma podem conter vírgula, então não há separador
- * implícito — a lista sempre chega explícita.
- */
-function parseTurmas(source) {
-  const raw = source?.turmas ?? source?.turma;
-  if (raw === undefined || raw === null || raw === '') return [];
-
-  let list;
-  if (Array.isArray(raw)) {
-    list = raw;
-  } else {
-    const text = String(raw).trim();
-    if (text.startsWith('[')) {
-      try { list = JSON.parse(text); } catch (err) { list = [text]; }
-    } else {
-      list = [text];
-    }
-  }
-
-  return [...new Set((Array.isArray(list) ? list : [list]).map(value => String(value).trim()).filter(Boolean))];
-}
-
-const parseFlag = (value) => value === true || value === 'true' || value === '1';
-
-/** Ids de tabela são slugs, então aqui a vírgula é um separador seguro. */
-const parseIdList = (value) => String(value || '')
-  .split(',')
-  .map(item => item.trim())
-  .filter(Boolean);
-
-function loadDatasets(turmas) {
-  const datasets = [];
-  const missing = [];
-  turmas.forEach(turma => {
-    const dataset = readDataset(turma);
-    if (dataset) datasets.push(dataset);
-    else missing.push(turma);
-  });
-  return { datasets, missing };
-}
-
-/**
  * Resolve a seleção de uma requisição em datasets carregados. Devolve `null`
  * (já tendo respondido o erro) quando não há nada para calcular.
  */
@@ -498,7 +455,13 @@ function resolveSelection(req, res, source) {
     turmas: datasets.map(dataset => dataset.turma),
     datasets,
     missing,
-    options: { ignoreEmptyStudents: parseFlag(source.ignoreEmpty) }
+    options: {
+      ignoreEmptyStudents: parseFlag(source.ignoreEmpty),
+      // Pseudonimizar troca as colunas de identidade por um hash com sal em
+      // **todas** as tabelas. Um pacote que se diz anônimo e traz o nome do
+      // aluno em uma delas é pior que um pacote identificado.
+      pseudonymize: parseFlag(source.pseudonymize)
+    }
   };
 }
 
@@ -604,6 +567,7 @@ exports.exportManifest = (req, res) => {
     res.json({
       turmas: selection.turmas,
       ignoreEmptyStudents: selection.options.ignoreEmptyStudents,
+      pseudonymize: selection.options.pseudonymize,
       studentCount: context.metrics.overview.totalStudents,
       excludedStudentCount: context.metrics.overview.excludedStudents,
       questionCount: context.metrics.overview.totalQuestions,

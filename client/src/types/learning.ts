@@ -107,6 +107,12 @@ export interface TopicMastery {
 
 export interface MasteryResult {
   bound: boolean;
+  turmas?: string[];
+  combined?: boolean;
+  /** Turmas vinculadas a taxonomias diferentes: o domínio não é comparável. */
+  conflict?: { turma: string; taxonomyId: string }[];
+  /** Turmas da seleção que ainda não vincularam taxonomia nenhuma. */
+  unboundTurmas?: string[];
   taxonomyId: string | null;
   taxonomyName?: string | null;
   error?: string;
@@ -316,6 +322,9 @@ export interface AssociationRow {
   direction: 'positive' | 'negative' | null;
   droppedIndicator: number;
   droppedOutcome: number;
+  /** Quantos pares cada turma contribuiu — um coeficiente sustentado por uma
+   *  turma só não é um achado da disciplina. */
+  byTurma: Record<string, number>;
   groups?: { positive: number; negative: number } | null;
   resamples: number;
   /** Pares observados, só quando o cálculo saiu; alimenta a dispersão. */
@@ -341,7 +350,9 @@ export interface AssociationResult {
   blocks: { family: IndicatorFamily; indicators: AssociationRow[] }[];
   thresholds: { minPairs: number; smallSample: number; minCoverage: number; partialCoverage: number };
   sources: { logs: boolean; participation: boolean; history: boolean; taxonomy: boolean };
-  period: { start: number; end: number } | null;
+  sourcesPartial?: { logs: boolean; participation: boolean; history: boolean; taxonomy: boolean };
+  turmas: string[];
+  mismatch?: { turma: string; kind: OutcomeKind; source: OutcomeSource }[] | null;
   warnings: string[];
 }
 
@@ -355,6 +366,8 @@ export type InterventionStatus = 'planned' | 'done' | 'abandoned';
 
 export interface Intervention {
   id: string;
+  /** A turma em que o registro vive — o retrato de baseline é da importação dela. */
+  turma?: string;
   userId: number;
   name: string | null;
   createdAt: number;
@@ -383,20 +396,29 @@ export interface FollowupGroup {
   comparison: { n: number; meanBefore: number | null; meanAfter: number | null; meanDelta: number | null };
 }
 
+export interface Followup {
+  available: boolean;
+  reason: string | null;
+  groups: FollowupGroup[];
+  entries: (Intervention & {
+    movement: { before: number; after: number; delta: number } | null;
+    stale: boolean;
+  })[];
+}
+
 export interface InterventionsState {
+  turmas: string[];
+  combined: boolean;
+  /** O registro é por turma: o retrato de baseline aponta para a importação dela. */
+  perTurma: {
+    turma: string;
+    importedAt: number;
+    entries: Intervention[];
+    followup: Followup;
+  }[];
   entries: Intervention[];
-  followup: {
-    available: boolean;
-    reason: string | null;
-    groups: FollowupGroup[];
-    entries: (Intervention & {
-      movement: { before: number; after: number; delta: number } | null;
-      stale: boolean;
-    })[];
-  };
   actions: InterventionAction[];
   statuses: InterventionStatus[];
-  importedAt: number;
 }
 
 export interface SocraticPackage {
@@ -417,8 +439,75 @@ export interface SocraticPackage {
   generatedAt: number;
 }
 
-export interface ExportSummary {
-  turmas: { turma: string; alunos: number }[];
-  rowCounts: Record<string, number>;
+// ---------------------------------------------------------------------------
+// Escopo — a seleção pode ter várias turmas
+// ---------------------------------------------------------------------------
+
+/**
+ * O que depende do período letivo vem **por turma**: engajamento e regularidade
+ * dividem por semanas, e somar semestres faria um aluno de um semestre só
+ * parecer meses em silêncio. Domínio conceitual, que não divide por tempo, vem
+ * combinado.
+ */
+export interface IndicatorsScope {
+  turmas: string[];
+  combined: boolean;
+  sources: { logs: boolean; participation: boolean; history: boolean; taxonomy: boolean };
+  sourcesPartial: { logs: boolean; participation: boolean; history: boolean; taxonomy: boolean };
+  byTurma: (IndicatorsResult & { turma: string })[];
+}
+
+export interface PatternsScope {
+  turmas: string[];
+  combined: boolean;
+  byTurma: (PatternsResult & { turma: string })[];
+}
+
+export interface MappingScope {
+  turmas: string[];
+  combined: boolean;
+  perTurma: {
+    turma: string;
+    taxonomyId: string | null;
+    mapping: QuestionMapping;
+    questions: { key: string; name: string; section: string | null; cmid: number }[];
+  }[];
+}
+
+export interface BindResult {
+  turmas: string[];
+  perTurma: (MappingRecord & { turma: string; reusedFrom: string[] })[];
+}
+
+export interface ActivityScope {
+  turmas: string[];
+  perTurma: (ActivitySummary & { turma: string })[];
+}
+
+export interface TurmaActivity extends ActivitySummary {
+  turma: string;
+}
+
+export interface OutcomeScope {
+  turmas: string[];
+  combined: boolean;
+  available: boolean;
+  /** Turmas medindo desfechos diferentes: empilhar não faria sentido. */
+  mismatch: { turma: string; kind: OutcomeKind; source: OutcomeSource }[] | null;
+  kind: OutcomeKind | null;
+  source: OutcomeSource | null;
+  independence: Independence | null;
+  defined: number;
+  total: number;
   warnings: string[];
+  perTurma: {
+    turma: string;
+    config: OutcomeConfig;
+    defined: number;
+    total: number;
+    available: boolean;
+    independence: Independence;
+    hasAcademic: boolean;
+    warnings: string[];
+  }[];
 }

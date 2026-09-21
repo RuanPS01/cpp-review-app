@@ -22,20 +22,25 @@ const InterventionsPanel: React.FC<InterventionsPanelProps> = ({ metrics, t, lan
   const [state, setState] = useState<InterventionsState | null>(null);
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [socraticFor, setSocraticFor] = useState<{ userId: number; name: string } | null>(null);
-  const [draft, setDraft] = useState({ userId: '', action: 'individualContact' as InterventionAction, note: '' });
+  const [socraticFor, setSocraticFor] = useState<{ userId: number; name: string; turma: string } | null>(null);
+  const [draft, setDraft] = useState({
+    turma: metrics.turmas[0] || '',
+    userId: '',
+    action: 'individualContact' as InterventionAction,
+    note: ''
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await learningApi.getInterventions(metrics.turma);
+      const response = await learningApi.getInterventions(metrics.turmas);
       setState(response.data);
     } catch (err: any) {
       toast.error(err.response?.data?.error || err.message);
     } finally {
       setLoading(false);
     }
-  }, [metrics.turma]);
+  }, [metrics.turmas.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
 
@@ -44,13 +49,15 @@ const InterventionsPanel: React.FC<InterventionsPanelProps> = ({ metrics, t, lan
     setAdding(true);
     try {
       const student = metrics.students.find(item => String(item.userId) === draft.userId);
-      await learningApi.addIntervention(metrics.turma, {
+      // O retrato de baseline aponta para a importação de uma turma, então a
+      // intervenção é registrada nela — não na seleção.
+      await learningApi.addIntervention(draft.turma, {
         userId: Number(draft.userId),
         name: student?.name || null,
         action: draft.action,
         note: draft.note
       } as Partial<Intervention>);
-      setDraft({ userId: '', action: 'individualContact', note: '' });
+      setDraft({ ...draft, userId: '', note: '' });
       await load();
       toast.success(t.intSaved);
     } catch (err: any) {
@@ -62,7 +69,7 @@ const InterventionsPanel: React.FC<InterventionsPanelProps> = ({ metrics, t, lan
 
   const remove = async (id: string) => {
     try {
-      await learningApi.deleteIntervention(metrics.turma, id);
+      await learningApi.deleteIntervention(turmaOf(id), id);
       await load();
     } catch (err: any) {
       toast.error(err.response?.data?.error || err.message);
@@ -71,12 +78,16 @@ const InterventionsPanel: React.FC<InterventionsPanelProps> = ({ metrics, t, lan
 
   const changeStatus = async (id: string, status: string) => {
     try {
-      await learningApi.updateIntervention(metrics.turma, id, { status });
+      await learningApi.updateIntervention(turmaOf(id), id, { status });
       await load();
     } catch (err: any) {
       toast.error(err.response?.data?.error || err.message);
     }
   };
+
+  /** De qual turma é o registro — a rota grava no arquivo-irmão daquela turma. */
+  const turmaOf = (id: string) =>
+    (state?.entries || []).find(entry => entry.id === id)?.turma || metrics.turmas[0] || '';
 
   const sortedStudents = useMemo(
     () => [...metrics.students].sort((a, b) => a.name.localeCompare(b.name)),
@@ -91,8 +102,6 @@ const InterventionsPanel: React.FC<InterventionsPanelProps> = ({ metrics, t, lan
     );
   }
 
-  const followup = state?.followup;
-
   return (
     <div className="space-y-6">
       {/* --- Registrar ----------------------------------------------------- */}
@@ -101,6 +110,15 @@ const InterventionsPanel: React.FC<InterventionsPanelProps> = ({ metrics, t, lan
         <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-text-dim">{t.intNewHint}</p>
 
         <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_auto]">
+          {metrics.turmas.length > 1 && (
+            <select
+              value={draft.turma}
+              onChange={(event) => setDraft({ ...draft, turma: event.target.value })}
+              className="cursor-pointer rounded-lg border border-border-main bg-input px-3 py-2 text-[11px] text-text-main focus:border-accent focus:outline-none lg:col-span-4"
+            >
+              {metrics.turmas.map(item => <option key={item} value={item}>{item}</option>)}
+            </select>
+          )}
           <select
             value={draft.userId}
             onChange={(event) => setDraft({ ...draft, userId: event.target.value })}
@@ -142,7 +160,7 @@ const InterventionsPanel: React.FC<InterventionsPanelProps> = ({ metrics, t, lan
       </div>
 
       {/* --- Acompanhamento ------------------------------------------------ */}
-      {(followup?.groups.length ?? 0) > 0 && (
+      {(state?.perTurma || []).some(item => item.followup.groups.length > 0) && (
         <ChartCard title={t.intFollowupTitle} subtitle={t.intFollowupSub}>
           <p className="mb-4 flex items-start gap-2 rounded-lg border p-3 text-[11px] leading-relaxed text-text-dim" style={{ borderColor: VIZ.warning }}>
             <AlertTriangle size={12} className="mt-0.5 shrink-0" style={{ color: VIZ.warning }} />
@@ -150,9 +168,12 @@ const InterventionsPanel: React.FC<InterventionsPanelProps> = ({ metrics, t, lan
           </p>
 
           <div className="space-y-4">
-            {followup!.groups.map(group => (
-              <div key={group.snapshotId} className="rounded-lg border border-border-main p-4">
+            {(state?.perTurma || []).flatMap(item =>
+              item.followup.groups.map(group => ({ ...group, turma: item.turma }))
+            ).map(group => (
+              <div key={`${group.turma}::${group.snapshotId}`} className="rounded-lg border border-border-main p-4">
                 <div className="mb-3 text-[10px] font-black uppercase tracking-widest text-text-dim">
+                  {metrics.turmas.length > 1 ? `${group.turma} · ` : ''}
                   {t.intBaselineOf.replace('{date}', formatDate(group.snapshotAt, lang))}
                 </div>
 
@@ -201,6 +222,7 @@ const InterventionsPanel: React.FC<InterventionsPanelProps> = ({ metrics, t, lan
             <thead className="border-b border-border-main text-[10px] font-black uppercase tracking-widest text-text-dim">
               <tr>
                 <th className="py-2">{t.learnStudentColumn}</th>
+                {metrics.turmas.length > 1 && <th className="py-2 pr-4">{t.learnTurmaColumn}</th>}
                 <th className="py-2">{t.intAction}</th>
                 <th className="py-2">{t.intNote}</th>
                 <th className="py-2 text-right">{t.intBefore}</th>
@@ -210,12 +232,15 @@ const InterventionsPanel: React.FC<InterventionsPanelProps> = ({ metrics, t, lan
               </tr>
             </thead>
             <tbody className="divide-y divide-border-main/50">
-              {(followup?.entries || []).map(entry => (
+              {(state?.perTurma || []).flatMap(item => item.followup.entries).map(entry => (
                 <tr key={entry.id}>
                   <td className="py-2 pr-4">
                     <div className="font-bold text-text-main">{entry.name || entry.userId}</div>
                     <div className="text-[10px] text-text-dim">{formatDate(entry.createdAt, lang)}</div>
                   </td>
+                  {metrics.turmas.length > 1 && (
+                    <td className="py-2 pr-4 text-[10px] text-text-dim">{entry.turma}</td>
+                  )}
                   <td className="py-2 pr-4 text-text-dim">{t[`intAction_${entry.action}`]}</td>
                   <td className="py-2 pr-4 text-text-dim">{entry.note || '—'}</td>
                   <td className="py-2 pr-4 text-right tabular-nums text-text-dim">
@@ -238,7 +263,11 @@ const InterventionsPanel: React.FC<InterventionsPanelProps> = ({ metrics, t, lan
                   <td className="py-2 text-right">
                     <div className="flex justify-end gap-1">
                       <button
-                        onClick={() => setSocraticFor({ userId: entry.userId, name: entry.name || String(entry.userId) })}
+                        onClick={() => setSocraticFor({
+                          userId: entry.userId,
+                          name: entry.name || String(entry.userId),
+                          turma: entry.turma || metrics.turmas[0]
+                        })}
                         title={t.intSocratic}
                         className="rounded p-1.5 text-text-dim transition-colors hover:text-accent"
                       >
@@ -268,7 +297,7 @@ const InterventionsPanel: React.FC<InterventionsPanelProps> = ({ metrics, t, lan
         <SocraticPackageModal
           isOpen
           onClose={() => setSocraticFor(null)}
-          turma={metrics.turma}
+          turma={socraticFor.turma}
           student={socraticFor}
           questions={metrics.questions.map(question => ({ key: question.key, name: question.name }))}
           t={t}

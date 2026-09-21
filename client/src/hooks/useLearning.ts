@@ -2,16 +2,19 @@ import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { learningApi } from '../services/learning';
 import type {
-  MappingRecord, MasteryResult, QuestionMapping, SuggestionResult, Taxonomy
+  MappingScope, MasteryResult, QuestionMapping, SuggestionResult, Taxonomy
 } from '../types/learning';
 
 /**
  * Estado do submódulo de Aprendizado. Carrega sob demanda: só busca quando o
  * professor abre o grupo Aprendizado, para não pesar a aba de Dados.
  */
-export function useLearning(turma: string, enabled: boolean) {
+export function useLearning(turmas: string[], enabled: boolean) {
+  // A seleção em si é a dependência: uma lista nova a cada render refaria a
+  // busca em laço, então o efeito depende da assinatura estável dela.
+  const scopeId = turmas.join('|');
   const [taxonomies, setTaxonomies] = useState<Taxonomy[]>([]);
-  const [mapping, setMapping] = useState<MappingRecord | null>(null);
+  const [mapping, setMapping] = useState<MappingScope | null>(null);
   const [mastery, setMastery] = useState<MasteryResult | null>(null);
   const [suggestion, setSuggestion] = useState<SuggestionResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -19,14 +22,14 @@ export function useLearning(turma: string, enabled: boolean) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!turma) return;
+    if (!turmas.length) return;
     setLoading(true);
     setError(null);
     try {
       const [taxonomiesRes, mappingRes, masteryRes] = await Promise.all([
         learningApi.listTaxonomies(),
-        learningApi.getMapping(turma),
-        learningApi.getMastery(turma)
+        learningApi.getMapping(turmas),
+        learningApi.getMastery(turmas)
       ]);
       setTaxonomies(taxonomiesRes.data?.taxonomies || []);
       setMapping(mappingRes.data);
@@ -37,54 +40,54 @@ export function useLearning(turma: string, enabled: boolean) {
     } finally {
       setLoading(false);
     }
-  }, [turma]);
+  }, [scopeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (enabled) load();
   }, [enabled, load]);
 
-  // Trocar de turma invalida a sugestão em revisão, que é por turma.
-  useEffect(() => { setSuggestion(null); }, [turma]);
+  // Trocar a seleção invalida a sugestão em revisão, que é por turma.
+  useEffect(() => { setSuggestion(null); }, [scopeId]);
 
   const bindTaxonomy = useCallback(async (taxonomyId: string) => {
     try {
-      const response = await learningApi.bindTaxonomy(turma, taxonomyId);
-      setMapping(response.data);
+      const response = await learningApi.bindTaxonomy(turmas, taxonomyId);
       setSuggestion(null);
-      const reused = response.data.reusedFrom || [];
+      const reused = [...new Set(response.data.perTurma.flatMap(item => item.reusedFrom || []))];
       if (reused.length) {
         toast.success(`Mapeamento reaproveitado de: ${reused.join(', ')}`);
       }
-      const masteryRes = await learningApi.getMastery(turma);
-      setMastery(masteryRes.data);
+      await load();
       return response.data;
     } catch (err: any) {
       toast.error(err.response?.data?.error || err.message);
       return null;
     }
-  }, [turma]);
+  }, [scopeId, load]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const saveMapping = useCallback(async (next: QuestionMapping, reviewed = false) => {
-    if (!mapping?.taxonomyId) return null;
+  /** O mapeamento é de uma turma por vez: questões homônimas de semestres
+   *  diferentes podem ter enunciados diferentes. */
+  const saveMapping = useCallback(async (turma: string, next: QuestionMapping, reviewed = false) => {
+    const entry = mapping?.perTurma.find(item => item.turma === turma);
+    if (!entry?.taxonomyId) return null;
     try {
       const response = await learningApi.saveMapping({
-        turma, taxonomyId: mapping.taxonomyId, mapping: next, reviewed
+        turma, taxonomyId: entry.taxonomyId, mapping: next, reviewed
       });
-      setMapping(previous => ({ ...(previous as MappingRecord), ...response.data }));
-      const masteryRes = await learningApi.getMastery(turma);
-      setMastery(masteryRes.data);
+      await load();
       return response.data;
     } catch (err: any) {
       toast.error(err.response?.data?.error || err.message);
       return null;
     }
-  }, [turma, mapping?.taxonomyId]);
+  }, [mapping, load]);
 
-  const requestSuggestion = useCallback(async () => {
-    if (!mapping?.taxonomyId) return null;
+  const requestSuggestion = useCallback(async (turma: string) => {
+    const entry = mapping?.perTurma.find(item => item.turma === turma);
+    if (!entry?.taxonomyId) return null;
     setSuggesting(true);
     try {
-      const response = await learningApi.suggestMapping(turma, mapping.taxonomyId);
+      const response = await learningApi.suggestMapping(turma, entry.taxonomyId);
       setSuggestion(response.data);
       return response.data;
     } catch (err: any) {
@@ -93,7 +96,7 @@ export function useLearning(turma: string, enabled: boolean) {
     } finally {
       setSuggesting(false);
     }
-  }, [turma, mapping?.taxonomyId]);
+  }, [mapping]);
 
   const saveTaxonomy = useCallback(async (taxonomy: Partial<Taxonomy>) => {
     try {
