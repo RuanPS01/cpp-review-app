@@ -344,3 +344,81 @@ export interface AssociationResult {
   period: { start: number; end: number } | null;
   warnings: string[];
 }
+
+// ---------------------------------------------------------------------------
+// Fase 4 — intervenção e base consolidada
+// ---------------------------------------------------------------------------
+
+export type InterventionAction =
+  | 'socraticPackage' | 'individualContact' | 'studyPlan' | 'reviewSession' | 'other';
+export type InterventionStatus = 'planned' | 'done' | 'abandoned';
+
+export interface Intervention {
+  id: string;
+  userId: number;
+  name: string | null;
+  createdAt: number;
+  updatedAt?: number;
+  pattern: string | null;
+  topic: string | null;
+  action: InterventionAction;
+  note: string;
+  status: InterventionStatus;
+  snapshotId: string;
+  baseline: {
+    importedAt: number;
+    avgPercent: number | null;
+    indicators: Record<string, number | null>;
+    topics: Record<string, number>;
+  };
+}
+
+export interface FollowupGroup {
+  snapshotId: string;
+  snapshotAt: number;
+  /** Mesma importação do retrato: ainda não há um "depois" para observar. */
+  stale: boolean;
+  bands: string[];
+  treated: { n: number; meanBefore: number | null; meanAfter: number | null; meanDelta: number | null };
+  comparison: { n: number; meanBefore: number | null; meanAfter: number | null; meanDelta: number | null };
+}
+
+export interface InterventionsState {
+  entries: Intervention[];
+  followup: {
+    available: boolean;
+    reason: string | null;
+    groups: FollowupGroup[];
+    entries: (Intervention & {
+      movement: { before: number; after: number; delta: number } | null;
+      stale: boolean;
+    })[];
+  };
+  actions: InterventionAction[];
+  statuses: InterventionStatus[];
+  importedAt: number;
+}
+
+export interface SocraticPackage {
+  scope: 'student' | 'topic';
+  student: { userId: number; name: string } | null;
+  topic: { code: string; name: string } | null;
+  question: { key: string; name: string } | null;
+  /** Texto fixo: não passa pelo modelo. */
+  rules: string[];
+  generated: {
+    diagnostico: string;
+    perguntas: { pergunta: string; objetivo: string; seNaoSouber: string }[];
+    andaime: string;
+    sinalDeAvanco: string;
+  };
+  provider: string;
+  model: string;
+  generatedAt: number;
+}
+
+export interface ExportSummary {
+  turmas: { turma: string; alunos: number }[];
+  rowCounts: Record<string, number>;
+  warnings: string[];
+}

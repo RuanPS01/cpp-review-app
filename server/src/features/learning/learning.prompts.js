@@ -85,4 +85,85 @@ function buildTaxonomySuggestionPrompt({ taxonomy, metrics, dataset }) {
   return { systemPrompt, userPrompt };
 }
 
-module.exports = { buildTaxonomySuggestionPrompt };
+// ---------------------------------------------------------------------------
+// Pacote socrático
+// ---------------------------------------------------------------------------
+
+const MAX_CODE_CHARS = 1800;
+
+/**
+ * As regras negativas da proposta de tutoria socrática.
+ *
+ * São texto fixo de propósito: se a IA pudesse reescrevê-las, o pacote deixaria
+ * de ser socrático no primeiro prompt em que o modelo achasse mais gentil dar a
+ * resposta. Elas entram no `.md` verbatim, fora do que o modelo gera.
+ */
+const SOCRATIC_RULES = [
+  'Não dê a resposta pronta nem escreva a solução completa, em nenhuma hipótese.',
+  'Exija uma tentativa do aluno antes de qualquer dica, e parta do que ele escreveu.',
+  'Uma pergunta por vez. Espere a resposta antes da próxima.',
+  'Não confirme como correta uma solução incompleta: aponte o caso que ainda falha.',
+  'Se o aluno pedir o código, recuse e devolva a pergunta que o aproxima do próximo passo.',
+  'Trate o erro como informação, não como falha do aluno.'
+];
+
+/**
+ * Perguntas-guia para o erro daquele aluno naquela questão.
+ *
+ * O que a IA gera é só isso: o diagnóstico e as perguntas. O enunciado, os
+ * casos reprovados e o código vêm dos dados, e as regras vêm da constante
+ * acima — nada disso passa pelo modelo, que não teria por que reescrevê-los.
+ */
+function buildSocraticPackagePrompt({ scope, topic, question, student, submission, lang = 'pt-BR' }) {
+  const language = lang === 'en-US' ? 'English' : 'português do Brasil';
+
+  const systemPrompt = [
+    'Você ajuda um professor de programação em C++ a preparar uma sessão de tutoria socrática.',
+    'Você NÃO conversa com o aluno: você escreve o roteiro que o professor vai usar.',
+    'Nunca escreva código de solução, nem trechos que resolvam o exercício.',
+    'Baseie-se apenas nos dados fornecidos; quando faltar um dado, diga que falta.',
+    `Responda SEMPRE em ${language}, em Markdown, com títulos curtos (##).`,
+    'Responda SOMENTE com JSON válido, sem texto antes ou depois, sem blocos de código markdown.'
+  ].join(' ');
+
+  const context = {
+    escopo: scope,
+    conceito: topic ? { codigo: topic.code, nome: topic.name, descricao: topic.description || null } : null,
+    questao: question ? {
+      nome: question.name,
+      enunciado: truncate(stripHtml(question.statement), MAX_STATEMENT_CHARS),
+      casosDeTeste: (question.testCases || []).slice(0, MAX_TEST_CASES).map(c => c.name)
+    } : null,
+    aluno: student ? { nome: student.name } : null,
+    entrega: submission ? {
+      nota: submission.grade,
+      tentativas: submission.attempts,
+      casosReprovados: submission.failedCases || [],
+      errosDeCompilacao: (submission.compileErrors || []).slice(0, 5),
+      codigo: truncate(submission.code, MAX_CODE_CHARS)
+    } : null
+  };
+
+  const userPrompt = [
+    scope === 'topic'
+      ? 'Monte um roteiro de tutoria socrática sobre o conceito abaixo, para usar com a turma.'
+      : 'Monte um roteiro de tutoria socrática para este aluno, a partir do erro dele nesta questão.',
+    '',
+    'DADOS (JSON):',
+    JSON.stringify(context, null, 1),
+    '',
+    'Devolva exatamente este formato:',
+    JSON.stringify({
+      diagnostico: 'em uma ou duas frases, qual é a lacuna de entendimento provável e por quê',
+      perguntas: [
+        { pergunta: 'a pergunta a fazer', objetivo: 'o que ela verifica', seNaoSouber: 'a dica menor a dar, ainda sem resolver' }
+      ],
+      andaime: 'quanto apoio dar, e o que NÃO adiantar nesta sessão',
+      sinalDeAvanco: 'o que o aluno precisa dizer ou escrever para considerar que entendeu'
+    }, null, 1)
+  ].join('\n');
+
+  return { systemPrompt, userPrompt };
+}
+
+module.exports = { buildTaxonomySuggestionPrompt, buildSocraticPackagePrompt, SOCRATIC_RULES };

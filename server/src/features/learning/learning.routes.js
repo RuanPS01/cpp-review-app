@@ -26,4 +26,14 @@ router.get('/learning/outcome', learningController.getOutcome);
 router.post('/learning/outcome', learningController.saveOutcome);
 router.get('/learning/association', learningController.getAssociation);
 
+router.get('/learning/interventions', learningController.getInterventions);
+router.post('/learning/interventions', learningController.addIntervention);
+router.patch('/learning/interventions/:id', learningController.updateIntervention);
+router.delete('/learning/interventions/:id', learningController.deleteIntervention);
+
+router.post('/learning/socratic', learningController.buildSocratic);
+
+router.get('/learning/export/turmas', learningController.listExportTurmas);
+router.post('/learning/export', learningController.exportPackage);
+
 module.exports = router;

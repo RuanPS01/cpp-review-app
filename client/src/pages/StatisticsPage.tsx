@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
-  AlertTriangle, BarChart3, Activity, FileQuestion, Fingerprint, FlaskConical, Gauge,
-  Loader2, Plus, RefreshCw, Sparkles, Target, Trash2, Users
+  AlertTriangle, BarChart3, Activity, ClipboardList, Database, FileQuestion, Fingerprint,
+  FlaskConical, Gauge, Loader2, Plus, RefreshCw, Sparkles, Target, Trash2, Users
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useStatistics } from '../hooks/useStatistics';
@@ -17,11 +17,13 @@ import ConceptsPanel from '../components/learning/ConceptsPanel';
 import IndicatorsPanel from '../components/learning/IndicatorsPanel';
 import PatternsPanel from '../components/learning/PatternsPanel';
 import ValidationPanel from '../components/learning/ValidationPanel';
+import InterventionsPanel from '../components/learning/InterventionsPanel';
+import ExportPanel from '../components/learning/ExportPanel';
 import { VIZ, formatDateTime } from '../components/statistics/charts/chartTheme';
 
 type StatsTab =
   | 'overview' | 'engagement' | 'questions' | 'students' | 'alerts' | 'ai'
-  | 'concepts' | 'indicators' | 'patterns' | 'validation';
+  | 'concepts' | 'indicators' | 'patterns' | 'validation' | 'interventions' | 'export';
 /** Dados = o que aconteceu; Aprendizado = o que isso diz sobre a aprendizagem. */
 type StatsGroup = 'data' | 'learning';
 
@@ -52,7 +54,9 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
       { key: 'concepts', label: t.learnTabConcepts, icon: Target },
       { key: 'indicators', label: t.learnTabIndicators, icon: Gauge },
       { key: 'patterns', label: t.learnTabPatterns, icon: Fingerprint },
-      { key: 'validation', label: t.valTab, icon: FlaskConical }
+      { key: 'validation', label: t.valTab, icon: FlaskConical },
+      { key: 'interventions', label: t.intTab, icon: ClipboardList },
+      { key: 'export', label: t.expTab, icon: Database }
     ]
   };
   const tabs = TABS_BY_GROUP[group];
@@ -315,6 +319,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
           {tab === 'indicators' && <IndicatorsPanel metrics={metrics} t={t} lang={lang} />}
           {tab === 'patterns' && <PatternsPanel metrics={metrics} t={t} lang={lang} />}
           {tab === 'validation' && <ValidationPanel metrics={metrics} t={t} lang={lang} />}
+          {tab === 'interventions' && <InterventionsPanel metrics={metrics} t={t} lang={lang} />}
+          {tab === 'export' && <ExportPanel t={t} />}
         </div>
       )}
 

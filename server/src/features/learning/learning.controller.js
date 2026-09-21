@@ -10,6 +10,9 @@ const { detectPatterns } = require('./patterns.service');
 const { buildAcademicRecord } = require('./academic.service');
 const outcomeService = require('./outcome.service');
 const association = require('./association.service');
+const interventions = require('./interventions.service');
+const consolidation = require('./consolidation.service');
+const { buildSocraticPackagePrompt, SOCRATIC_RULES } = require('./learning.prompts');
 
 // ---------------------------------------------------------------------------
 // Taxonomias globais
@@ -470,5 +473,174 @@ exports.getAssociation = (req, res) => {
   } catch (err) {
     console.error('[learning] Association failed:', err);
     res.status(500).json({ error: `Falha ao calcular a associação: ${err.message}` });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Intervenções
+// ---------------------------------------------------------------------------
+
+const readRegistry = (turma) =>
+  readJsonFile(statisticsPaths(turma).interventions, interventions.emptyRegistry());
+
+exports.getInterventions = (req, res) => {
+  const { turma } = req.query;
+  const context = loadContext(turma);
+  if (!context) return res.status(404).json({ error: 'Importação não encontrada.' });
+
+  try {
+    const registry = readRegistry(turma);
+    const followup = interventions.computeFollowup(context.dataset, registry);
+    res.json({
+      entries: registry.entries || [],
+      followup,
+      actions: interventions.ACTIONS,
+      statuses: interventions.STATUSES,
+      importedAt: context.dataset.importedAt
+    });
+  } catch (err) {
+    console.error('[learning] Interventions failed:', err);
+    res.status(500).json({ error: `Falha ao ler as intervenções: ${err.message}` });
+  }
+};
+
+exports.addIntervention = (req, res) => {
+  const { turma, ...entry } = req.body;
+  const context = loadContext(turma);
+  if (!context) return res.status(404).json({ error: 'Importação não encontrada.' });
+  if (entry.userId === undefined || entry.userId === null) {
+    return res.status(400).json({ error: 'A intervenção precisa de um aluno.' });
+  }
+
+  try {
+    const indicators = computeIndicators(context.dataset, context.activity, context.mastery);
+    const next = interventions.addEntry(readRegistry(turma), {
+      dataset: context.dataset, indicators, mastery: context.mastery, entry
+    });
+    writeJsonFile(statisticsPaths(turma).interventions, next);
+    res.json({ success: true, entries: next.entries });
+  } catch (err) {
+    console.error('[learning] Add intervention failed:', err);
+    res.status(500).json({ error: `Falha ao registrar a intervenção: ${err.message}` });
+  }
+};
+
+exports.updateIntervention = (req, res) => {
+  const { turma, ...patch } = req.body;
+  if (!readDataset(turma)) return res.status(404).json({ error: 'Importação não encontrada.' });
+
+  try {
+    const next = interventions.updateEntry(readRegistry(turma), req.params.id, patch);
+    writeJsonFile(statisticsPaths(turma).interventions, next);
+    res.json({ success: true, entries: next.entries });
+  } catch (err) {
+    res.status(500).json({ error: `Falha ao atualizar a intervenção: ${err.message}` });
+  }
+};
+
+exports.deleteIntervention = (req, res) => {
+  const { turma } = req.query;
+  if (!readDataset(turma)) return res.status(404).json({ error: 'Importação não encontrada.' });
+
+  try {
+    const next = interventions.removeEntry(readRegistry(turma), req.params.id);
+    writeJsonFile(statisticsPaths(turma).interventions, next);
+    res.json({ success: true, entries: next.entries });
+  } catch (err) {
+    res.status(500).json({ error: `Falha ao remover a intervenção: ${err.message}` });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Pacote socrático
+// ---------------------------------------------------------------------------
+
+exports.buildSocratic = async (req, res) => {
+  const { turma, userId, questionKey, topicCode, lang } = req.body;
+  const context = loadContext(turma);
+  if (!context) return res.status(404).json({ error: 'Importação não encontrada.' });
+
+  const dataset = context.dataset;
+  const question = (dataset.questions || []).find(q => q.key === questionKey) || null;
+  const student = userId === undefined || userId === null
+    ? null
+    : (dataset.students || []).find(s => String(s.userId) === String(userId)) || null;
+  const submission = student && questionKey ? student.questions?.[questionKey] : null;
+  const topic = topicCode
+    ? (context.taxonomy?.topics || []).find(item => item.code === topicCode) || null
+    : null;
+
+  if (!student && !topic) {
+    return res.status(400).json({ error: 'Escolha um aluno ou um conceito.' });
+  }
+
+  try {
+    const { systemPrompt, userPrompt } = buildSocraticPackagePrompt({
+      scope: student ? 'student' : 'topic',
+      topic, question, student, submission, lang
+    });
+    const settings = readSettings();
+    const raw = await runPrompt({ settings, systemPrompt, userPrompt, json: true, maxTokens: 2500 });
+
+    let parsed;
+    try {
+      parsed = extractJson(raw);
+    } catch (err) {
+      return res.status(502).json({
+        error: 'O modelo não devolveu JSON válido. Tente novamente.',
+        raw: String(raw || '').slice(0, 500)
+      });
+    }
+
+    res.json({
+      scope: student ? 'student' : 'topic',
+      student: student ? { userId: student.userId, name: student.name } : null,
+      topic: topic ? { code: topic.code, name: topic.name } : null,
+      question: question ? { key: question.key, name: question.name } : null,
+      // As regras não passam pelo modelo: se ele pudesse reescrevê-las, o pacote
+      // deixaria de ser socrático no primeiro prompt em que achasse mais gentil
+      // entregar a resposta.
+      rules: SOCRATIC_RULES,
+      generated: parsed,
+      provider: settings.provider,
+      model: settings.provider === 'ollama' ? settings.ollamaModel : settings.cloudModel,
+      generatedAt: Date.now()
+    });
+  } catch (err) {
+    console.error('[learning] Socratic package failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Base consolidada
+// ---------------------------------------------------------------------------
+
+exports.listExportTurmas = (req, res) => {
+  try {
+    res.json({ turmas: consolidation.listTurmas(), schemaVersion: consolidation.SCHEMA_VERSION });
+  } catch (err) {
+    res.status(500).json({ error: `Falha ao listar as turmas: ${err.message}` });
+  }
+};
+
+exports.exportPackage = (req, res) => {
+  const { turmas, pseudonymize } = req.body;
+  if (!Array.isArray(turmas) || !turmas.length) {
+    return res.status(400).json({ error: 'Escolha ao menos uma turma.' });
+  }
+
+  try {
+    const { buffer, summary } = consolidation.buildZip({
+      turmas, pseudonymize: pseudonymize !== false
+    });
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="analises-aprendizado_${stamp}.zip"`);
+    res.setHeader('X-Export-Summary', encodeURIComponent(JSON.stringify(summary)));
+    res.send(buffer);
+  } catch (err) {
+    console.error('[learning] Export failed:', err);
+    res.status(500).json({ error: `Falha ao montar o pacote: ${err.message}` });
   }
 };

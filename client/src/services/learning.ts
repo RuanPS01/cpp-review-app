@@ -3,7 +3,8 @@ import { API_BASE } from './api';
 import type {
   AcademicMatch, AcademicRow, AcademicState, ActivitySummary, AssociationResult,
   IndicatorsResult, MappingRecord, MasteryResult, OutcomeConfig, OutcomeState,
-  PatternsResult, QuestionMapping, SuggestionResult, Taxonomy, TaxonomyFile
+  Intervention, InterventionsState, PatternsResult, QuestionMapping, SocraticPackage,
+  SuggestionResult, Taxonomy, TaxonomyFile
 } from '../types/learning';
 
 export const learningApi = {
@@ -48,5 +49,23 @@ export const learningApi = {
     axios.post<OutcomeConfig>(`${API_BASE}/learning/outcome`, { turma, ...config }),
 
   getAssociation: (turma: string, window: 'full' | 'early') =>
-    axios.get<AssociationResult>(`${API_BASE}/learning/association`, { params: { turma, window } })
+    axios.get<AssociationResult>(`${API_BASE}/learning/association`, { params: { turma, window } }),
+
+  getInterventions: (turma: string) =>
+    axios.get<InterventionsState>(`${API_BASE}/learning/interventions`, { params: { turma } }),
+  addIntervention: (turma: string, entry: Partial<Intervention>) =>
+    axios.post<{ entries: Intervention[] }>(`${API_BASE}/learning/interventions`, { turma, ...entry }),
+  updateIntervention: (turma: string, id: string, patch: { status?: string; note?: string }) =>
+    axios.patch<{ entries: Intervention[] }>(`${API_BASE}/learning/interventions/${id}`, { turma, ...patch }),
+  deleteIntervention: (turma: string, id: string) =>
+    axios.delete(`${API_BASE}/learning/interventions/${id}`, { params: { turma } }),
+
+  buildSocratic: (data: { turma: string; userId?: number; questionKey?: string; topicCode?: string; lang?: string }) =>
+    axios.post<SocraticPackage>(`${API_BASE}/learning/socratic`, data),
+
+  listExportTurmas: () =>
+    axios.get<{ turmas: string[]; schemaVersion: number }>(`${API_BASE}/learning/export/turmas`),
+  // Binário: o pacote é um .zip, então sai como blob e vira download no cliente.
+  exportPackage: (turmas: string[], pseudonymize: boolean) =>
+    axios.post(`${API_BASE}/learning/export`, { turmas, pseudonymize }, { responseType: 'blob' })
 };

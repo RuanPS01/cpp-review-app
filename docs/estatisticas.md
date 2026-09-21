@@ -125,6 +125,12 @@ Os prompts usam o provedor definido em **Configurações** (Ollama, OpenAI, Gemi
 | `moodleActivity.js` | Coleta e agregação dos relatórios de log e participação |
 | `indicators.service.js` | As cinco dimensões, com `n` e motivo de ausência |
 | `patterns.service.js` | Os sete padrões de comportamento |
+| `academic.service.js` | Casamento da planilha do portal por matrícula |
+| `outcome.service.js` | Resolve o desfecho por aluno |
+| `correlation.js` | Postos médios, Spearman, delta de Cliff, bootstrap com semente |
+| `association.service.js` | Famílias, cobertura, janela de início, as recusas |
+| `interventions.service.js` | Registro com retrato e grupo de comparação |
+| `consolidation.service.js` | O `.zip` autodescrito |
 | `learning.prompts.js` | Prompt da sugestão de mapeamento |
 
 ### Rotas
@@ -151,7 +157,12 @@ Os prompts usam o provedor definido em **Configurações** (Ollama, OpenAI, Gemi
 | `components/learning/IndicatorsPanel.tsx` | Sub-aba Indicadores: dimensões, indicadores crus e curva de aprendizagem |
 | `components/learning/PatternsPanel.tsx` | Sub-aba Padrões: um cartão por padrão, com interpretação e intervenção |
 | `components/learning/LearningSourcesBar.tsx` | O que está medido e o botão de coleta de logs |
-| `hooks/useLearning.ts` · `hooks/useLearningInsights.ts` | Estado do submódulo |
+| `components/learning/ValidationPanel.tsx` | Sub-aba Validação, com os três blocos e a dispersão |
+| `components/learning/AcademicImportModal.tsx` | Leitura da planilha, mapeamento e prévia do casamento |
+| `components/learning/InterventionsPanel.tsx` | Registro e acompanhamento |
+| `components/learning/SocraticPackageModal.tsx` | Geração e download do `.md` |
+| `components/learning/ExportPanel.tsx` | Seleção de turmas e download do `.zip` |
+| `hooks/useLearning.ts` · `hooks/useLearningInsights.ts` · `hooks/useValidation.ts` | Estado do submódulo |
 | `services/learning.ts` | Cliente REST do submódulo |
 
 ### Dados em disco
@@ -162,7 +173,10 @@ data/
     ├── stats_{turma}.json            # dataset bruto (alunos, questões, código, métricas)
     ├── stats_{turma}.reports.json    # relatórios de IA em cache
     ├── stats_{turma}.taxonomy.json   # vínculo e mapeamento questão→conceito
-    └── stats_{turma}.activity.json   # atividade agregada por aluno e dia
+    ├── stats_{turma}.activity.json   # atividade agregada por aluno e dia
+    ├── stats_{turma}.academic.json   # notas e frequência do portal, já casadas
+    ├── stats_{turma}.outcome.json    # definição do desfecho e marcações manuais
+    └── stats_{turma}.interventions.json  # intervenções com o retrato de baseline
 ```
 
 ---
@@ -193,6 +207,8 @@ A aba Estatísticas tem dois níveis: **Dados** (as seis sub-abas descritas acim
 A Fase 1 entrega a sub-aba **Conceitos**: sem mapear questão a conceito, os dados por questão produzem notas; com o mapeamento, produzem um perfil de domínio conceitual — que é o que torna o alerta acionável.
 
 A Fase 2 entrega as sub-abas **Indicadores** e **Padrões**, mais a coleta dos logs do Moodle: o domínio conceitual diz *em qual conceito* o aluno tem lacuna, e os indicadores dizem *como ele estuda*.
+
+As Fases 3 e 4 fecham o ciclo: **Validação** confronta os indicadores com um desfecho real, **Intervenções** registra o que o professor fez depois do alerta, e **Exportação** consolida tudo numa base longitudinal autodescrita.
 
 ### Taxonomia: global, mapeamento por turma
 
@@ -288,6 +304,62 @@ A parcela agora só soma quando `improving !== true`, e `improving` usa o mesmo 
 
 Com `improving === null` (turma sem histórico profundo) **a regra anterior continua valendo**: nenhuma importação existente muda de comportamento. `productivePersistence` é um campo próprio do aluno, exibido como reconhecimento; não entra em `risk.reasons`, que é lista de motivos de risco.
 
+### Validação — o que impede o número bonito e errado
+
+Sem um desfecho, os indicadores são plausíveis, não validados. A sub-aba Validação associa cada indicador a um resultado real, com quatro travas:
+
+**Circularidade.** Metade dos indicadores sai das mesmas notas do VPL que compõem o desfecho. Eles aparecem em **três blocos separados** — comportamento, processo, compartilham origem — e **nunca numa lista única ordenada**, em que o domínio conceitual sempre ficaria no topo e seria lido como a descoberta do semestre quando é aritmética. Com a nota do portal e o peso do VPL desconhecido, o bloco de processo inteiro é promovido a "compartilha origem": contaminação desconhecida se trata como contaminação.
+
+**A medida.** Spearman com **postos médios** — o atalho `1 − 6Σd²/(n(n²−1))` só vale sem empate, e aqui `stalledCount` é 0 para quase toda a turma. Para desfecho binário, **delta de Cliff**, porque contra um 0/1 a magnitude do Spearman é limitada pela proporção dos grupos e comparar entre indicadores passaria a comparar atenuação em vez de associação.
+
+**A incerteza.** Intervalo por bootstrap dos pares, **reranqueando dentro de cada réplica** (reamostrar os postos fixaria as marginais e devolveria um intervalo estreito e falso), com semente determinística — intervalo que muda a cada recarga destrói a confiança mais rápido que intervalo largo. Sem p-valor, e a leitura é a **largura** do intervalo, nunca se ele cruza o zero: "o IC não cruza zero" é um p-valor pela porta dos fundos.
+
+**As recusas.** Abaixo de 15 pares, indicador constante, mais de 90% da turma no mesmo valor, cobertura abaixo de 34% — cada caso aparece com o motivo, com o mesmo peso visual de um número. Indicador ausente para todos tem motivo próprio em vez de virar "medido em poucos alunos".
+
+> **Evasão sobre o período inteiro é tautológica.** Quem saiu na terceira semana tem poucos dias ativos *porque* saiu. O cálculo recusa e exige a janela **início do período**, que recorta submissões, histórico e atividade até o primeiro terço e recalcula indicadores e domínio sobre o recorte. É também a pergunta que interessa: o que dava para saber cedo.
+
+### Planilha do portal
+
+O PortalHelper ainda entrega dados simulados, então a fonte é a planilha que o professor baixa do portal. Ela é lida no renderer com o `xlsx` (dependência do cliente) e chega ao servidor já normalizada — o mesmo caminho do `importGrades`.
+
+A chave é a **matrícula**, comparada sem zeros à esquerda: planilha aberta no Excel transforma matrícula em número, e sem normalizar o casamento daria zero sem ninguém perceber. A prévia é obrigatória e mostra quem casou por qual campo, as linhas sem aluno e os alunos sem linha.
+
+### Intervenções — acompanhamento, não avaliação de efeito
+
+Cada registro guarda um **retrato** dos indicadores no momento (um por importação, compartilhado entre as intervenções daquela leva). Sem ele não há o que comparar, porque o dataset é sobrescrito a cada reimportação.
+
+Quando a turma é reimportada, a tela mostra a evolução de quem recebeu ao lado da evolução de quem estava **no mesmo terço da distribuição** e não recebeu. O aviso de regressão à média fica sempre visível, o grupo de comparação não é sorteado, e a palavra "efeito" não aparece.
+
+### Pacote socrático
+
+As regras negativas da proposta de tutoria — não dar a resposta, exigir tentativa antes da dica, uma pergunta por vez, não confirmar solução incompleta — são **texto fixo que não passa pelo modelo**. Se a IA pudesse reescrevê-las, o pacote deixaria de ser socrático no primeiro prompt em que o modelo achasse mais gentil entregar a resposta. O que ela gera é o diagnóstico provável e as perguntas-guia para aquele erro.
+
+### A base consolidada
+
+Cada projeto tem um terço do mesmo aluno: este app tem o comportamento e o conceito, o portal tem a nota e a frequência, a tutoria tem a intervenção. A chave de junção é a matrícula.
+
+Como o PortalHelper não tem schema, o pacote é **autodescrito** — quem o ler não precisa combinar formato antes. Um `.zip` (via `adm-zip`, já dependência) com:
+
+| Arquivo | Grão |
+|---|---|
+| `alunos.csv` | turma × aluno — 17 indicadores, 5 escores, desfecho, flags de fonte |
+| `conceitos.csv` | turma × aluno × conceito |
+| `trajetorias.csv` | turma × aluno × questão × tentativa |
+| `atividade_diaria.csv` | turma × aluno × dia |
+| `intervencoes.csv` | uma por intervenção, com o antes e o depois |
+| `turmas.csv` | uma por turma, com as fontes presentes |
+| `dicionario.csv` | coluna, tipo, família, fonte, unidade, quando fica vazia, observação |
+| `LEIA-ME.md` · `manifesto.json` | as cinco armadilhas e a procedência |
+
+Decisões que fazem o pacote servir para o que promete:
+
+- **A declaração das colunas é única** (`TABLES` em `consolidation.service.js`) e serve tanto para escrever o CSV quanto para gerar o dicionário. Duas listas separadas fariam o dicionário mentir no primeiro campo novo — pior que não ter dicionário.
+- **Célula vazia, nunca zero.** Mesma regra das fases anteriores, e também o que um modelo de árvore quer: o XGBoost trata ausente nativamente, e um zero imputado vira ponto de corte real.
+- **A coluna `familia`** marca cada campo como `identificacao | comportamento | desempenho | desfecho | contexto` — é o que impede treinar um modelo com a nota dentro das features e comemorar a acurácia.
+- **A coluna `observacao`** marca os indicadores que caem para um substituto sem logs: sem ela, "dias com atividade" tirado das datas de entrega passaria por medida de log dentro do CSV.
+- **Formato longo** onde o conjunto varia (conceitos, questões); largo só em `alunos.csv`.
+- **Pseudonimização por padrão**, com sal em `{DATA_DIR}/export-salt.txt`, fora do pacote. O mesmo aluno mantém o mesmo id entre exportações — a ligação longitudinal sobrevive — sem que o id volte a ser matrícula.
+
 ### Rotas
 
 | Método | Rota | Função |
@@ -304,10 +376,18 @@ Com `improving === null` (turma sem histórico profundo) **a regra anterior cont
 | POST | `/api/learning/activity/collect` | Coleta logs e participação (progresso via Socket.IO) |
 | GET | `/api/learning/indicators?turma=` | Cinco dimensões por aluno |
 | GET | `/api/learning/patterns?turma=` | Padrões detectados, com os limiares em uso |
+| GET / POST | `/api/learning/academic` | Planilha do portal (`POST /academic/preview` confere antes) |
+| GET / POST | `/api/learning/outcome` | Definição do desfecho |
+| GET | `/api/learning/association?turma=&window=` | Associação indicador × desfecho |
+| GET / POST | `/api/learning/interventions` | Registro com retrato e acompanhamento |
+| PATCH / DELETE | `/api/learning/interventions/:id` | Situação, anotação, remoção |
+| POST | `/api/learning/socratic` | Pacote socrático |
+| GET | `/api/learning/export/turmas` | Turmas disponíveis para a base |
+| POST | `/api/learning/export` | Devolve o `.zip` consolidado |
 
 ### Arquivos-irmão do dataset
 
-`statistics.paths.js` centraliza os caminhos de uma turma e a lista `SIDECAR_SUFFIXES` (hoje `.reports.json`, `.taxonomy.json` e `.activity.json`). **Quem criar um arquivo-irmão novo precisa registrá-lo ali** — é o que impede dois erros: o arquivo aparecer na listagem como se fosse uma importação, e sobrar órfão quando a turma é apagada.
+`statistics.paths.js` centraliza os caminhos de uma turma e a lista `SIDECAR_SUFFIXES` (hoje `.reports.json`, `.taxonomy.json`, `.activity.json`, `.academic.json`, `.outcome.json` e `.interventions.json`). **Quem criar um arquivo-irmão novo precisa registrá-lo ali** — é o que impede dois erros: o arquivo aparecer na listagem como se fosse uma importação, e sobrar órfão quando a turma é apagada.
 
 ### Nomenclatura
 
