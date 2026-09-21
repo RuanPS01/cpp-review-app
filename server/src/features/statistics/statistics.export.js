@@ -15,11 +15,63 @@
 //     (a única exceção é `overview.csv`, que é uma tabela de agregados).
 
 const AdmZip = require('adm-zip');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const { DATA_DIR } = require('../../config/env');
 const {
   computeMetrics, mergeDatasets, selectStudents, scopedQuestions, submissionPercent,
   studentKey, leadTimeBucket, LEAD_TIME_BUCKETS, PASS_THRESHOLD, HOUR_MS, round
 } = require('./statistics.service');
 const { CONCEPT_LABELS, SMELL_LABELS } = require('./codeMetrics');
+const { loadScope, scopeMastery, scopeOutcome } = require('../learning/scope');
+const { DIMENSIONS } = require('../learning/indicators.service');
+const { studentAverage } = require('../learning/interventions.service');
+const { statisticsPaths, readJsonFile } = require('./statistics.paths');
+
+const LEARNING_INDICATOR_KEYS = {
+  engagement: ['activeDays', 'eventsPerWeek', 'activitiesViewed', 'submissionRate'],
+  regularity: ['medianGapDays', 'longestSilenceDays', 'activeWeeksRatio'],
+  persistence: ['attemptsToFirstPass', 'gainFirstToLast', 'recoveryRate', 'stalledCount'],
+  learning: ['avgMastery', 'gapTopics', 'firstAttemptPassRate'],
+  selfRegulation: ['medianLeadHours', 'lastMinuteRate', 'distributedPractice']
+};
+
+const LEARNING_UNITS = {
+  activeDays: 'dias', eventsPerWeek: 'eventos/semana', activitiesViewed: 'atividades',
+  submissionRate: '%', medianGapDays: 'dias', longestSilenceDays: 'dias',
+  activeWeeksRatio: '%', attemptsToFirstPass: 'tentativas', gainFirstToLast: 'p.p.',
+  recoveryRate: '%', stalledCount: 'questões', avgMastery: '%', gapTopics: 'conceitos',
+  firstAttemptPassRate: '%', medianLeadHours: 'horas', lastMinuteRate: '%',
+  distributedPractice: '%'
+};
+
+/**
+ * A família de cada indicador em relação ao desfecho — é o que impede alguém de
+ * treinar um modelo com a resposta dentro das features e comemorar a acurácia.
+ */
+const LEARNING_FAMILY = {
+  activeDays: 'comportamento', eventsPerWeek: 'comportamento', activitiesViewed: 'comportamento',
+  medianGapDays: 'comportamento', longestSilenceDays: 'comportamento', activeWeeksRatio: 'comportamento',
+  medianLeadHours: 'comportamento', lastMinuteRate: 'comportamento', distributedPractice: 'comportamento',
+  submissionRate: 'desempenho', attemptsToFirstPass: 'desempenho', gainFirstToLast: 'desempenho',
+  recoveryRate: 'desempenho', stalledCount: 'desempenho', avgMastery: 'desempenho',
+  gapTopics: 'desempenho', firstAttemptPassRate: 'desempenho'
+};
+
+const LEARNING_INDICATOR_LABELS = {
+  activeDays: 'Dias com atividade', eventsPerWeek: 'Eventos por semana',
+  activitiesViewed: 'Atividades acessadas', submissionRate: 'Taxa de entrega',
+  medianGapDays: 'Intervalo mediano entre dias ativos', longestSilenceDays: 'Maior período de silêncio',
+  activeWeeksRatio: 'Semanas com atividade', attemptsToFirstPass: 'Tentativas até passar',
+  gainFirstToLast: 'Ganho da primeira à última tentativa',
+  recoveryRate: 'Recuperação após começar abaixo do corte',
+  stalledCount: 'Questões abandonadas sem passar', avgMastery: 'Domínio médio nos conceitos',
+  gapTopics: 'Conceitos em lacuna', firstAttemptPassRate: 'Acerto já na primeira tentativa',
+  medianLeadHours: 'Antecedência mediana ao prazo',
+  lastMinuteRate: 'Entregas na última hora ou atrasadas',
+  distributedPractice: 'Prática fora da véspera do prazo'
+};
 
 const WEEKDAY_LABELS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
@@ -67,9 +119,47 @@ function csvCell(value) {
   return /[",]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-function toCsv(columns, rows) {
+/**
+ * Colunas que carregam identidade, e o que a pseudonimização faz com cada uma.
+ *
+ * A lista vive num lugar só e vale para **todas** as tabelas: um pacote que se
+ * diz anônimo mas traz o nome do aluno em `students.csv` é pior que um pacote
+ * identificado, porque promete o que não cumpre.
+ */
+const IDENTITY_COLUMNS = {
+  // Viram um hash com sal: o mesmo aluno mantém o mesmo id entre exportações,
+  // então a ligação ao longo do tempo sobrevive sem que o id volte a ser pessoa.
+  hash: new Set(['student_key', 'student_id', 'aluno_id']),
+  // Simplesmente saem.
+  drop: new Set(['name', 'student_name', 'email', 'username', 'id_number', 'folder_name'])
+};
+
+const SALT_FILE = path.join(DATA_DIR, 'export-salt.txt');
+
+/** O sal é gerado uma vez por instalação e **nunca** entra no pacote. */
+function readSalt() {
+  if (!fs.existsSync(SALT_FILE)) {
+    fs.writeFileSync(SALT_FILE, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
+  }
+  return fs.readFileSync(SALT_FILE, 'utf8').trim();
+}
+
+function pseudonym(value, salt) {
+  if (value === null || value === undefined || value === '') return '';
+  return crypto.createHash('sha256').update(`${salt}:${value}`).digest('hex').slice(0, 16);
+}
+
+function toCsv(columns, rows, options = {}) {
+  const salt = options.pseudonymize ? readSalt() : null;
+  const value = (row, name) => {
+    if (!salt) return row[name];
+    if (IDENTITY_COLUMNS.hash.has(name)) return pseudonym(row[name], salt);
+    if (IDENTITY_COLUMNS.drop.has(name)) return null;
+    return row[name];
+  };
+
   const header = columns.map(column => column.name).join(',');
-  const body = rows.map(row => columns.map(column => csvCell(row[column.name])).join(','));
+  const body = rows.map(row => columns.map(column => csvCell(value(row, column.name))).join(','));
   return [header, ...body].join('\r\n') + '\r\n';
 }
 
@@ -103,7 +193,29 @@ function buildContext(datasets, options = {}) {
   ctx.pairs = buildPairs(ctx);
   ctx.events = buildEvents(ctx);
   ctx.eventsByStudent = groupBy(ctx.events, event => event.studentKey);
+  // O submódulo de aprendizado é opcional: turma sem taxonomia, sem logs e sem
+  // intervenções simplesmente devolve tabelas vazias — com cabeçalho, para que
+  // quem lê o pacote saiba que a coluna existe e o dado é que não.
+  ctx.learning = buildLearningContext(datasets);
   return ctx;
+}
+
+/**
+ * Os indicadores e o domínio conceitual, **por turma**.
+ *
+ * Por turma porque engajamento e regularidade dividem por semanas do período:
+ * somar semestres faria um aluno de um semestre só parecer meses em silêncio.
+ */
+function buildLearningContext(datasets) {
+  const scope = loadScope(datasets.map(dataset => dataset.turma));
+  if (!scope) return { turmas: [], perTurma: [], mastery: null };
+  return {
+    turmas: scope.turmas,
+    perTurma: scope.contexts,
+    mastery: scopeMastery(scope),
+    outcome: scopeOutcome(scope),
+    scope
+  };
 }
 
 function groupBy(items, keyFn) {
@@ -1450,6 +1562,188 @@ const TABLES = [
       return row;
     })
   }
+,
+  // ------------------------------------------------------------- aprendizado
+  {
+    id: 'learning_indicators',
+    group: 'learning',
+    file: 'learning_indicators.csv',
+    title: 'Indicadores de aprendizado',
+    description: 'Uma linha por aluno **por turma**, com os dezessete indicadores das cinco dimensões, os escores relativos e o desfecho.',
+    tip: 'Para uma pergunta de alerta precoce use só as colunas de família `comportamento` (veja no dicionário): as de desempenho saem das mesmas notas que compõem o desfecho, e um modelo que as use acerta por construção.',
+    columns: () => columnList([
+      ['turma', 'Importação (turma) de origem. Os indicadores são calculados dentro dela, com o período dela.'],
+      ['student_key', 'Identificador do aluno.'],
+      ['student_name', 'Nome do aluno.'],
+      ['email', 'E-mail do aluno.'],
+      ['id_number', 'Matrícula — a chave que liga esta base ao portal acadêmico.'],
+      ['from_logs', 'Se os logs de acesso do Moodle foram coletados nesta turma. Quando False, dias ativos, intervalo e silêncio saem das **datas de entrega**: outro dado com o mesmo nome.'],
+      ['from_history', 'Se a turma foi importada com o histórico de tentativas.'],
+      ['from_taxonomy', 'Se a turma tem taxonomia de conceitos vinculada.'],
+      ...DIMENSIONS.flatMap(dimension => [
+        ...LEARNING_INDICATOR_KEYS[dimension].map(key => [
+          `${dimension}__${key}`,
+          `${LEARNING_INDICATOR_LABELS[key]} (${LEARNING_UNITS[key] || '—'}) · família ${LEARNING_FAMILY[key]}. Vazio = não medido nesta turma.`
+        ]),
+        [`score__${dimension}`, 'Posição relativa do aluno na dimensão, em percentil de 0 a 100 **dentro da própria turma**. Não é nota.']
+      ]),
+      ['outcome_kind', 'Tipo de desfecho configurado na turma.'],
+      ['outcome_source', 'De onde o desfecho veio.'],
+      ['outcome_value', 'Valor do desfecho: nota percentual, ou 0/1 quando binário.'],
+      ['portal_grade_percent', 'Nota final do portal, em %.'],
+      ['portal_absences', 'Faltas registradas no portal.']
+    ]),
+    rows: (ctx) => ctx.learning.perTurma.flatMap(context => {
+      const outcome = (ctx.learning.outcome?.perTurma || [])
+        .find(entry => entry.turma === context.turma)?.outcome;
+      const studentByKey = new Map((context.dataset.students || []).map(item => [studentKey(item), item]));
+
+      return (context.indicators.students || []).map(row => {
+        const key = studentKey(row);
+        const student = studentByKey.get(key) || {};
+        const academicRow = context.academic?.students?.[key];
+
+        const record = {
+          turma: context.turma,
+          student_key: key,
+          student_name: row.name,
+          email: row.email,
+          id_number: student.idNumber ?? null,
+          from_logs: Boolean(context.indicators.sources.logs),
+          from_history: Boolean(context.indicators.sources.history),
+          from_taxonomy: Boolean(context.indicators.sources.taxonomy),
+          outcome_kind: outcome?.available ? outcome.kind : null,
+          outcome_source: outcome?.available ? outcome.source : null,
+          outcome_value: outcome?.values?.get(key) ?? null,
+          portal_grade_percent: academicRow?.gradePercent ?? null,
+          portal_absences: academicRow?.absences ?? null
+        };
+
+        DIMENSIONS.forEach(dimension => {
+          LEARNING_INDICATOR_KEYS[dimension].forEach(indicatorKey => {
+            const entry = row.dimensions?.[dimension]?.[indicatorKey];
+            // Ausente vira célula vazia, nunca zero: um zero imputado vira ponto
+            // de corte real numa árvore, e o modelo passa a tratar "não mediu" e
+            // "mediu zero" como a mesma coisa.
+            record[`${dimension}__${indicatorKey}`] = entry?.available ? entry.value : null;
+          });
+          const score = row.scores?.[dimension];
+          record[`score__${dimension}`] = score?.available ? score.value : null;
+        });
+
+        return record;
+      });
+    })
+  },
+  {
+    id: 'learning_concepts',
+    group: 'learning',
+    file: 'learning_concepts.csv',
+    title: 'Domínio conceitual',
+    description: 'Uma linha por aluno × conceito. Formato longo porque o conjunto de conceitos muda de turma para turma.',
+    tip: 'Domínio vazio quer dizer **evidência insuficiente** (menos de duas questões avaliando o conceito), não domínio zero. Filtre `status != "insufficient"` antes de agregar.',
+    columns: () => columnList([
+      ['student_key', 'Identificador do aluno.'],
+      ['student_name', 'Nome do aluno.'],
+      ['id_number', 'Matrícula.'],
+      ['turmas', 'Turmas do aluno dentro da seleção.'],
+      ['concept_code', 'Código do conceito na taxonomia.'],
+      ['concept_name', 'Nome do conceito.'],
+      ['mastery_percent', 'Domínio no conceito, em %. Vazio = evidência insuficiente.'],
+      ['status', 'mastered, partial, gap ou insufficient.'],
+      ['questions_evaluated', 'Quantas questões com nota alimentaram o cálculo.'],
+      ['not_attempted', 'Nota baixa e a construção sequer aparece no código. Vazio quando o conceito não tem sinal estático confiável.']
+    ]),
+    rows: (ctx) => {
+      const mastery = ctx.learning.mastery;
+      if (!mastery?.bound) return [];
+      const byCode = new Map((mastery.topics || []).map(topic => [topic.code, topic]));
+      const studentByKey = new Map((ctx.merged.students || []).map(item => [studentKey(item), item]));
+
+      return (mastery.students || []).flatMap(row => {
+        const key = studentKey(row);
+        const student = studentByKey.get(key) || {};
+        return Object.entries(row.topics || {}).map(([code, result]) => ({
+          student_key: key,
+          student_name: row.name,
+          id_number: student.idNumber ?? null,
+          turmas: student.turmas || [],
+          concept_code: code,
+          concept_name: byCode.get(code)?.name ?? null,
+          mastery_percent: result.mastery,
+          status: result.status,
+          questions_evaluated: result.itemCount,
+          not_attempted: byCode.get(code)?.codeSignals?.length ? result.untried : null
+        }));
+      });
+    }
+  },
+  {
+    id: 'learning_access',
+    group: 'learning',
+    file: 'learning_access.csv',
+    title: 'Acesso ao Moodle por dia',
+    description: 'Uma linha por aluno × dia com eventos nos logs do Moodle. Diferente de `student_daily_activity.csv`, que conta **envios**: aqui é presença, não entrega.',
+    tip: 'Só existe para turmas em que os logs foram coletados. O Moodle registra eventos com carimbo de hora, não duração de sessão — não há como derivar "tempo de estudo" daqui.',
+    columns: () => columnList([
+      ['turma', 'Importação (turma) de origem.'],
+      ['student_key', 'Identificador do aluno.'],
+      ['id_number', 'Matrícula.'],
+      ['date', 'Dia (YYYY-MM-DD).'],
+      ['events', 'Eventos registrados no dia.']
+    ]),
+    rows: (ctx) => ctx.learning.perTurma.flatMap(context => {
+      const byStudent = context.activity?.byStudent || {};
+      const studentByKey = new Map((context.dataset.students || []).map(item => [studentKey(item), item]));
+      return Object.entries(byStudent).flatMap(([key, record]) =>
+        Object.entries(record.days || {}).map(([day, events]) => ({
+          turma: context.turma,
+          student_key: key,
+          id_number: studentByKey.get(key)?.idNumber ?? null,
+          date: day,
+          events
+        })));
+    })
+  },
+  {
+    id: 'learning_interventions',
+    group: 'learning',
+    file: 'learning_interventions.csv',
+    title: 'Intervenções registradas',
+    description: 'Uma linha por intervenção, com o retrato do aluno no momento do registro e onde ele está na importação atual.',
+    tip: 'O aluno foi escolhido por estar pior, então regressão à média basta para produzir melhora sem que a intervenção tenha feito nada. Estas colunas servem para acompanhar, não para atribuir efeito.',
+    columns: () => columnList([
+      ['turma', 'Importação (turma) de origem.'],
+      ['student_key', 'Identificador do aluno.'],
+      ['student_name', 'Nome do aluno.'],
+      ['registered_at', 'Quando a intervenção foi registrada (ISO local).'],
+      ['pattern', 'Padrão de comportamento que a motivou, quando houve um.'],
+      ['concept', 'Conceito a que ela se refere, quando houve um.'],
+      ['action', 'Tipo de ação.'],
+      ['status', 'planned, done ou abandoned.'],
+      ['avg_percent_before', 'Média percentual do aluno no momento do registro.'],
+      ['avg_percent_after', 'Média na importação atual. Vazio enquanto a turma não for reimportada.']
+    ]),
+    rows: (ctx) => ctx.learning.perTurma.flatMap(context => {
+      const registry = readJsonFile(statisticsPaths(context.turma).interventions, null);
+      return (registry?.entries || []).map(entry => {
+        const snapshot = registry.snapshots?.[entry.snapshotId];
+        const moved = snapshot && snapshot.importedAt !== context.dataset.importedAt;
+        return {
+          turma: context.turma,
+          student_key: String(entry.userId),
+          student_name: entry.name,
+          registered_at: isoLocal(entry.createdAt),
+          pattern: entry.pattern,
+          concept: entry.topic,
+          action: entry.action,
+          status: entry.status,
+          avg_percent_before: entry.baseline?.avgPercent ?? null,
+          avg_percent_after: moved ? studentAverage(context.dataset, String(entry.userId)) : null
+        };
+      });
+    })
+  }
 ];
 
 const TABLE_BY_ID = new Map(TABLES.map(table => [table.id, table]));
@@ -1457,7 +1751,8 @@ const TABLE_BY_ID = new Map(TABLES.map(table => [table.id, table]));
 const GROUP_LABELS = {
   cross: 'Transversais (um retrato do momento)',
   timeseries: 'Séries temporais',
-  unified: 'Unificados (tabelas largas prontas para análise)'
+  unified: 'Unificados (tabelas largas prontas para análise)',
+  learning: 'Aprendizado (indicadores, conceitos e intervenções)'
 };
 
 // ---------------------------------------------------------------------------
@@ -1479,7 +1774,7 @@ function buildTable(table, ctx) {
 
 function tableCsv(table, ctx) {
   const { columns, rows } = buildTable(table, ctx);
-  return toCsv(columns, rows);
+  return toCsv(columns, rows, ctx.options);
 }
 
 /** Manifesto para a tela de exportação: o que existe e quantas linhas tem. */

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  BookOpen, Check, Clock, Download, FileSpreadsheet, Layers, Loader2, Table2
+  BookOpen, Check, Clock, Download, FileSpreadsheet, Layers, Loader2, Table2, ShieldCheck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { ExportGroup, ExportManifest, ExportTableInfo, StatisticsScope } from '../../types/statistics';
@@ -37,6 +37,7 @@ const StatisticsExportPanel: React.FC<StatisticsExportPanelProps> = ({ scope, t,
   const [manifest, setManifest] = useState<ExportManifest | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [includeDocs, setIncludeDocs] = useState(true);
+  const [pseudonymize, setPseudonymize] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -104,7 +105,7 @@ const StatisticsExportPanel: React.FC<StatisticsExportPanelProps> = ({ scope, t,
     if (!selected.length) return toast.error(t.statsExportEmpty);
     setBusy('zip');
     try {
-      const response = await statisticsApi.exportZip(scope, selected, includeDocs);
+      const response = await statisticsApi.exportZip(scope, selected, includeDocs, pseudonymize);
       downloadBlob(response.data, fileNameFromResponse(response.headers, 'estatisticas.zip'));
       toast.success(t.statsExportDone);
       onClose();
@@ -265,6 +266,24 @@ const StatisticsExportPanel: React.FC<StatisticsExportPanelProps> = ({ scope, t,
             <BookOpen size={12} className="text-accent" /> {t.statsExportIncludeDocs}
           </span>
           <span className="mt-1 block text-[10px] leading-snug text-text-dim">{t.statsExportIncludeDocsHint}</span>
+        </span>
+      </label>
+
+      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border-main bg-input p-3">
+        <input
+          type="checkbox"
+          checked={pseudonymize}
+          onChange={(event) => setPseudonymize(event.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+        />
+        <span>
+          <span className="flex items-center gap-2 text-[11px] font-bold text-text-main">
+            <ShieldCheck size={12} style={{ color: pseudonymize ? VIZ.good : undefined }} className={pseudonymize ? '' : 'text-accent'} />
+            {t.statsExportPseudonymize}
+          </span>
+          <span className="mt-1 block text-[10px] leading-snug text-text-dim">
+            {pseudonymize ? t.statsExportPseudonymizeOn : t.statsExportPseudonymizeOff}
+          </span>
         </span>
       </label>
 

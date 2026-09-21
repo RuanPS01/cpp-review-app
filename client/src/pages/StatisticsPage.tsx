@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
-  AlertTriangle, BarChart3, Activity, Download, FileQuestion, Loader2, Plus, RefreshCw,
-  Sparkles, UserX, Users
+  AlertTriangle, BarChart3, Activity, ClipboardList, Download, FileQuestion, Fingerprint,
+  FlaskConical, Gauge, Loader2, Plus, RefreshCw, Sparkles, Target, UserX, Users
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useStatistics } from '../hooks/useStatistics';
@@ -15,10 +15,19 @@ import QuestionsPanel from '../components/statistics/QuestionsPanel';
 import StudentsPanel from '../components/statistics/StudentsPanel';
 import AlertsPanel from '../components/statistics/AlertsPanel';
 import AIInsightsPanel from '../components/statistics/AIInsightsPanel';
+import ConceptsPanel from '../components/learning/ConceptsPanel';
+import IndicatorsPanel from '../components/learning/IndicatorsPanel';
+import PatternsPanel from '../components/learning/PatternsPanel';
+import ValidationPanel from '../components/learning/ValidationPanel';
+import InterventionsPanel from '../components/learning/InterventionsPanel';
 import { scopeOf } from '../services/statistics';
 import { VIZ, formatDateTime, formatNumber } from '../components/statistics/charts/chartTheme';
 
-type StatsTab = 'overview' | 'engagement' | 'questions' | 'students' | 'alerts' | 'ai';
+type StatsTab =
+  | 'overview' | 'engagement' | 'questions' | 'students' | 'alerts' | 'ai'
+  | 'concepts' | 'indicators' | 'patterns' | 'validation' | 'interventions';
+/** Dados = o que aconteceu; Aprendizado = o que isso diz sobre a aprendizagem. */
+type StatsGroup = 'data' | 'learning';
 
 interface StatisticsPageProps {
   t: Record<string, string>;
@@ -27,6 +36,7 @@ interface StatisticsPageProps {
 
 const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
   const statistics = useStatistics(t);
+  const [group, setGroup] = useState<StatsGroup>('data');
   const [tab, setTab] = useState<StatsTab>('overview');
   const [showImport, setShowImport] = useState(false);
   const [showExport, setShowExport] = useState(false);
@@ -38,17 +48,34 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
     ignoreEmptyStudents, setIgnoreEmptyStudents, metrics, reports, saveReport, loading, error
   } = statistics;
 
-  const tabs: { key: StatsTab; label: string; icon: typeof BarChart3 }[] = [
-    { key: 'overview', label: t.statsTabOverview, icon: BarChart3 },
-    { key: 'engagement', label: t.statsTabEngagement, icon: Activity },
-    { key: 'questions', label: t.statsTabQuestions, icon: FileQuestion },
-    { key: 'students', label: t.statsTabStudents, icon: Users },
-    { key: 'alerts', label: t.statsTabAlerts, icon: AlertTriangle },
-    { key: 'ai', label: t.statsTabAI, icon: Sparkles }
-  ];
+  const TABS_BY_GROUP: Record<StatsGroup, { key: StatsTab; label: string; icon: typeof BarChart3 }[]> = {
+    data: [
+      { key: 'overview', label: t.statsTabOverview, icon: BarChart3 },
+      { key: 'engagement', label: t.statsTabEngagement, icon: Activity },
+      { key: 'questions', label: t.statsTabQuestions, icon: FileQuestion },
+      { key: 'students', label: t.statsTabStudents, icon: Users },
+      { key: 'alerts', label: t.statsTabAlerts, icon: AlertTriangle },
+      { key: 'ai', label: t.statsTabAI, icon: Sparkles }
+    ],
+    learning: [
+      { key: 'concepts', label: t.learnTabConcepts, icon: Target },
+      { key: 'indicators', label: t.learnTabIndicators, icon: Gauge },
+      { key: 'patterns', label: t.learnTabPatterns, icon: Fingerprint },
+      { key: 'validation', label: t.valTab, icon: FlaskConical },
+      { key: 'interventions', label: t.intTab, icon: ClipboardList }
+    ]
+  };
+  const tabs = TABS_BY_GROUP[group];
+
+  const selectGroup = (next: StatsGroup) => {
+    setGroup(next);
+    setTab(TABS_BY_GROUP[next][0].key);
+    setFocusedStudent(null);
+  };
 
   const openStudent = (studentId: string) => {
     setFocusedStudent(studentId);
+    setGroup('data');
     setTab('students');
   };
 
@@ -205,7 +232,27 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
 
       {metrics && (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <nav className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex rounded-lg border border-border-main bg-button p-1">
+              {([
+                { key: 'data' as StatsGroup, label: t.statsGroupData },
+                { key: 'learning' as StatsGroup, label: t.statsGroupLearning }
+              ]).map(item => (
+                <button
+                  key={item.key}
+                  onClick={() => selectGroup(item.key)}
+                  className={`rounded-md px-4 py-1.5 text-[11px] font-black uppercase tracking-widest transition-all ${
+                    group === item.key ? 'bg-accent text-black' : 'text-text-dim hover:text-accent'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="h-6 w-px bg-border-main" />
+
+            <nav className="flex flex-wrap gap-2">
             {tabs.map(item => {
               const Icon = item.icon;
               const isActive = tab === item.key;
@@ -232,7 +279,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
                 </button>
               );
             })}
-          </nav>
+            </nav>
+          </div>
 
           <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-text-dim">
             {metrics.combined && (
@@ -298,7 +346,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
       )}
 
       {metrics && (
-        <div key={`${metrics.turma}-${tab}`} className="duration-300 animate-in fade-in">
+        <div key={`${metrics.turma}-${group}-${tab}`} className="duration-300 animate-in fade-in">
           {tab === 'overview' && <OverviewPanel metrics={metrics} t={t} />}
           {tab === 'engagement' && <EngagementPanel metrics={metrics} t={t} lang={lang} />}
           {tab === 'questions' && (
@@ -328,6 +376,12 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ t, lang }) => {
           {tab === 'ai' && (
             <AIInsightsPanel metrics={metrics} reports={reports} onReportGenerated={saveReport} t={t} lang={lang} />
           )}
+
+          {tab === 'concepts' && <ConceptsPanel metrics={metrics} t={t} />}
+          {tab === 'indicators' && <IndicatorsPanel metrics={metrics} t={t} lang={lang} />}
+          {tab === 'patterns' && <PatternsPanel metrics={metrics} t={t} lang={lang} />}
+          {tab === 'validation' && <ValidationPanel metrics={metrics} t={t} lang={lang} />}
+          {tab === 'interventions' && <InterventionsPanel metrics={metrics} t={t} lang={lang} />}
         </div>
       )}
 

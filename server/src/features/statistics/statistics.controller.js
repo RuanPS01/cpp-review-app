@@ -10,37 +10,21 @@ const { computeMetrics, mergeDatasets, hasAnyRecord, studentKey } = require('./s
 const statisticsExport = require('./statistics.export');
 const { buildPrompt, REPORT_KINDS } = require('./statistics.prompts');
 const { runPrompt, readSettings } = require('../ai/ai.service');
+const { parseTurmas, parseFlag, parseIdList, loadDatasets } = require('./statistics.selection');
+const {
+  sanitizeTurma, statisticsPaths, isDatasetFile, readDataset, readJsonFile
+} = require('./statistics.paths');
 
 const DATASET_VERSION = 1;
 const MAX_STORED_CODE_CHARS = 20000;
 const PROGRESS_EVENT = 'statistics-import-progress';
 
 // ---------------------------------------------------------------------------
-// Persistência
+// Persistência (caminhos e leitura em ./statistics.paths.js)
 // ---------------------------------------------------------------------------
 
-/** Impede que o nome da turma escape do diretório de estatísticas. */
-function sanitizeTurma(turma) {
-  return String(turma || '').replace(/[\\/:*?"<>|]/g, '_').replace(/\.\./g, '_').trim();
-}
-
-const datasetPath = (turma) => path.join(STATS_DIR, `stats_${sanitizeTurma(turma)}.json`);
-const reportsPath = (turma) => path.join(STATS_DIR, `stats_${sanitizeTurma(turma)}.reports.json`);
-
-function readDataset(turma) {
-  const filePath = datasetPath(turma);
-  if (!fs.existsSync(filePath)) return null;
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
-
 function readReports(turma) {
-  const filePath = reportsPath(turma);
-  if (!fs.existsSync(filePath)) return {};
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch (err) {
-    return {};
-  }
+  return readJsonFile(statisticsPaths(turma).reports, {});
 }
 
 // ---------------------------------------------------------------------------
@@ -424,7 +408,7 @@ exports.importMoodle = async (req, res) => {
       students: [...students.values()]
     };
 
-    fs.writeFileSync(datasetPath(turma), JSON.stringify(dataset, null, 2));
+    fs.writeFileSync(statisticsPaths(turma).dataset, JSON.stringify(dataset, null, 2));
     progress('Importação concluída', totalSteps, totalSteps);
 
     const metrics = computeMetrics(dataset);
@@ -451,50 +435,6 @@ exports.importMoodle = async (req, res) => {
 // ---------------------------------------------------------------------------
 
 /**
- * Lê a seleção de turmas de uma query ou de um corpo de requisição. Aceita um
- * array (corpo JSON), um JSON serializado (`["A","B"]`, usado nos GETs) ou um
- * nome único. Nomes de turma podem conter vírgula, então não há separador
- * implícito — a lista sempre chega explícita.
- */
-function parseTurmas(source) {
-  const raw = source?.turmas ?? source?.turma;
-  if (raw === undefined || raw === null || raw === '') return [];
-
-  let list;
-  if (Array.isArray(raw)) {
-    list = raw;
-  } else {
-    const text = String(raw).trim();
-    if (text.startsWith('[')) {
-      try { list = JSON.parse(text); } catch (err) { list = [text]; }
-    } else {
-      list = [text];
-    }
-  }
-
-  return [...new Set((Array.isArray(list) ? list : [list]).map(value => String(value).trim()).filter(Boolean))];
-}
-
-const parseFlag = (value) => value === true || value === 'true' || value === '1';
-
-/** Ids de tabela são slugs, então aqui a vírgula é um separador seguro. */
-const parseIdList = (value) => String(value || '')
-  .split(',')
-  .map(item => item.trim())
-  .filter(Boolean);
-
-function loadDatasets(turmas) {
-  const datasets = [];
-  const missing = [];
-  turmas.forEach(turma => {
-    const dataset = readDataset(turma);
-    if (dataset) datasets.push(dataset);
-    else missing.push(turma);
-  });
-  return { datasets, missing };
-}
-
-/**
  * Resolve a seleção de uma requisição em datasets carregados. Devolve `null`
  * (já tendo respondido o erro) quando não há nada para calcular.
  */
@@ -515,7 +455,13 @@ function resolveSelection(req, res, source) {
     turmas: datasets.map(dataset => dataset.turma),
     datasets,
     missing,
-    options: { ignoreEmptyStudents: parseFlag(source.ignoreEmpty) }
+    options: {
+      ignoreEmptyStudents: parseFlag(source.ignoreEmpty),
+      // Pseudonimizar troca as colunas de identidade por um hash com sal em
+      // **todas** as tabelas. Um pacote que se diz anônimo e traz o nome do
+      // aluno em uma delas é pior que um pacote identificado.
+      pseudonymize: parseFlag(source.pseudonymize)
+    }
   };
 }
 
@@ -525,8 +471,7 @@ function resolveSelection(req, res, source) {
 
 exports.listDatasets = (req, res) => {
   try {
-    const files = fs.readdirSync(STATS_DIR)
-      .filter(f => f.startsWith('stats_') && f.endsWith('.json') && !f.endsWith('.reports.json'));
+    const files = fs.readdirSync(STATS_DIR).filter(isDatasetFile);
 
     const datasets = files.map(file => {
       try {
@@ -599,7 +544,8 @@ exports.getSubmissionCode = (req, res) => {
 exports.deleteDataset = (req, res) => {
   const turma = req.params.turma;
   try {
-    [datasetPath(turma), reportsPath(turma)].forEach(filePath => {
+    // Apaga o dataset e todos os arquivos-irmão registrados em SIDECAR_SUFFIXES.
+    Object.values(statisticsPaths(turma)).forEach(filePath => {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     });
     res.json({ success: true });
@@ -621,6 +567,7 @@ exports.exportManifest = (req, res) => {
     res.json({
       turmas: selection.turmas,
       ignoreEmptyStudents: selection.options.ignoreEmptyStudents,
+      pseudonymize: selection.options.pseudonymize,
       studentCount: context.metrics.overview.totalStudents,
       excludedStudentCount: context.metrics.overview.excludedStudents,
       questionCount: context.metrics.overview.totalQuestions,
@@ -747,7 +694,7 @@ exports.generateReport = async (req, res) => {
     const ownerTurma = [...selection.turmas].sort()[0];
     const reports = readReports(ownerTurma);
     reports[cacheKey] = report;
-    fs.writeFileSync(reportsPath(ownerTurma), JSON.stringify(reports, null, 2));
+    fs.writeFileSync(statisticsPaths(ownerTurma).reports, JSON.stringify(reports, null, 2));
 
     res.json(report);
   } catch (err) {

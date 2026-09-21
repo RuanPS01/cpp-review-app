@@ -83,7 +83,7 @@ export function niceMax(value: number): number {
   return step * magnitude;
 }
 
-export function axisTicks(max: number, count = 4): number[] {
-  const step = max / count;
-  return Array.from({ length: count + 1 }, (_, i) => Math.round(i * step * 100) / 100);
+export function axisTicks(max: number, count = 4, min = 0): number[] {
+  const step = (max - min) / count;
+  return Array.from({ length: count + 1 }, (_, i) => Math.round((min + i * step) * 100) / 100);
 }
