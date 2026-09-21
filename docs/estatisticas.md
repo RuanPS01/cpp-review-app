@@ -161,3 +161,69 @@ Regras aplicadas em todos os gráficos:
 - Cores de estado (crítico/alto/médio/ok) sempre acompanhadas de ícone e rótulo.
 - Rótulos são medidos antes de desenhar e reticenciados; nunca são cortados pela própria marca.
 - Magnitude contínua (mapa de calor) usa rampa sequencial de uma matiz só.
+
+---
+
+## 7. Análises de Aprendizado (submódulo)
+
+A aba Estatísticas tem dois níveis: **Dados** (as seis sub-abas descritas acima) e **Aprendizado**, que une as propostas institucionais de analytics do Moodle, de tutoria socrática por LLM e de base longitudinal para predição.
+
+A Fase 1 entrega a sub-aba **Conceitos**: sem mapear questão a conceito, os dados por questão produzem notas; com o mapeamento, produzem um perfil de domínio conceitual — que é o que torna o alerta acionável.
+
+### Taxonomia: global, mapeamento por turma
+
+| Onde | O quê |
+|------|-------|
+| `data/taxonomy.json` | Taxonomias por disciplina (conceitos), reutilizáveis entre turmas. Semente AL01–AL09 criada no primeiro boot |
+| `data/statistics/stats_{turma}.taxonomy.json` | Vínculo turma→taxonomia e o mapeamento `questão → [{conceito, peso}]` |
+
+O peso tem só dois valores — **principal (1)** e **secundário (0,5)**. Um campo numérico livre daria falsa precisão.
+
+Ao vincular uma taxonomia, o mapeamento é **pré-preenchido a partir de outras turmas que já mapearam a mesma atividade VPL** (mesmo `cmid`). A mesma prova reaparece a cada semestre, e sem isso o professor remapearia tudo em cada importação — o gargalo que a proposta de analytics prevê.
+
+### `codeSignals`: o cruzamento que separa dois problemas
+
+Cada conceito pode apontar para chaves do detector estático de `codeMetrics.js` (`loops`, `arrays`, `stdVector`, …). Isso permite distinguir dois casos que a nota sozinha confunde:
+
+| Nota baixa e… | Leitura | Intervenção |
+|---|---|---|
+| a construção nem aparece no código | não chegou a tentar usar | ensinar o conceito |
+| a construção aparece | tentou e errou | depurar o uso |
+
+Conceito sem sinal confiável fica com a lista vazia e o cruzamento simplesmente não aparece. Busca e Ordenação não têm detector; Matrizes fica de fora porque o detector não distingue vetor de matriz — forçar o vínculo produziria evidência falsa.
+
+### Domínio conceitual, e o que ele se recusa a afirmar
+
+Domínio do aluno no conceito = média das notas percentuais das questões do conceito, ponderada pelo peso. Faixas: **dominado** ≥ 80, **parcial** ≥ 60, **lacuna** abaixo disso.
+
+Com 2–4 questões por conceito o número é grosseiro, então o cálculo se recusa a fingir precisão:
+
+- Menos de **duas** questões avaliadas → **"evidência insuficiente"**, nunca 0%. Ausência de medida não é desempenho ruim.
+- Aluno sem nenhuma entrega cai em evidência insuficiente, **não em lacuna** — a falta de entrega já é sinalizada pelos alertas da aba Dados; tratá-la como lacuna conceitual inventaria evidência.
+- Conceito sem evidência **não entra nos gráficos**; aparece nomeado em nota de rodapé.
+- A matriz aluno × conceito codifica a **lacuna** (100 − domínio) numa escala fixa de 0 a 100, com célula hachurada para "sem evidência" e marcador para "não chegou a usar a construção".
+
+### Sugestão por IA
+
+`POST /api/learning/taxonomy/suggest` envia por questão o enunciado, os casos de teste e as construções que os alunos realmente usaram (o `conceptUsage` que as estatísticas já calculam) e devolve uma proposta de mapeamento. A sugestão **não é persistida**: volta para a tela de revisão, cada vínculo com a justificativa da IA ao lado, e só entra quando o professor aceita. JSON inválido do modelo vira mensagem de erro, não fallback silencioso.
+
+### Rotas
+
+| Método | Rota | Função |
+|--------|------|--------|
+| GET | `/api/learning/taxonomies` | Taxonomias globais |
+| POST | `/api/learning/taxonomies` | Cria ou atualiza uma taxonomia |
+| DELETE | `/api/learning/taxonomies/:id` | Remove uma taxonomia |
+| GET | `/api/learning/taxonomy?turma=` | Vínculo e mapeamento da turma |
+| POST | `/api/learning/taxonomy` | Salva o mapeamento |
+| POST | `/api/learning/taxonomy/bind` | Vincula a taxonomia e herda o mapeamento por `cmid` |
+| POST | `/api/learning/taxonomy/suggest` | Sugestão por IA (não persiste) |
+| GET | `/api/learning/mastery?turma=` | Domínio conceitual calculado |
+
+### Arquivos-irmão do dataset
+
+`statistics.paths.js` centraliza os caminhos de uma turma e a lista `SIDECAR_SUFFIXES`. **Quem criar um arquivo-irmão novo precisa registrá-lo ali** — é o que impede dois erros: o arquivo aparecer na listagem como se fosse uma importação, e sobrar órfão quando a turma é apagada.
+
+### Nomenclatura
+
+`concept` já designa, no módulo de Estatísticas, os sinais estáticos do parser de C++. O conceito curricular chama-se **`topic`** no código. Na interface os dois aparecem como "conceito" (curricular) e "construção" (linguagem).

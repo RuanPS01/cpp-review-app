@@ -9,37 +9,20 @@ const { analyzeCode } = require('./codeMetrics');
 const { computeMetrics } = require('./statistics.service');
 const { buildPrompt, REPORT_KINDS } = require('./statistics.prompts');
 const { runPrompt, readSettings } = require('../ai/ai.service');
+const {
+  sanitizeTurma, statisticsPaths, isDatasetFile, readDataset, readJsonFile
+} = require('./statistics.paths');
 
 const DATASET_VERSION = 1;
 const MAX_STORED_CODE_CHARS = 20000;
 const PROGRESS_EVENT = 'statistics-import-progress';
 
 // ---------------------------------------------------------------------------
-// Persistência
+// Persistência (caminhos e leitura em ./statistics.paths.js)
 // ---------------------------------------------------------------------------
 
-/** Impede que o nome da turma escape do diretório de estatísticas. */
-function sanitizeTurma(turma) {
-  return String(turma || '').replace(/[\\/:*?"<>|]/g, '_').replace(/\.\./g, '_').trim();
-}
-
-const datasetPath = (turma) => path.join(STATS_DIR, `stats_${sanitizeTurma(turma)}.json`);
-const reportsPath = (turma) => path.join(STATS_DIR, `stats_${sanitizeTurma(turma)}.reports.json`);
-
-function readDataset(turma) {
-  const filePath = datasetPath(turma);
-  if (!fs.existsSync(filePath)) return null;
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
-
 function readReports(turma) {
-  const filePath = reportsPath(turma);
-  if (!fs.existsSync(filePath)) return {};
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch (err) {
-    return {};
-  }
+  return readJsonFile(statisticsPaths(turma).reports, {});
 }
 
 // ---------------------------------------------------------------------------
@@ -423,7 +406,7 @@ exports.importMoodle = async (req, res) => {
       students: [...students.values()]
     };
 
-    fs.writeFileSync(datasetPath(turma), JSON.stringify(dataset, null, 2));
+    fs.writeFileSync(statisticsPaths(turma).dataset, JSON.stringify(dataset, null, 2));
     progress('Importação concluída', totalSteps, totalSteps);
 
     const metrics = computeMetrics(dataset);
@@ -451,8 +434,7 @@ exports.importMoodle = async (req, res) => {
 
 exports.listDatasets = (req, res) => {
   try {
-    const files = fs.readdirSync(STATS_DIR)
-      .filter(f => f.startsWith('stats_') && f.endsWith('.json') && !f.endsWith('.reports.json'));
+    const files = fs.readdirSync(STATS_DIR).filter(isDatasetFile);
 
     const datasets = files.map(file => {
       try {
@@ -510,7 +492,8 @@ exports.getSubmissionCode = (req, res) => {
 exports.deleteDataset = (req, res) => {
   const turma = req.params.turma;
   try {
-    [datasetPath(turma), reportsPath(turma)].forEach(filePath => {
+    // Apaga o dataset e todos os arquivos-irmão registrados em SIDECAR_SUFFIXES.
+    Object.values(statisticsPaths(turma)).forEach(filePath => {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     });
     res.json({ success: true });
@@ -561,7 +544,7 @@ exports.generateReport = async (req, res) => {
 
     const reports = readReports(turma);
     reports[targetId ? `${kind}:${targetId}` : kind] = report;
-    fs.writeFileSync(reportsPath(turma), JSON.stringify(reports, null, 2));
+    fs.writeFileSync(statisticsPaths(turma).reports, JSON.stringify(reports, null, 2));
 
     res.json(report);
   } catch (err) {

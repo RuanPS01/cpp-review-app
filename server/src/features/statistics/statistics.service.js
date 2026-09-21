@@ -572,5 +572,7 @@ module.exports = {
   PASS_THRESHOLD,
   mean,
   median,
+  stdDev,
+  rate,
   round
 };
